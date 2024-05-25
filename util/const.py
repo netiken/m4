@@ -1,0 +1,11 @@
+import numpy as np
+
+UNIT_G = 1000000000
+UNIT_M = 1000000
+UNIT_K = 1000
+
+MTU = UNIT_K
+BDP = 10 * MTU
+
+HEADER_SIZE = 48
+BYTE_TO_BIT = 8
