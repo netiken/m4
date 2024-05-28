@@ -17,3 +17,5 @@ tensorboard --logdir /data2/lichenni/output_cc --port 8009 --bind_all
 git add -A . ; git commit -m "For now, it lacks the functions to parse transformer texts. Additionally, it requires traces from the real run, which are then parsed via the PyTorch converter."; git push
 
 >/dev/null
+
+time run ../ckpts/model_llama.bin ../ckpts/model_mlp.bin ../ckpts/data_lr10Gbps_7 -b 10 -e 576 -n 7 -t 1 -f 30 -k 18000 -p 1 -c 0 -x 30 

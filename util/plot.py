@@ -129,7 +129,7 @@ def plot_cdf(
     file_name,
     linelabels,
     x_label,
-    y_label="CDF",
+    y_label="CDF (%)",
     log_switch=False,
     rotate_xaxis=False,
     ylim_low=0,
@@ -178,7 +178,7 @@ def plot_cdf(
         counts = counts.astype(float) / data_size
 
         # Find the cdf
-        cdf = np.cumsum(counts)
+        cdf = np.cumsum(counts)*100
 
         # Plot the cdf
         if i < len(linelabels):
@@ -206,7 +206,7 @@ def plot_cdf(
         loc=loc,
     )
 
-    plt.ylim((ylim_low, 1))
+    # plt.ylim((ylim_low, 1))
     if xlim_bottom:
         plt.xlim(left=xlim_bottom)
     if xlim:
