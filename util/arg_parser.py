@@ -26,12 +26,12 @@ def create_config():
     parser.add_argument(
         "--dir_input",
         help="input directory (dataset)",
-        default="/data2/lichenni/path_tc",
+        default="/data2/lichenni/path_perflow",
     )
     parser.add_argument(
         "--dir_output",
         help="output directory (checkpotins)",
-        default="/data2/lichenni/output",
+        default="/data2/lichenni/output_perflow",
     )
     parser.add_argument("--timestamp", type=str, default=None)
     parser.add_argument("--note", type=str, default="m3")

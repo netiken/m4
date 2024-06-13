@@ -562,9 +562,12 @@ class PathDataModuleQueueLen(LightningDataModule):
                         )
                         spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
                         for sample in sample_list:
-                            data_list.append(
-                                (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
-                            )
+                            qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
+                            flow_id_list=qfeat[:,0]
+                            if len(flow_id_list)==len(np.unique(flow_id_list))==n_flows*2:
+                                data_list.append(
+                                    (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
+                                )
                             
             np.random.shuffle(data_list)
         self.data_list = data_list
@@ -782,17 +785,19 @@ class PathDatasetQueueLen(Dataset):
         # load data
         dir_input_tmp = f"{self.dir_input}/{spec}"
         
-        fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+        # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
         sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
         fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
-            
-        sizes=sizes_flowsim[fid]
-        fats = fats_flowsim[fid]
-        input=np.concatenate((sizes[:,None],fats[:,None]),axis=1).astype(np.float32)
+        fats_ia_flowsim=np.diff(fats_flowsim)
+        fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
+        input=np.concatenate((sizes_flowsim[:,None],fats_ia_flowsim[:,None]),axis=1).astype(np.float32)
         
         qfeat=np.load(f"{dir_input_tmp}/qfeat{topo_type}.npy")
-        queue_lengths_dict = {entry[0]: entry[2] for entry in qfeat}
-        output=np.array([queue_lengths_dict[flow_id] for flow_id in fid]).reshape(-1, 1).astype(np.float32)
+        if len(qfeat)!=len(sizes_flowsim):
+            print(f"qfeat shape mismatch: {len(qfeat)} vs {len(sizes_flowsim)}")
+            assert False
+        queue_lengths_dict = {qfeat[i,0]: qfeat[i,2]*1000.0 for i in range(len(qfeat))}
+        output=np.array([queue_lengths_dict[flow_id] for flow_id in range(len(sizes_flowsim))]).reshape(-1, 1).astype(np.float32)
         return (
             input,
             output,

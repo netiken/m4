@@ -1,0 +1,32 @@
+# YAML config for dataset, training, and model parameters
+
+# Dataset parameters
+dataset:
+  n_flows_list: [20000]
+  n_hosts_list: [3]
+  shard: 0
+  shard_list: [0,5000,5000] # [start, end, num]
+  sample_list: [0,1,1] # [start, end, num]
+  lr: 10
+  bucket_thold: 1
+  train_frac: 0.9
+  enable_context: True
+  topo_type: "_topo-pl-x_"
+
+# Model parameters
+model:
+  model_name: "lstm"
+  n_layer: 4
+  loss_fn_type: "mse"
+  hidden_dim: 64
+
+# Training parameters
+training:
+  # gpu: [0,0,1,1,2,2,3,3]
+  gpu: [0,1,2,3]
+  n_epochs: 1000
+  batch_size: 8
+  learning_rate: 0.001
+  num_workers: 4
+  enable_val: True
+  enable_dist: True

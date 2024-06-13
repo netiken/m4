@@ -82,7 +82,8 @@ if args.mode == "train":
         )
         
         ddp_strategy = DDPStrategy(
-            process_group_backend="gloo", find_unused_parameters=True
+            process_group_backend="gloo", 
+            # find_unused_parameters=True
         )
         
     with open(f"{tb_logger.log_dir}/config.yaml", "w") as f:

@@ -409,16 +409,23 @@ class LSTMModel(nn.Module):
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        outputs = []
-        h_t, c_t = self.init_hidden(x.size(0))
+        batch_size, seq_len, _ = x.size()
+        h_t, c_t = self.init_hidden(batch_size)
         h_t=h_t.to(x.device)
         c_t=c_t.to(x.device)
-        for t in range(x.size(1)):
-            out, (h_t, c_t) = self.lstm(x[:, t:t+1, :], (h_t, c_t))
-            out = self.fc(out[:, -1, :])
-            outputs.append(out)
-        outputs = torch.stack(outputs, dim=1)
-        return outputs, (h_t, c_t)
+        
+        # outputs = []
+        # for t in range(seq_len):
+        #     out, (h_t, c_t) = self.lstm(x[:, t:t+1, :], (h_t, c_t))
+        #     out = self.fc(out[:, -1, :])
+        #     outputs.append(out)
+        # outputs = torch.stack(outputs, dim=1)
+        # Process the entire sequence at once
+        lstm_out, (h_t, c_t) = self.lstm(x, (h_t, c_t))
+        
+        # Apply the fully connected layer to each time step
+        out = self.fc(lstm_out)
+        return out, (h_t, c_t)
 
     def init_hidden(self, batch_size):
         h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size)
@@ -509,7 +516,17 @@ class FlowSimQueueLen(LightningModule):
         return self.step(batch, batch_idx, tag="test")
     
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(
-            self.model_lstm.parameters(), lr=self.learning_rate
-        )
-        return optimizer
+        # optimizer = torch.optim.Adam(
+        #     self.model_lstm.parameters(), lr=self.learning_rate
+        # )
+        # return optimizer
+    
+        optimizer = torch.optim.Adam(self.model_lstm.parameters(), lr=self.learning_rate)
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5, min_lr=1e-6)
+        return {
+            'optimizer': optimizer,
+            'lr_scheduler': {
+                'scheduler': scheduler,
+                'monitor': 'val_loss_sync',  # Adjust according to the relevant metric
+            }
+        }
