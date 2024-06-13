@@ -145,6 +145,103 @@ class FlowSimTransformer_Base(LightningModule):
     def test_step(self, batch, batch_idx):
         return self.step(batch, batch_idx, tag="test")
 
+class FlowSimQueueLenTransformer(FlowSimTransformer_Base):
+    def __init__(
+        self,
+        n_layer=4,
+        n_head=4,
+        n_embd=64,
+        block_size=64,
+        vocab_size=50257,
+        dropout=0.0,
+        compile=False,
+        loss_fn_type="l1",
+        weight_decay=1e-2,
+        learning_rate=6e-4,
+        betas=[0.9, 0.95],
+        batch_size=400,
+        enable_masked_loss=False,
+        enable_weighted_loss=False,
+        enable_context=False,
+        enable_dist=False,
+        enable_val=True,
+        enable_position=True,
+        enable_log=False,
+        enable_const_opt=True,
+        save_dir=None,
+    ):
+        super().__init__(
+            n_layer=n_layer,
+            n_head=n_head,
+            n_embd=n_embd,
+            block_size=block_size,
+            vocab_size=vocab_size,
+            dropout=dropout,
+            compile=compile,
+            loss_fn_type=loss_fn_type,
+            enable_dist=enable_dist,
+            enable_val=enable_val,
+            enable_position=enable_position,
+            save_dir=save_dir,
+        )
+        self.n_embd = n_embd
+        self.weight_decay = weight_decay
+        self.learning_rate = learning_rate
+        self.betas = tuple(betas)
+        self.batch_size = batch_size
+        self.enable_masked_loss = enable_masked_loss
+        self.enable_weighted_loss = enable_weighted_loss
+        self.enable_context = enable_context
+        
+        logging.info(
+            f"model: enable_context: {enable_context},enable_const_opt:{enable_const_opt}")
+
+    def step(self, batch, batch_idx, tag=None):
+        input, output, spec, src_dst_pair_target_str = batch
+        estimated,_ = self.model_lstm(input)
+        loss = self.loss_fn(estimated, output)
+        
+        if self.enable_dist:
+            self.log(
+                f"{tag}_loss_sync",
+                loss,
+                sync_dist=True,
+                on_step=True,
+                on_epoch=True,
+                logger=True,
+                prog_bar=True,
+                batch_size=self.batch_size,
+            )
+        else:
+            self.log(
+                f"{tag}_loss",
+                loss,
+                on_step=True,
+                on_epoch=True,
+                logger=True,
+                prog_bar=True,
+                batch_size=self.batch_size,
+            )
+
+        if tag == "test":
+            test_dir = f"{self.save_dir}/{spec[0]}_{src_dst_pair_target_str[0]}"
+            os.makedirs(test_dir, exist_ok=True)
+            estimated = estimated.cpu().numpy()
+            output = output.cpu().numpy()
+            
+            np.savez(
+                f"{test_dir}/res.npz",
+                queue_len_est=estimated,
+                output=output
+            )
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = self.model_transformer.configure_optimizers(
+            self.weight_decay, self.learning_rate, self.betas
+        )
+        return optimizer
+    
 class FlowSimTransformer_Path(FlowSimTransformer_Base):
     def __init__(
         self,
@@ -531,187 +628,4 @@ class FlowSimQueueLen(LightningModule):
             }
         }
 
-class FlowSimQueueLenTransformer(FlowSimTransformer_Base):
-    def __init__(
-        self,
-        n_layer=4,
-        n_head=4,
-        n_embd=64,
-        block_size=64,
-        vocab_size=50257,
-        dropout=0.0,
-        compile=False,
-        loss_fn_type="l1",
-        weight_decay=1e-2,
-        learning_rate=6e-4,
-        betas=[0.9, 0.95],
-        batch_size=400,
-        enable_masked_loss=False,
-        enable_weighted_loss=False,
-        enable_context=False,
-        enable_dist=False,
-        enable_val=True,
-        enable_position=True,
-        enable_const_opt=True,
-        save_dir=None,
-    ):
-        super().__init__(
-            n_layer=n_layer,
-            n_head=n_head,
-            n_embd=n_embd,
-            block_size=block_size,
-            vocab_size=vocab_size,
-            dropout=dropout,
-            compile=compile,
-            loss_fn_type=loss_fn_type,
-            enable_dist=enable_dist,
-            enable_val=enable_val,
-            enable_position=enable_position,
-            save_dir=save_dir,
-        )
-        self.n_embd = n_embd
-        self.weight_decay = weight_decay
-        self.learning_rate = learning_rate
-        self.betas = tuple(betas)
-        self.batch_size = batch_size
-        self.enable_masked_loss = enable_masked_loss
-        self.enable_weighted_loss = enable_weighted_loss
-        self.enable_context = enable_context
-        
-        logging.info(
-            f"model: enable_context: {enable_context},enable_const_opt:{enable_const_opt}")
 
-    def step(self, batch, batch_idx, tag=None):
-        (
-            sizebucket_to_sldn_flowsim,
-            num_flows_per_cell_flowsim,
-            sizebucket_to_sldn,
-            num_flows_per_cell,
-            spec,
-            sizebucket_to_sldn_flowsim_idx,
-            src_dst_pair_target_str,
-            # src_dst_pair_target,
-        ) = batch
-        
-        if self.enable_const_opt:
-            num_flows_per_cell_flowsim=num_flows_per_cell_flowsim.reshape((num_flows_per_cell_flowsim.shape[0],-1,self.y_len)).mean(dim=-1)
-            for idx_1 in range(num_flows_per_cell_flowsim.shape[0]):
-                for idx_2 in range(num_flows_per_cell_flowsim.shape[1]):
-                    if num_flows_per_cell_flowsim[idx_1,idx_2]<EPS:
-                        sizebucket_to_sldn_flowsim[idx_1,idx_2*self.y_len:(idx_2+1)*self.y_len]=self.const_tensor
-                                    
-        if self.enable_context:
-            idx_start = 0
-            sizebucket_to_sldn_foreground = sizebucket_to_sldn.new(
-                len(spec), self.feat_dim
-            )
-            sizebucket_to_sldn_context = sizebucket_to_sldn.new(
-                len(spec), self.n_embd
-            )
-            for i in range(len(spec)):
-                sizebucket_to_sldn_foreground[i] = sizebucket_to_sldn_flowsim[
-                    idx_start
-                ]
-                idx_interval = sizebucket_to_sldn_flowsim_idx[i]
-                tmp = sizebucket_to_sldn_flowsim[
-                    idx_start + 1 : idx_start + idx_interval
-                ]
-                
-                # tmp=torch.flatten(tmp).long()
-                sizebucket_to_sldn_background, _ = self.model_transformer(
-                    tmp[None, :]
-                )
-                sizebucket_to_sldn_context[i] = torch.mean(
-                    sizebucket_to_sldn_background, dim=1
-                )
-                idx_start += idx_interval
-
-            sizebucket_to_sldn_input = torch.cat(
-                [sizebucket_to_sldn_foreground, sizebucket_to_sldn_context], dim=-1
-            )
-        else:
-            sizebucket_to_sldn_foreground = sizebucket_to_sldn_flowsim[:, 0, :]
-            sizebucket_to_sldn_input = sizebucket_to_sldn_foreground
-        # Instead of sizebucket_to_sldn_est = self.model_mlp(sizebucket_to_sldn_input) + 1.0
-        sizebucket_to_sldn_est = self.model_mlp(sizebucket_to_sldn_input)
-        sizebucket_to_sldn_est.add_(1.0)  # In-place addition
-        
-        loss_weights = num_flows_per_cell > 0.0
-        
-        loss = self.loss_fn(
-                torch.div(sizebucket_to_sldn_est, sizebucket_to_sldn),
-                torch.ones_like(sizebucket_to_sldn),
-                loss_weights
-            )
-        
-        if self.enable_dist:
-            self.log(
-                f"{tag}_loss_sync",
-                loss,
-                sync_dist=True,
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-                batch_size=self.batch_size,
-            )
-        else:
-            self.log(
-                f"{tag}_loss",
-                loss,
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-                batch_size=self.batch_size,
-            )
-        # logging.info(f"step-{batch_idx}-{tag}_loss: {loss}")
-
-        if tag == "test":
-            test_dir = f"{self.save_dir}/{spec[0]}_{src_dst_pair_target_str[0]}"
-            # logging.info(f"save to {test_dir}")
-            os.makedirs(test_dir, exist_ok=True)
-            sizebucket_to_sldn_flowsim = sizebucket_to_sldn_flowsim.cpu().numpy()[0]
-            sizebucket_to_sldn_est = sizebucket_to_sldn_est.cpu().numpy()[0]
-            sizebucket_to_sldn = sizebucket_to_sldn.cpu().numpy()[0]
-            num_flows_per_cell = num_flows_per_cell.cpu().numpy()[0]
-            # num_flows_per_cell_flowsim_ori=num_flows_per_cell_flowsim_ori.cpu().numpy()[0]
-            # num_flows_per_cell_flowsim=num_flows_per_cell_flowsim.cpu().numpy()[0]
-            # error = np.divide(
-            #     abs(sizebucket_to_sldn_est - sizebucket_to_sldn),
-            #     sizebucket_to_sldn,
-            #     out=np.zeros_like(sizebucket_to_sldn),
-            #     where=sizebucket_to_sldn != 0,
-            # )
-            # logging.info(
-            #     np.round(np.nanmin(error), 3),
-            #     np.round(np.nanpercentile(error, 50), 3),
-            #     np.round(np.nanmax(error), 3),
-            # )
-            np.savez(
-                f"{test_dir}/res.npz",
-                sizebucket_to_sldn_est=sizebucket_to_sldn_est,
-                sizebucket_to_sldn_flowsim=sizebucket_to_sldn_flowsim,
-                sizebucket_to_sldn=sizebucket_to_sldn,
-                num_flows_per_cell=num_flows_per_cell,
-                # num_flows_per_cell_flowsim_ori=num_flows_per_cell_flowsim_ori,
-                # num_flows_per_cell_flowsim=num_flows_per_cell_flowsim,
-            )
-        return loss
-
-    def configure_optimizers(self):
-        optimizer = self.model_transformer.configure_optimizers(
-            self.weight_decay, self.learning_rate, self.betas
-        )
-        # optimizer_mlp = torch.optim.Adam(
-        #     self.model.parameters(), lr=self.learning_rate
-        # )
-        optimizer.add_param_group(
-            {"params": self.model_mlp.parameters(), "weight_decay": 0.0}
-        )
-        if self.enable_const_opt:
-            optimizer.add_param_group(
-                {"params": self.const_tensor, "weight_decay": 0.0}
-            )
-        # return optimizer_transformer,optimizer_mlp
-        return optimizer
