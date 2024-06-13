@@ -2,6 +2,8 @@ import torch
 import random
 import numpy as np
 from scipy.stats import rankdata
+import logging
+import struct
 
 def fix_seed(seed):
     # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
@@ -33,3 +35,55 @@ def map_percentiles(arr,arr_std):
     ranks = rankdata(arr, method='ordinal')-1  # Get the ranks of the elements
     res = sorted_arr_std[ranks]
     return res
+def serialize_fp32(file, tensor):
+    """ writes one fp32 tensor to file that is open in wb mode """
+    d = tensor.detach().cpu().view(-1).to(torch.float32).numpy()
+    b = struct.pack(f'{len(d)}f', *d)
+    file.write(b)
+
+
+def parse_output_get_input(res, n_flows):
+    size_tmp = res.size_tmp
+    event_times = np.fromiter(res.event_times, dtype=np.float64, count=2 * n_flows)
+    enq_indices = np.fromiter(res.enq_indices, dtype=np.uint, count=n_flows).astype(
+        np.int64
+    )
+    deq_indices = np.fromiter(res.deq_indices, dtype=np.uint, count=n_flows).astype(
+        np.int64
+    )
+    num_active_flows = np.fromiter(
+        res.num_active_flows, dtype=np.uint, count=(2 * n_flows - 1)
+    ).astype(np.int64)
+    weight_scatter_indices = np.fromiter(
+        res.weight_scatter_indices, dtype=np.uint, count=size_tmp
+    ).astype(np.int64)
+    active_flows = np.fromiter(res.active_flows, dtype=np.uint, count=size_tmp).astype(
+        np.int64
+    )
+    return (
+        event_times,
+        enq_indices,
+        deq_indices,
+        num_active_flows,
+        weight_scatter_indices,
+        active_flows,
+    )
+class fileFilter(logging.Filter):
+    def filter(self, record):
+        # return (not record.getMessage().startswith("Added")) and (
+        #     not record.getMessage().startswith("Rank ")
+        # )
+        return True
+
+def create_logger(log_name):
+    logging.basicConfig(
+        # format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
+        # format="%(asctime)s|%(levelname)s| %(processName)s [%(filename)s:%(lineno)d] %(message)s",
+        format="%(asctime)s|%(filename)s:%(lineno)d|%(message)s",
+        # datefmt="%Y-%m-%d:%H:%M:%S",
+        datefmt="%m-%d:%H:%M:%S",
+        level=logging.INFO,
+        handlers=[logging.FileHandler(log_name, mode="a"), logging.StreamHandler()],
+    )
+    for handler in logging.root.handlers:
+        handler.addFilter(fileFilter())

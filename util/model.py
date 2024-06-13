@@ -9,7 +9,7 @@ from .consts import (
     SIZE_BUCKET_LIST_LABEL_OUTPUT,
     P99_PERCENTILE_LIST,
 )
-from .utils import (
+from .func import (
     serialize_fp32
 )
 import numpy as np
@@ -397,4 +397,119 @@ class FlowSimTransformer_Path(FlowSimTransformer_Base):
                 {"params": self.const_tensor, "weight_decay": 0.0}
             )
         # return optimizer_transformer,optimizer_mlp
+        return optimizer
+
+# LSTM Model
+class LSTMModel(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size, num_layers):
+        super(LSTMModel, self).__init__()
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x):
+        outputs = []
+        h_t, c_t = self.init_hidden(x.size(0))
+        h_t=h_t.to(x.device)
+        c_t=c_t.to(x.device)
+        for t in range(x.size(1)):
+            out, (h_t, c_t) = self.lstm(x[:, t:t+1, :], (h_t, c_t))
+            out = self.fc(out[:, -1, :])
+            outputs.append(out)
+        outputs = torch.stack(outputs, dim=1)
+        return outputs, (h_t, c_t)
+
+    def init_hidden(self, batch_size):
+        h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size)
+        c_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size)
+        return h_0, c_0
+
+# FlowSimQueue Class
+class FlowSimQueueLen(LightningModule):
+    def __init__(
+        self,
+        n_layer=4,
+        loss_fn_type="l1",
+        learning_rate=6e-4,
+        batch_size=400,
+        hidden_size=50,
+        enable_dist=False,
+        enable_val=True,
+        save_dir=None,
+        output_size=1,
+        input_size=2
+    ):
+        super(FlowSimQueueLen, self).__init__()
+        if loss_fn_type == "l1":
+            self.loss_fn = nn.L1Loss()
+        elif loss_fn_type == "mse":
+            self.loss_fn = nn.MSELoss()
+        self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer)
+        
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.enable_dist = enable_dist
+        self.enable_val = enable_val
+        self.save_dir = save_dir
+        logging.info(
+            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}")
+    
+    def forward(self, x):
+        return self.model_lstm(x)
+    
+    def step(self, batch, batch_idx, tag=None):
+        input, output, spec, src_dst_pair_target_str = batch
+        estimated,_ = self.model_lstm(input)
+        loss = self.loss_fn(estimated, output)
+        
+        if self.enable_dist:
+            self.log(
+                f"{tag}_loss_sync",
+                loss,
+                sync_dist=True,
+                on_step=True,
+                on_epoch=True,
+                logger=True,
+                prog_bar=True,
+                batch_size=self.batch_size,
+            )
+        else:
+            self.log(
+                f"{tag}_loss",
+                loss,
+                on_step=True,
+                on_epoch=True,
+                logger=True,
+                prog_bar=True,
+                batch_size=self.batch_size,
+            )
+
+        if tag == "test":
+            test_dir = f"{self.save_dir}/{spec[0]}_{src_dst_pair_target_str[0]}"
+            os.makedirs(test_dir, exist_ok=True)
+            estimated = estimated.cpu().numpy()
+            output = output.cpu().numpy()
+            
+            np.savez(
+                f"{test_dir}/res.npz",
+                queue_len_est=estimated,
+                output=output
+            )
+        return loss
+    
+    def training_step(self, batch, batch_idx):
+        return self.step(batch, batch_idx, tag="train")
+
+    def validation_step(self, batch, batch_idx):
+        if self.enable_val:
+            return self.step(batch, batch_idx, tag="val")
+
+    def test_step(self, batch, batch_idx):
+        return self.step(batch, batch_idx, tag="test")
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.model_lstm.parameters(), lr=self.learning_rate
+        )
         return optimizer

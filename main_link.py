@@ -2,16 +2,16 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from util.dataset import LinkDataModule
+from util.dataset import PathDataModuleQueueLen
 from util.arg_parser import create_config
-from util.utils import (
+from util.func import (
     fix_seed,
     create_logger,
 )
 from util.model import (
-    FlowSimTransformer_Link,
+    FlowSimQueueLen,
 )
-from util.callback import MyCallback, OverrideEpochStepCallback
+from util.callback import OverrideEpochStepCallback
 import logging, os
 import torch
 import yaml
@@ -25,6 +25,7 @@ with open(config_file, "r") as f:
     dataset_config = config["dataset"]
     model_config = config["model"]
     training_config = config["training"]
+
 shard = dataset_config["shard"]
 fix_seed(shard)
 
@@ -38,29 +39,34 @@ shard_list = sorted(
     )
 )
 n_flows_list = dataset_config["n_flows_list"]
-n_tcs_list = dataset_config["n_tcs_list"]
-lr = dataset_config["lr"]
+n_hosts_list = dataset_config["n_hosts_list"]
+sample_list_config = dataset_config["sample_list"]
+sample_list = sorted(
+    np.random.choice(
+        np.arange(sample_list_config[0], sample_list_config[1]),
+        size=sample_list_config[2],
+        replace=False,
+    )
+)
 
+lr = dataset_config["lr"]
 note_str = f"{args.note}_" if args.note else ""
-program_name = f"{note_str}shard{len(shard_list)}_nflows{len(n_flows_list)}_nhosts{len(n_tcs_list)}_lr{lr}Gbps"
+program_name = f"{note_str}shard{len(shard_list)}_nflows{len(n_flows_list)}_nhosts{len(n_hosts_list)}_nsamples{len(sample_list)}_lr{lr}Gbps"
 override_epoch_step_callback = OverrideEpochStepCallback()
+dir_output=args.dir_output
+dir_input=args.dir_input
 
 if args.mode == "train":
-    tb_logger = TensorBoardLogger(dataset_config["dir_output"], name=program_name)
+    tb_logger = TensorBoardLogger(dir_output, name=program_name)
 
     # configure logging at the root level of Lightning
     os.makedirs(tb_logger.log_dir, exist_ok=True)
-    hidden_dims_str = "-".join([str(x) for x in model_config["hidden_dims"]])
-    model_name = "bs{}_lr{}_bt{}_nlayer{}_nhead{}_nembd{}_block{}_vocab{}_hd{}".format(
+    model_name = "bs{}_lr{}_bt{}_nlayer{}_hd{}".format(
         training_config["batch_size"],
         training_config["learning_rate"],
         dataset_config["bucket_thold"],
         model_config["n_layer"],
-        model_config["n_head"],
-        model_config["n_embd"],
-        model_config["block_size"],
-        model_config["vocab_size"],
-        hidden_dims_str,
+        model_config["hidden_dim"],
     )
     create_logger(os.path.join(tb_logger.log_dir, f"{model_name}.log"))
     logging.info(f"Save to: {tb_logger.log_dir}")
@@ -74,32 +80,28 @@ if args.mode == "train":
         logging.info(
             f"gloo: {torch.distributed.is_gloo_available()}, nccl: {torch.distributed.is_nccl_available()}"
         )
-        if (not model_config.get("enable_position", True)) or (
-            not dataset_config.get("enable_context", False)
-        ):
-            ddp_strategy = DDPStrategy(
-                process_group_backend="gloo", find_unused_parameters=True
-            )
-        else:
-            ddp_strategy = DDPStrategy(process_group_backend="gloo")
+        
+        ddp_strategy = DDPStrategy(
+            process_group_backend="gloo", find_unused_parameters=True
+        )
+        
     with open(f"{tb_logger.log_dir}/config.yaml", "w") as f:
         yaml.dump(config, f)
 
-    datamodule = LinkDataModule(
-        dir_input=dataset_config["dir_input"],
-        n_flows_list=n_flows_list,
+    datamodule = PathDataModuleQueueLen(
+        dir_input=dir_input,
         shard_list=shard_list,
-        n_tcs_list=n_tcs_list,
+        n_flows_list=n_flows_list,
+        n_hosts_list=n_hosts_list,
+        sample_list=sample_list,
         batch_size=training_config["batch_size"],
         num_workers=training_config["num_workers"],
         train_frac=dataset_config["train_frac"],
         dir_output=tb_logger.log_dir,
         lr=lr,
         bucket_thold=dataset_config["bucket_thold"],
-        enable_prop_delay=dataset_config["enable_prop_delay"],
-        enable_percentile=dataset_config["enable_percentile"],
+        topo_type=dataset_config.get("topo_type", ""),
         enable_context=dataset_config.get("enable_context", False),
-        enable_one_traffic=dataset_config.get("enable_one_traffic", False),
     )
 
     # Init checkpointer
@@ -137,7 +139,7 @@ if args.mode == "train":
         accelerator="gpu",
         devices=training_config["gpu"],
         strategy=ddp_strategy if enable_dist else "auto",
-        default_root_dir=dataset_config["dir_output"],
+        default_root_dir=dir_output,
         # log_every_n_steps=args.n_epochs_every_log,
         log_every_n_steps=1,
         val_check_interval=1.0,
@@ -147,33 +149,23 @@ if args.mode == "train":
         # enable_progress_bar=True,
     )
     model_name = model_config["model_name"]
-    if model_name == "transformer":
-        model = FlowSimTransformer_Link(
+    if model_name == "lstm":
+        model = FlowSimQueueLen(
             n_layer=model_config["n_layer"],
-            n_head=model_config["n_head"],
-            n_embd=model_config["n_embd"],
-            block_size=model_config["block_size"],
-            vocab_size=model_config["vocab_size"],
-            dropout=model_config["dropout"],
-            compile=model_config["compile"],
             loss_fn_type=model_config["loss_fn_type"],
-            weight_decay=training_config["weight_decay"],
             learning_rate=training_config["learning_rate"],
-            betas=training_config["betas"],
             batch_size=training_config["batch_size"],
-            enable_masked_loss=training_config["enable_masked_loss"],
-            enable_weighted_loss=training_config["enable_weighted_loss"],
-            enable_context=dataset_config.get("enable_context", False),
-            hidden_sizes=model_config["hidden_dims"],
-            enable_position=model_config["enable_position"],
+            hidden_size=model_config["hidden_dim"],
             enable_val=enable_val,
             enable_dist=enable_dist,
+            input_size=2,
+            output_size=1,
         )
     trainer.fit(model, datamodule=datamodule, ckpt_path=args.ckpt_path)
 else:
     DEVICE = torch.device(training_config["gpu"][0])
     dir_train = (
-        f"{dataset_config['dir_output']}/{program_name}/version_{args.version_id}"
+        f"{dir_output}/{program_name}/version_{args.version_id}"
     )
     print(f"load model: {dir_train}")
 
@@ -185,25 +177,25 @@ else:
     logging.info(f"Save to: {tb_logger.log_dir}")
     logging.info(args)
 
-    datamodule = LinkDataModule(
-        dir_input=dataset_config["dir_input"],
-        n_flows_list=n_flows_list,
+    datamodule = PathDataModuleQueueLen(
+        dir_input=dir_input,
         shard_list=shard_list,
-        n_tcs_list=n_tcs_list,
+        n_flows_list=n_flows_list,
+        n_hosts_list=n_hosts_list,
+        sample_list=sample_list,
         batch_size=training_config["batch_size"],
         num_workers=training_config["num_workers"],
         train_frac=dataset_config["train_frac"],
         dir_output=dir_train,
         # customized config
-        bucket_thold=dataset_config["bucket_thold"],
         lr=dataset_config["lr"],
+        bucket_thold=dataset_config["bucket_thold"],
+        enable_context=dataset_config.get("enable_context", False),
+        topo_type=dataset_config.get("topo_type", ""),
+        mode=args.mode,
         test_on_train=args.test_on_train,
         test_on_empirical=args.test_on_empirical,
         test_on_manual=args.test_on_manual,
-        enable_prop_delay=dataset_config["enable_prop_delay"],
-        enable_percentile=dataset_config["enable_percentile"],
-        enable_context=dataset_config.get("enable_context", False),
-        enable_one_traffic=dataset_config.get("enable_one_traffic", False),
     )
 
     callbacks = [override_epoch_step_callback]
@@ -222,32 +214,21 @@ else:
         # limit_train_batches=1,
         # limit_val_batches=1,
         # enable_progress_bar=False,
-        # )
     )
     model_name = model_config["model_name"]
-    if model_name == "transformer":
-        model = FlowSimTransformer_Link.load_from_checkpoint(
-            f"{dir_train}/checkpoints/best.ckpt",
+    if model_name == "lstm":
+        model = FlowSimQueueLen.load_from_checkpoint(
+            f"{dir_train}/checkpoints/last.ckpt",
             map_location=DEVICE,
             n_layer=model_config["n_layer"],
-            n_head=model_config["n_head"],
-            n_embd=model_config["n_embd"],
-            block_size=model_config["block_size"],
-            vocab_size=model_config["vocab_size"],
-            dropout=model_config["dropout"],
-            compile=model_config["compile"],
             loss_fn_type=model_config["loss_fn_type"],
-            weight_decay=training_config["weight_decay"],
             learning_rate=training_config["learning_rate"],
-            betas=training_config["betas"],
             batch_size=training_config["batch_size"],
+            hidden_size=model_config["hidden_dim"],
             enable_val=training_config["enable_val"],
             enable_dist=training_config["enable_dist"],
-            enable_masked_loss=training_config["enable_masked_loss"],
-            enable_weighted_loss=training_config["enable_weighted_loss"],
-            enable_context=dataset_config.get("enable_context", False),
-            hidden_sizes=model_config["hidden_dims"],
-            enable_position=model_config["enable_position"],
+            input_size=2,
+            output_size=1,
             save_dir=tb_logger.log_dir,
         )
     trainer.test(model, datamodule=datamodule)
