@@ -789,14 +789,15 @@ class PathDatasetQueueLen(Dataset):
         sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
         fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
         fats_ia_flowsim=np.diff(fats_flowsim)
-        fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
-        input=np.concatenate((sizes_flowsim[:,None],fats_ia_flowsim[:,None]),axis=1).astype(np.float32)
+        fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0).astype(np.float32)
+        sizes_flowsim=sizes_flowsim.astype(np.float32)/MTU
+        input=np.concatenate((sizes_flowsim[:,None],fats_ia_flowsim[:,None]),axis=1)
         
         qfeat=np.load(f"{dir_input_tmp}/qfeat{topo_type}.npy")
         if len(qfeat)!=len(sizes_flowsim):
             print(f"qfeat shape mismatch: {len(qfeat)} vs {len(sizes_flowsim)}")
             assert False
-        queue_lengths_dict = {qfeat[i,0]: qfeat[i,2]*1000.0 for i in range(len(qfeat))}
+        queue_lengths_dict = {qfeat[i,0]: qfeat[i,2] for i in range(len(qfeat))}
         output=np.array([queue_lengths_dict[flow_id] for flow_id in range(len(sizes_flowsim))]).reshape(-1, 1).astype(np.float32)
         return (
             input,
