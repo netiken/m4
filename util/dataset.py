@@ -514,7 +514,7 @@ class PathDataset_Context(Dataset):
             # np.array(src_dst_pair_target),
         )
 
-class PathDataModuleQueueLen(LightningDataModule):
+class PathDataModulePerFlow(LightningDataModule):
     def __init__(
         self,
         dir_input,
@@ -534,6 +534,7 @@ class PathDataModuleQueueLen(LightningDataModule):
         test_on_manual=False,
         enable_context=False,
         topo_type="",
+        output_type="queueLen"
     ) -> None:
         """
         Initializes a new instance of the class with the specified parameters.
@@ -574,7 +575,8 @@ class PathDataModuleQueueLen(LightningDataModule):
         self.test_on_train = test_on_train
         self.test_on_empirical = test_on_empirical
         self.test_on_manual = test_on_manual
-    
+        self.output_type=output_type
+        
     def setup(self, stage: str):
         """
         Assign train/val datasets for use in dataloaders.
@@ -744,11 +746,17 @@ class PathDataModuleQueueLen(LightningDataModule):
         return train_part, test_part
 
     def __create_dataset(self, data_list, dir_input):
-        return PathDatasetQueueLen(
-            data_list,
-            dir_input,
-        )
-
+        if self.output_type=="queueLen":
+            return PathDatasetQueueLen(
+                data_list,
+                dir_input,
+            )
+        elif self.output_type=="fctSldn":
+            return PathDatasetFctSldn(
+                data_list,
+                dir_input,
+            )
+            
     def __dump_data_list(self, path):
         with open(f"{path}/data_list.json", "w") as fp:
             data_dict = {
@@ -773,6 +781,49 @@ class PathDatasetQueueLen(Dataset):
         self.dir_input = dir_input
         logging.info(
             f"call PathDatasetQueueLen: data_list={len(data_list)}"
+        )
+
+    def __len__(self):
+        return len(self.data_list)
+        
+    def __getitem__(self, idx):
+        spec, src_dst_pair_target, topo_type = self.data_list[idx]
+        src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])
+        
+        # load data
+        dir_input_tmp = f"{self.dir_input}/{spec}"
+        
+        # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+        sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
+        fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
+        fats_ia_flowsim=np.diff(fats_flowsim)
+        fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0).astype(np.float32)
+        sizes_flowsim=sizes_flowsim.astype(np.float32)/MTU
+        input=np.concatenate((sizes_flowsim[:,None],fats_ia_flowsim[:,None]),axis=1)
+        
+        qfeat=np.load(f"{dir_input_tmp}/qfeat{topo_type}.npy")
+        if len(qfeat)!=len(sizes_flowsim):
+            print(f"qfeat shape mismatch: {len(qfeat)} vs {len(sizes_flowsim)}")
+            assert False
+        queue_lengths_dict = {qfeat[i,0]: qfeat[i,2] for i in range(len(qfeat))}
+        output=np.array([queue_lengths_dict[flow_id] for flow_id in range(len(sizes_flowsim))]).reshape(-1, 1).astype(np.float32)
+        return (
+            input,
+            output,
+            spec+topo_type,
+            src_dst_pair_target_str,
+        )
+        
+class PathDatasetFctSldn(Dataset):
+    def __init__(
+        self,
+        data_list,
+        dir_input,
+    ):
+        self.data_list = data_list
+        self.dir_input = dir_input
+        logging.info(
+            f"call PathDatasetFctSldn: data_list={len(data_list)}"
         )
 
     def __len__(self):

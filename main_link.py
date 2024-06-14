@@ -2,14 +2,14 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from util.dataset import PathDataModuleQueueLen
+from util.dataset import PathDataModulePerFlow
 from util.arg_parser import create_config
 from util.func import (
     fix_seed,
     create_logger,
 )
 from util.model import (
-    FlowSimQueueLen,
+    FlowSimPerFlow,
 )
 from util.callback import OverrideEpochStepCallback
 import logging, os
@@ -89,7 +89,7 @@ if args.mode == "train":
     with open(f"{tb_logger.log_dir}/config.yaml", "w") as f:
         yaml.dump(config, f)
 
-    datamodule = PathDataModuleQueueLen(
+    datamodule = PathDataModulePerFlow(
         dir_input=dir_input,
         shard_list=shard_list,
         n_flows_list=n_flows_list,
@@ -103,6 +103,7 @@ if args.mode == "train":
         bucket_thold=dataset_config["bucket_thold"],
         topo_type=dataset_config.get("topo_type", ""),
         enable_context=dataset_config.get("enable_context", False),
+        output_type=dataset_config.get("output_type", "fctSldn"),
     )
 
     # Init checkpointer
@@ -151,7 +152,7 @@ if args.mode == "train":
     )
     model_name = model_config["model_name"]
     if model_name == "lstm":
-        model = FlowSimQueueLen(
+        model = FlowSimPerFlow(
             n_layer=model_config["n_layer"],
             loss_fn_type=model_config["loss_fn_type"],
             learning_rate=training_config["learning_rate"],
@@ -161,6 +162,7 @@ if args.mode == "train":
             enable_dist=enable_dist,
             input_size=2,
             output_size=1,
+            enable_bidirectional=model_config.get("enable_bidirectional", False),
         )
     trainer.fit(model, datamodule=datamodule, ckpt_path=args.ckpt_path)
 else:
@@ -178,7 +180,7 @@ else:
     logging.info(f"Save to: {tb_logger.log_dir}")
     logging.info(args)
 
-    datamodule = PathDataModuleQueueLen(
+    datamodule = PathDataModulePerFlow(
         dir_input=dir_input,
         shard_list=shard_list,
         n_flows_list=n_flows_list,
@@ -197,6 +199,7 @@ else:
         test_on_train=args.test_on_train,
         test_on_empirical=args.test_on_empirical,
         test_on_manual=args.test_on_manual,
+        output_type=dataset_config.get("output_type", "fctSldn"),
     )
 
     callbacks = [override_epoch_step_callback]
@@ -218,7 +221,7 @@ else:
     )
     model_name = model_config["model_name"]
     if model_name == "lstm":
-        model = FlowSimQueueLen.load_from_checkpoint(
+        model = FlowSimPerFlow.load_from_checkpoint(
             f"{dir_train}/checkpoints/last.ckpt",
             map_location=DEVICE,
             n_layer=model_config["n_layer"],
@@ -231,5 +234,6 @@ else:
             input_size=2,
             output_size=1,
             save_dir=tb_logger.log_dir,
+            enable_bidirectional=model_config.get("enable_bidirectional", False),
         )
     trainer.test(model, datamodule=datamodule)

@@ -498,11 +498,11 @@ class FlowSimTransformer_Path(FlowSimTransformer_Base):
 
 # LSTM Model
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers):
+    def __init__(self, input_size, hidden_size, output_size, num_layers, enable_bidirectional=False):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional)
         self.fc = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
@@ -530,7 +530,7 @@ class LSTMModel(nn.Module):
         return h_0, c_0
 
 # FlowSimQueue Class
-class FlowSimQueueLen(LightningModule):
+class FlowSimPerFlow(LightningModule):
     def __init__(
         self,
         n_layer=4,
@@ -542,14 +542,18 @@ class FlowSimQueueLen(LightningModule):
         enable_val=True,
         save_dir=None,
         output_size=1,
-        input_size=2
+        input_size=2,
+        enable_bidirectional=False,
     ):
-        super(FlowSimQueueLen, self).__init__()
+        super(FlowSimPerFlow, self).__init__()
         if loss_fn_type == "l1":
             self.loss_fn = nn.L1Loss()
         elif loss_fn_type == "mse":
             self.loss_fn = nn.MSELoss()
-        self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer)
+        if enable_bidirectional:
+            self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, bidirectional=True)
+        else:
+            self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer)
         
         self.learning_rate = learning_rate
         self.batch_size = batch_size
