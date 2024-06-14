@@ -14,7 +14,7 @@ ps aux | head -1; ps aux | grep ^lichenni| sort -rnk 4 | more
 
 tensorboard --logdir /data2/lichenni/output_perflow --port 8009 --bind_all
 
-git add -A . ; git commit -m "gt: queue len in B"; git push
+git add -A . ; git commit -m "wrap up after group meeting"; git push
 
 >/dev/null
 
@@ -22,3 +22,5 @@ time run ../ckpts/model_llama.bin ../ckpts/model_mlp.bin ../ckpts/data_lr10Gbps_
 
 
 python main_link.py --train_config=./config/train_config.yaml --mode=train --dir_input=/data2/lichenni/path_perflow --dir_output=/data2/lichenni/output_perflow --note inputLog
+
+python main_link.py --test_config=./config/test_config.yaml --mode=test --note=sizeNum --version_id 0 --dir_input=/data2/lichenni/path_perflow --dir_output=/data2/lichenni/output_perflow --test_on_train 

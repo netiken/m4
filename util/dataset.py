@@ -802,6 +802,6 @@ class PathDatasetQueueLen(Dataset):
         return (
             input,
             output,
-            spec,
+            spec+topo_type,
             src_dst_pair_target_str,
         )
