@@ -5,7 +5,7 @@ dataset:
   n_flows_list: [20000]
   n_hosts_list: [3]
   shard: 0
-  shard_list: [0,50000,50000] # [start, end, num]
+  shard_list: [0,20000,20000] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   bucket_thold: 1
@@ -19,7 +19,7 @@ model:
   model_name: "lstm"
   n_layer: 2
   loss_fn_type: "mse"
-  hidden_dim: 64
+  hidden_dim: 32
   enable_bidirectional: True
 
 # Training parameters
