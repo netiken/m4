@@ -502,10 +502,15 @@ class LSTMModel(nn.Module):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.bidirectional = enable_bidirectional
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional)
-        self.fc = nn.Linear(hidden_size, output_size)
+        # Adjust the fully connected layer based on bidirectionality
+        if enable_bidirectional:
+            self.fc = nn.Linear(hidden_size * 2, output_size)
+        else:
+            self.fc = nn.Linear(hidden_size, output_size)
 
-    def forward(self, x):
+    def forward(self, x,lengths):
         batch_size, seq_len, _ = x.size()
         h_t, c_t = self.init_hidden(batch_size)
         h_t=h_t.to(x.device)
@@ -518,15 +523,23 @@ class LSTMModel(nn.Module):
         #     outputs.append(out)
         # outputs = torch.stack(outputs, dim=1)
         # Process the entire sequence at once
-        lstm_out, (h_t, c_t) = self.lstm(x, (h_t, c_t))
+        # lstm_out, (h_t, c_t) = self.lstm(x, (h_t, c_t))
+        
+        # Pack the padded batch of sequences for LSTM
+        packed_input = nn.utils.rnn.pack_padded_sequence(x, lengths, batch_first=True, enforce_sorted=False)
+        packed_output, (h_t, c_t) = self.lstm(packed_input, (h_t, c_t))
+        
+        # Unpack the output sequence
+        lstm_out, _ = nn.utils.rnn.pad_packed_sequence(packed_output, batch_first=True)
         
         # Apply the fully connected layer to each time step
         out = self.fc(lstm_out)
         return out, (h_t, c_t)
 
     def init_hidden(self, batch_size):
-        h_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size)
-        c_0 = torch.zeros(self.num_layers, batch_size, self.hidden_size)
+        num_directions = 2 if self.bidirectional else 1
+        h_0 = torch.zeros(self.num_layers * num_directions, batch_size, self.hidden_size)
+        c_0 = torch.zeros(self.num_layers * num_directions, batch_size, self.hidden_size)
         return h_0, c_0
 
 # FlowSimQueue Class
@@ -550,10 +563,7 @@ class FlowSimPerFlow(LightningModule):
             self.loss_fn = nn.L1Loss()
         elif loss_fn_type == "mse":
             self.loss_fn = nn.MSELoss()
-        if enable_bidirectional:
-            self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, bidirectional=True)
-        else:
-            self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer)
+        self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, enable_bidirectional=enable_bidirectional)
         
         self.learning_rate = learning_rate
         self.batch_size = batch_size
@@ -561,15 +571,24 @@ class FlowSimPerFlow(LightningModule):
         self.enable_val = enable_val
         self.save_dir = save_dir
         logging.info(
-            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}")
+            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, enable_bidirectional: {enable_bidirectional}")
     
-    def forward(self, x):
-        return self.model_lstm(x)
+    def forward(self, x,lengths):
+        return self.model_lstm(x,lengths)
     
     def step(self, batch, batch_idx, tag=None):
-        input, output, spec, src_dst_pair_target_str = batch
-        estimated,_ = self.model_lstm(input)
-        loss = self.loss_fn(estimated, output)
+        input, output, lengths, spec, src_dst_pair_target_str = batch
+        estimated, _ = self.model_lstm(input, lengths)
+        # Generate a mask based on lengths
+        lengths = torch.tensor(lengths)
+        mask = torch.arange(output.size(1)).expand(len(lengths), output.size(1)) < lengths.unsqueeze(1)
+        
+        # Apply the mask to both estimated and output
+        masked_estimated = estimated[mask]
+        masked_output = output[mask]
+        
+        # Calculate the loss
+        loss = self.loss_fn(masked_estimated, masked_output)
         
         if self.enable_dist:
             self.log(

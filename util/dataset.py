@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset
 import numpy as np
 from torch.utils.data import DataLoader
+from torch.nn.utils.rnn import pad_sequence
 from pytorch_lightning import LightningDataModule
 import torch
 from .consts import (
@@ -513,7 +514,23 @@ class PathDataset_Context(Dataset):
             src_dst_pair_target_str,
             # np.array(src_dst_pair_target),
         )
-
+# Custom collate function to handle variable sequence lengths
+def collate_fn_per_flow(batch):
+    inputs, outputs, specs, src_dst_pairs = zip(*batch)
+    
+    # Get lengths of each sequence in the batch
+    lengths = np.array([x.shape[0] for x in inputs]).astype(np.int64)
+    
+    # Pad sequences
+    max_len = max(lengths)
+    padded_inputs = np.zeros((len(inputs), max_len, inputs[0].shape[1]), dtype=np.float32)
+    padded_outputs = np.zeros((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)
+    
+    for i, (input, output) in enumerate(zip(inputs, outputs)):
+        padded_inputs[i, :input.shape[0], :] = input
+        padded_outputs[i, :output.shape[0], :] = output
+    
+    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs
 class PathDataModulePerFlow(LightningDataModule):
     def __init__(
         self,
@@ -563,9 +580,11 @@ class PathDataModulePerFlow(LightningDataModule):
                         )
                         spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
                         for sample in sample_list:
-                            qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
-                            flow_id_list=qfeat[:,0]
-                            if len(flow_id_list)==len(np.unique(flow_id_list))==n_flows*2:
+                            # qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
+                            fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
+                            fcts = np.load(f"{dir_input}/{spec}/fct{topo_type_cur}s{sample}.npy")
+                            # flow_id_list=qfeat[:,0]
+                            if len(fsize)==len(fcts):
                                 data_list.append(
                                     (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
                                 )
@@ -706,6 +725,7 @@ class PathDataModulePerFlow(LightningDataModule):
             num_workers=self.num_workers,
             shuffle=True,
             pin_memory=True,
+            collate_fn=collate_fn_per_flow,
         )
 
     def val_dataloader(self):
@@ -719,6 +739,7 @@ class PathDataModulePerFlow(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
+            collate_fn=collate_fn_per_flow,
         )
 
     # Create test dataloader
@@ -734,6 +755,7 @@ class PathDataModulePerFlow(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
+            collate_fn=collate_fn_per_flow,
         )
 
     def __random_split_list(self, lst, percentage):
@@ -756,6 +778,8 @@ class PathDataModulePerFlow(LightningDataModule):
                 data_list,
                 dir_input,
             )
+        else:
+            assert "output_type not supported"
             
     def __dump_data_list(self, path):
         with open(f"{path}/data_list.json", "w") as fp:
@@ -839,20 +863,17 @@ class PathDatasetFctSldn(Dataset):
         # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
         sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
         fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
-        fats_ia_flowsim=np.diff(fats_flowsim)
-        fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0).astype(np.float32)
-        sizes_flowsim=sizes_flowsim.astype(np.float32)/MTU
-        input=np.concatenate((sizes_flowsim[:,None],fats_ia_flowsim[:,None]),axis=1)
         
-        qfeat=np.load(f"{dir_input_tmp}/qfeat{topo_type}.npy")
-        if len(qfeat)!=len(sizes_flowsim):
-            print(f"qfeat shape mismatch: {len(qfeat)} vs {len(sizes_flowsim)}")
-            assert False
-        queue_lengths_dict = {qfeat[i,0]: qfeat[i,2] for i in range(len(qfeat))}
-        output=np.array([queue_lengths_dict[flow_id] for flow_id in range(len(sizes_flowsim))]).reshape(-1, 1).astype(np.float32)
-        return (
-            input,
-            output,
-            spec+topo_type,
-            src_dst_pair_target_str,
-        )
+        # Calculate inter-arrival times and adjust the first element
+        fats_ia_flowsim=np.diff(fats_flowsim)
+        fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
+        sizes_flowsim=sizes_flowsim
+        
+        # Combine flow sizes and inter-arrival times into the input tensor
+        input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim)).astype(np.float32)
+        
+        fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
+        i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
+        output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
+        
+        return input_data, output_data, spec + topo_type, src_dst_pair_target_str
