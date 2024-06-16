@@ -61,12 +61,11 @@ if args.mode == "train":
 
     # configure logging at the root level of Lightning
     os.makedirs(tb_logger.log_dir, exist_ok=True)
-    model_name = "bs{}_lr{}_bt{}_nlayer{}_hd{}".format(
+    model_name = "bs{}_lr{}_nlayer{}_hd{}".format(
         training_config["batch_size"],
         training_config["learning_rate"],
-        dataset_config["bucket_thold"],
         model_config["n_layer"],
-        model_config["hidden_dim"],
+        model_config["hidden_size"],
     )
     create_logger(os.path.join(tb_logger.log_dir, f"{model_name}.log"))
     logging.info(f"Save to: {tb_logger.log_dir}")
@@ -100,9 +99,7 @@ if args.mode == "train":
         train_frac=dataset_config["train_frac"],
         dir_output=tb_logger.log_dir,
         lr=lr,
-        bucket_thold=dataset_config["bucket_thold"],
         topo_type=dataset_config.get("topo_type", ""),
-        enable_context=dataset_config.get("enable_context", False),
         output_type=dataset_config.get("output_type", "fctSldn"),
     )
 
@@ -157,7 +154,7 @@ if args.mode == "train":
             loss_fn_type=model_config["loss_fn_type"],
             learning_rate=training_config["learning_rate"],
             batch_size=training_config["batch_size"],
-            hidden_size=model_config["hidden_dim"],
+            hidden_size=model_config["hidden_size"],
             enable_val=enable_val,
             enable_dist=enable_dist,
             input_size=2,
@@ -192,14 +189,12 @@ else:
         dir_output=dir_train,
         # customized config
         lr=dataset_config["lr"],
-        bucket_thold=dataset_config["bucket_thold"],
-        enable_context=dataset_config.get("enable_context", False),
         topo_type=dataset_config.get("topo_type", ""),
+        output_type=dataset_config.get("output_type", "fctSldn"),
         mode=args.mode,
         test_on_train=args.test_on_train,
         test_on_empirical=args.test_on_empirical,
         test_on_manual=args.test_on_manual,
-        output_type=dataset_config.get("output_type", "fctSldn"),
     )
 
     callbacks = [override_epoch_step_callback]
@@ -228,12 +223,12 @@ else:
             loss_fn_type=model_config["loss_fn_type"],
             learning_rate=training_config["learning_rate"],
             batch_size=training_config["batch_size"],
-            hidden_size=model_config["hidden_dim"],
+            hidden_size=model_config["hidden_size"],
             enable_val=training_config["enable_val"],
             enable_dist=training_config["enable_dist"],
             input_size=2,
             output_size=1,
-            save_dir=tb_logger.log_dir,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
+            save_dir=tb_logger.log_dir,
         )
     trainer.test(model, datamodule=datamodule)

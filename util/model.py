@@ -504,17 +504,13 @@ class LSTMModel(nn.Module):
         self.num_layers = num_layers
         self.bidirectional = enable_bidirectional
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional)
+        self.num_directions = 2 if enable_bidirectional else 1
         # Adjust the fully connected layer based on bidirectionality
-        if enable_bidirectional:
-            self.fc = nn.Linear(hidden_size * 2, output_size)
-        else:
-            self.fc = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
 
     def forward(self, x,lengths):
-        batch_size, seq_len, _ = x.size()
-        h_t, c_t = self.init_hidden(batch_size)
-        h_t=h_t.to(x.device)
-        c_t=c_t.to(x.device)
+        batch_size = x.size(0)
+        h_t, c_t = self.init_hidden(batch_size, x.device)
         
         # outputs = []
         # for t in range(seq_len):
@@ -536,49 +532,54 @@ class LSTMModel(nn.Module):
         out = self.fc(lstm_out)
         return out, (h_t, c_t)
 
-    def init_hidden(self, batch_size):
-        num_directions = 2 if self.bidirectional else 1
-        h_0 = torch.zeros(self.num_layers * num_directions, batch_size, self.hidden_size)
-        c_0 = torch.zeros(self.num_layers * num_directions, batch_size, self.hidden_size)
+    def init_hidden(self, batch_size, device):
+        h_0 = torch.zeros(self.num_layers * self.num_directions, batch_size, self.hidden_size, device=device)
+        c_0 = torch.zeros(self.num_layers * self.num_directions, batch_size, self.hidden_size, device=device)
         return h_0, c_0
 
-# FlowSimQueue Class
 class FlowSimPerFlow(LightningModule):
     def __init__(
         self,
-        n_layer=4,
+        n_layer=2,
         loss_fn_type="l1",
-        learning_rate=6e-4,
+        learning_rate=1e-3,
         batch_size=400,
-        hidden_size=50,
+        hidden_size=32,
         enable_dist=False,
         enable_val=True,
-        save_dir=None,
         output_size=1,
         input_size=2,
         enable_bidirectional=False,
+        save_dir=None,
     ):
         super(FlowSimPerFlow, self).__init__()
-        if loss_fn_type == "l1":
-            self.loss_fn = nn.L1Loss()
-        elif loss_fn_type == "mse":
-            self.loss_fn = nn.MSELoss()
+        self.save_hyperparameters()
+        
+        self.loss_fn = self._get_loss_fn(loss_fn_type)
         self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, enable_bidirectional=enable_bidirectional)
         
-        self.learning_rate = learning_rate
-        self.batch_size = batch_size
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir
+        
         logging.info(
             f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, enable_bidirectional: {enable_bidirectional}")
     
+    def _get_loss_fn(self, loss_fn_type):
+        if loss_fn_type == "l1":
+            return nn.L1Loss()
+        elif loss_fn_type == "mse":
+            return nn.MSELoss()
+        else:
+            raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
+        
     def forward(self, x,lengths):
         return self.model_lstm(x,lengths)
     
     def step(self, batch, batch_idx, tag=None):
         input, output, lengths, spec, src_dst_pair_target_str = batch
         estimated, _ = self.model_lstm(input, lengths)
+        
         # Generate a mask based on lengths
         lengths = torch.tensor(lengths)
         mask = torch.arange(output.size(1)).expand(len(lengths), output.size(1)) < lengths.unsqueeze(1)
@@ -590,41 +591,26 @@ class FlowSimPerFlow(LightningModule):
         # Calculate the loss
         loss = self.loss_fn(masked_estimated, masked_output)
         
+        self._log_loss(loss, tag)
+        self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)
+        
+        return loss
+    
+    def _log_loss(self, loss, tag):
+        loss_tag = f"{tag}_loss"
         if self.enable_dist:
-            self.log(
-                f"{tag}_loss_sync",
-                loss,
-                sync_dist=True,
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-                batch_size=self.batch_size,
-            )
+            loss_tag += "_sync"
+            self.log(loss_tag, loss, sync_dist=True, on_step=True, on_epoch=True, logger=True, prog_bar=True, batch_size=self.hparams.batch_size)
         else:
-            self.log(
-                f"{tag}_loss",
-                loss,
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-                batch_size=self.batch_size,
-            )
-
+            self.log(loss_tag, loss, on_step=True, on_epoch=True, logger=True, prog_bar=True, batch_size=self.hparams.batch_size)
+    
+    def _save_test_results(self, tag, spec, src_dst_pair_target_str, estimated, output):
         if tag == "test":
             test_dir = f"{self.save_dir}/{spec[0]}_{src_dst_pair_target_str[0]}"
             os.makedirs(test_dir, exist_ok=True)
-            estimated = estimated.cpu().numpy()
-            output = output.cpu().numpy()
-            
-            np.savez(
-                f"{test_dir}/res.npz",
-                queue_len_est=estimated,
-                output=output
-            )
-        return loss
-    
+            np.savez(f"{test_dir}/res.npz", queue_len_est=estimated.cpu().numpy(), output=output.cpu().numpy())
+
+
     def training_step(self, batch, batch_idx):
         return self.step(batch, batch_idx, tag="train")
 
@@ -641,7 +627,7 @@ class FlowSimPerFlow(LightningModule):
         # )
         # return optimizer
     
-        optimizer = torch.optim.Adam(self.model_lstm.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(self.model_lstm.parameters(), lr=self.hparams.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5, min_lr=1e-6)
         return {
             'optimizer': optimizer,
