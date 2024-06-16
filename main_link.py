@@ -9,7 +9,8 @@ from util.func import (
     create_logger,
 )
 from util.model import (
-    FlowSimPerFlow,
+    FlowSimLstm,
+    FlowSimTransformer
 )
 from util.callback import OverrideEpochStepCallback
 import logging, os
@@ -149,7 +150,7 @@ if args.mode == "train":
     )
     model_name = model_config["model_name"]
     if model_name == "lstm":
-        model = FlowSimPerFlow(
+        model = FlowSimLstm(
             n_layer=model_config["n_layer"],
             loss_fn_type=model_config["loss_fn_type"],
             learning_rate=training_config["learning_rate"],
@@ -160,6 +161,24 @@ if args.mode == "train":
             input_size=2,
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
+        )
+    elif model_name == "transformer":
+        model = FlowSimTransformer(
+            n_layer=model_config["n_layer"],
+            n_head=model_config["n_head"],
+            n_embd=model_config["n_embd"],
+            block_size=model_config["block_size"],
+            vocab_size=model_config["vocab_size"],
+            dropout=model_config["dropout"],
+            compile=model_config["compile"],
+            loss_fn_type=model_config["loss_fn_type"],
+            weight_decay=training_config["weight_decay"],
+            learning_rate=training_config["learning_rate"],
+            betas=training_config["betas"],
+            batch_size=training_config["batch_size"],
+            enable_position=model_config["enable_position"],
+            enable_val=enable_val,
+            enable_dist=enable_dist,
         )
     trainer.fit(model, datamodule=datamodule, ckpt_path=args.ckpt_path)
 else:
@@ -216,7 +235,7 @@ else:
     )
     model_name = model_config["model_name"]
     if model_name == "lstm":
-        model = FlowSimPerFlow.load_from_checkpoint(
+        model = FlowSimLstm.load_from_checkpoint(
             f"{dir_train}/checkpoints/last.ckpt",
             map_location=DEVICE,
             n_layer=model_config["n_layer"],
@@ -229,6 +248,27 @@ else:
             input_size=2,
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
+            save_dir=tb_logger.log_dir,
+        )
+    elif model_name == "transformer":
+        model = FlowSimTransformer.load_from_checkpoint(
+            f"{dir_train}/checkpoints/last.ckpt",
+            map_location=DEVICE,
+            n_layer=model_config["n_layer"],
+            n_head=model_config["n_head"],
+            n_embd=model_config["n_embd"],
+            block_size=model_config["block_size"],
+            vocab_size=model_config["vocab_size"],
+            dropout=model_config["dropout"],
+            compile=model_config["compile"],
+            loss_fn_type=model_config["loss_fn_type"],
+            weight_decay=training_config["weight_decay"],
+            learning_rate=training_config["learning_rate"],
+            betas=training_config["betas"],
+            batch_size=training_config["batch_size"],
+            enable_position=model_config["enable_position"],
+            enable_val=training_config["enable_val"],
+            enable_dist=training_config["enable_dist"],
             save_dir=tb_logger.log_dir,
         )
     trainer.test(model, datamodule=datamodule)

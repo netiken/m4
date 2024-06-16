@@ -122,6 +122,7 @@ class Attention(nn.Module):
         x: torch.Tensor,
         freqs_cos: torch.Tensor,
         freqs_sin: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None
     ):
         bsz, seqlen, _ = x.shape
 
@@ -145,12 +146,14 @@ class Attention(nn.Module):
 
         # flash implementation
         if self.flash:
-            output = torch.nn.functional.scaled_dot_product_attention(xq, xk, xv, attn_mask=None, dropout_p=self.dropout if self.training else 0.0, is_causal=True)
+            output = torch.nn.functional.scaled_dot_product_attention(xq, xk, xv, attn_mask=attention_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=False)
         else:
             # manual implementation
             scores = torch.matmul(xq, xk.transpose(2, 3)) / math.sqrt(self.head_dim)
             assert hasattr(self, 'mask')
-            scores = scores + self.mask[:, :, :seqlen, :seqlen]   # (bs, n_local_heads, seqlen, cache_len + seqlen)
+            if attention_mask is not None:
+                scores = scores.masked_fill(attention_mask == 0, float('-inf'))
+            # scores = scores + self.mask[:, :, :seqlen, :seqlen]   # Causal mask, (bs, n_local_heads, seqlen, cache_len + seqlen)
             scores = F.softmax(scores.float(), dim=-1).type_as(xq)
             scores = self.attn_dropout(scores)
             output = torch.matmul(scores, xv)  # (bs, n_local_heads, seqlen, head_dim)
@@ -197,8 +200,8 @@ class TransformerBlock(nn.Module):
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
 
-    def forward(self, x, freqs_cos, freqs_sin):
-        h = x + self.attention.forward(self.attention_norm(x), freqs_cos, freqs_sin)
+    def forward(self, x, freqs_cos, freqs_sin, attention_mask=None):
+        h = x + self.attention.forward(self.attention_norm(x), freqs_cos, freqs_sin,attention_mask)
         out = h + self.feed_forward.forward(self.ffn_norm(h))
         return out
 
@@ -240,7 +243,7 @@ class Transformer(nn.Module):
         # Initialize attribute for the loss of the last forward call. This will be set if the forward is called with a targets tensor.
         self.last_loss = None
         
-        n_params = sum(p.numel() for pn, p in self.named_parameters())
+        # n_params = sum(p.numel() for pn, p in self.named_parameters())
         # print("number of parameters: %.2fM" % (n_params/1e6,))
 
     def _init_weights(self, module):
@@ -251,7 +254,7 @@ class Transformer(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, tokens: torch.Tensor, targets: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, tokens: torch.Tensor, targets: Optional[torch.Tensor] = None, attention_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         _bsz, seqlen, _ = tokens.shape
         h = self.tok_embeddings(tokens)
         # for j in range(h.shape[1]):
@@ -264,7 +267,7 @@ class Transformer(nn.Module):
         freqs_sin = self.freqs_sin[:seqlen]
 
         for layer in self.layers:
-            h = layer(h, freqs_cos, freqs_sin)
+            h = layer(h, freqs_cos, freqs_sin, attention_mask)
         h = self.norm(h)
 
         # if targets is not None:
