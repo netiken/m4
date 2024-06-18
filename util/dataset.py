@@ -86,8 +86,8 @@ class PathDataModulePerFlow(LightningDataModule):
                             # qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
                             # flow_id_list=qfeat[:,0]
                             fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
-                            fcts = np.load(f"{dir_input}/{spec}/fct{topo_type_cur}s{sample}.npy")
-                            if len(fsize)==len(fcts):
+                            fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
+                            if len(fid)==len(set(fid)):
                                 data_list.append(
                                     (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
                                 )
@@ -363,9 +363,11 @@ class PathDatasetFctSldn(Dataset):
         # load data
         dir_input_tmp = f"{self.dir_input}/{spec}"
         
-        # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+        fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
         sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
         fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
+        sizes_flowsim=sizes_flowsim[fid]
+        fats_flowsim=fats_flowsim[fid]
         
         # Calculate inter-arrival times and adjust the first element
         fats_ia_flowsim=np.diff(fats_flowsim)

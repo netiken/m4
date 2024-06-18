@@ -2,7 +2,7 @@
 
 # Dataset parameters
 dataset:
-  n_flows_list: [20000]
+  n_flows_list: [1000]
   n_hosts_list: [3]
   shard: 0
   shard_list: [0,20000,20000] # [start, end, num]
@@ -18,7 +18,7 @@ model:
   n_layer: 2
   loss_fn_type: "mse"
   hidden_size: 32
-  enable_bidirectional: False
+  enable_bidirectional: True
 
 # Training parameters
 training:

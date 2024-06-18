@@ -17,12 +17,14 @@ class ModelArgs:
     n_heads: int = 32
     n_kv_heads: Optional[int] = None
     vocab_size: int = 32000
+    output_dim: Optional[int] = None
     hidden_dim: Optional[int] = None
     multiple_of: int = 256  # MLP hidden layer size will be multiple of
     norm_eps: float = 1e-5
     max_seq_len: int = 2048
     dropout: float = 0.0
-
+    enable_position: bool = True
+    enable_causal: bool = False
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float):
@@ -108,6 +110,7 @@ class Attention(nn.Module):
         self.attn_dropout = nn.Dropout(args.dropout)
         self.resid_dropout = nn.Dropout(args.dropout)
         self.dropout = args.dropout
+        self.enable_causal=args.enable_causal
 
         # use flash attention or a manual implementation?
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -144,15 +147,28 @@ class Attention(nn.Module):
         xk = xk.transpose(1, 2)
         xv = xv.transpose(1, 2)
 
+        # Ensure attention_mask has the appropriate shape
+        assert attention_mask is not None
+        
+        attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+        
+        if self.enable_causal:
+            # Create a causal mask
+            causal_mask = torch.tril(torch.ones((seqlen, seqlen), device=x.device)).unsqueeze(0).unsqueeze(0)
+            combined_mask = attention_mask * causal_mask
+        else:
+            combined_mask = attention_mask
+        
+        combined_mask = combined_mask.expand(bsz, self.n_local_heads, seqlen, seqlen)
+
         # flash implementation
         if self.flash:
-            output = torch.nn.functional.scaled_dot_product_attention(xq, xk, xv, attn_mask=attention_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=False)
+            output = torch.nn.functional.scaled_dot_product_attention(xq, xk, xv, attn_mask=combined_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=False)
         else:
             # manual implementation
             scores = torch.matmul(xq, xk.transpose(2, 3)) / math.sqrt(self.head_dim)
             assert hasattr(self, 'mask')
-            if attention_mask is not None:
-                scores = scores.masked_fill(attention_mask == 0, float('-inf'))
+            scores = scores.masked_fill(combined_mask == 0, float('-inf'))
             # scores = scores + self.mask[:, :, :seqlen, :seqlen]   # Causal mask, (bs, n_local_heads, seqlen, cache_len + seqlen)
             scores = F.softmax(scores.float(), dim=-1).type_as(xq)
             scores = self.attn_dropout(scores)
@@ -222,8 +238,10 @@ class Transformer(nn.Module):
         for layer_id in range(params.n_layers):
             self.layers.append(TransformerBlock(layer_id, params))
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
-        # self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
-        self.output = nn.Linear(params.dim, params.dim,  bias=False)
+        if params.output_dim is None:
+            self.output = nn.Linear(params.dim, params.vocab_size, bias=False)
+        else:
+            self.output = nn.Linear(params.dim, params.output_dim, bias=False)
 
         # share the unembedding parameters with the embedding parameters
         # self.tok_embeddings.weight = self.output.weight # https://paperswithcode.com/method/weight-tying

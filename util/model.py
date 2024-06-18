@@ -35,10 +35,12 @@ class TransformerBase(LightningModule):
         n_embd,
         block_size,
         vocab_size,
+        output_dim,
         dropout,
         loss_fn_type,
         enable_val,
         enable_position,
+        enable_causal,
         save_dir=None,
     ):
         super().__init__()
@@ -54,15 +56,17 @@ class TransformerBase(LightningModule):
             n_layers=n_layer,
             n_heads=n_head,
             vocab_size=vocab_size,
+            output_dim=output_dim,
             multiple_of = 1,
             max_seq_len=block_size,
             dropout=dropout,
+            enable_causal=enable_causal,
         )
         self.model_transformer = Transformer(conf)
         self.enable_val = enable_val
         self.save_dir = save_dir
         logging.info(
-            f"model: FlowSimTransformer, loss_fn: {loss_fn_type}, n_layer: {n_layer}, n_head: {n_head}, n_embd: {n_embd}, block_size: {block_size}, vocab_size: {vocab_size}, dropout: {dropout}, enable_position: {enable_position}, enable_val: {enable_val}"
+            f"model: FlowSimTransformer, loss_fn: {loss_fn_type}, n_layer: {n_layer}, n_head: {n_head}, n_embd: {n_embd}, block_size: {block_size}, vocab_size: {vocab_size}, output_dim: {output_dim}, dropout: {dropout}, enable_position: {enable_position}, enable_causal: {enable_causal}, enable_val: {enable_val}"
         )
     
     def export_to_bin_llama_v0(self, filepath):
@@ -142,10 +146,12 @@ class FlowSimTransformer(TransformerBase):
         n_embd=64,
         block_size=64,
         vocab_size=50257,
+        output_dim=None,
         dropout=0.0,
         compile=False,
         loss_fn_type="l1",
         enable_position=True,
+        enable_causal=False,
         weight_decay=1e-2,
         learning_rate=6e-4,
         betas=[0.9, 0.95],
@@ -160,8 +166,10 @@ class FlowSimTransformer(TransformerBase):
             n_embd=n_embd,
             block_size=block_size,
             vocab_size=vocab_size,
+            output_dim=output_dim,
             dropout=dropout,
             enable_position=enable_position,
+            enable_causal=enable_causal,
             loss_fn_type=loss_fn_type,
             enable_val=enable_val,
             save_dir=save_dir,
