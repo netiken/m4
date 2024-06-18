@@ -10,13 +10,14 @@ dataset:
   lr: 10
   train_frac: 0.9
   topo_type: "_topo-pl-x_"
+  output_type: "fctSldn" # fctSldn, queueLen
 
 # Model parameters
 model:
   model_name: "transformer"
   n_layer: 4
   n_head: 4
-  n_embd: 576 
+  n_embd: 32 
   block_size: 16
   vocab_size: 200 #50257
   dropout: 0.2

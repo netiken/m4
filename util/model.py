@@ -54,7 +54,7 @@ class TransformerBase(LightningModule):
             n_layers=n_layer,
             n_heads=n_head,
             vocab_size=vocab_size,
-            multiple_of = 32,
+            multiple_of = 1,
             max_seq_len=block_size,
             dropout=dropout,
         )
@@ -161,7 +161,6 @@ class FlowSimTransformer(TransformerBase):
             block_size=block_size,
             vocab_size=vocab_size,
             dropout=dropout,
-            compile=compile,
             enable_position=enable_position,
             loss_fn_type=loss_fn_type,
             enable_val=enable_val,
@@ -181,7 +180,7 @@ class FlowSimTransformer(TransformerBase):
         attention_mask = mask.to(input.device)
 
         # Pass the input through the transformer
-        estimated, _ = self.model_transformer(input,attention_mask)
+        estimated, _ = self.model_transformer(input,attention_mask=attention_mask)
 
         # Mask the output and target
         masked_estimated = estimated[mask]

@@ -62,11 +62,11 @@ if args.mode == "train":
 
     # configure logging at the root level of Lightning
     os.makedirs(tb_logger.log_dir, exist_ok=True)
-    model_name = "bs{}_lr{}_nlayer{}_hd{}".format(
+    model_name = "bs{}_lr{}_{}_nlayer{}".format(
         training_config["batch_size"],
         training_config["learning_rate"],
+        model_config["model_name"],
         model_config["n_layer"],
-        model_config["hidden_size"],
     )
     create_logger(os.path.join(tb_logger.log_dir, f"{model_name}.log"))
     logging.info(f"Save to: {tb_logger.log_dir}")

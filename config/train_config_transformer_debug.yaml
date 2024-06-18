@@ -1,0 +1,38 @@
+# YAML config for dataset, training, and model parameters
+
+# Dataset parameters
+dataset:
+  n_flows_list: [20000]
+  n_hosts_list: [3]
+  shard: 0
+  shard_list: [0,500,500] # [start, end, num]
+  sample_list: [0,1,1] # [start, end, num]
+  lr: 10
+  train_frac: 0.9
+  topo_type: "_topo-pl-x_"
+  output_type: "fctSldn" # fctSldn, queueLen
+
+# Model parameters
+model:
+  model_name: "transformer"
+  n_layer: 2
+  n_head: 8
+  n_embd: 16 
+  block_size: 40000
+  vocab_size: 2 #50257
+  dropout: 0.2
+  compile: False 
+  loss_fn_type: "l1"
+  enable_position: True
+
+# Training parameters
+training:
+  gpu: [3]
+  n_epochs: 4
+  batch_size: 2
+  learning_rate: 0.001
+  betas: [0.9, 0.95]
+  weight_decay: 0.02 
+  num_workers: 1
+  enable_val: True
+  enable_dist: False
