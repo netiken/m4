@@ -329,11 +329,17 @@ class FlowSimLstm(LightningModule):
         mask = torch.arange(output.size(1)).expand(len(lengths), output.size(1)) < lengths.unsqueeze(1)
         
         # Apply the mask to both estimated and output
-        masked_estimated = estimated[mask]
-        masked_output = output[mask]
+        # masked_estimated = estimated[mask]
+        # masked_output = output[mask]
+        
+        est = torch.div(estimated, output)
+        gt=torch.ones_like(est)
+        est=est[mask]
+        gt=gt[mask]
+                
         
         # Calculate the loss
-        loss = self.loss_fn(masked_estimated, masked_output)
+        loss = self.loss_fn(est, gt)
         
         self._log_loss(loss, tag)
         self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)

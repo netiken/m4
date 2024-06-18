@@ -31,7 +31,7 @@ def collate_fn_per_flow(batch):
     # Pad sequences
     max_len = max(lengths)
     padded_inputs = np.zeros((len(inputs), max_len, inputs[0].shape[1]), dtype=np.float32)
-    padded_outputs = np.zeros((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)
+    padded_outputs = np.ones((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)
     
     for i, (input, output) in enumerate(zip(inputs, outputs)):
         padded_inputs[i, :input.shape[0], :] = input
