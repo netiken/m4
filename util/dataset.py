@@ -85,9 +85,9 @@ class PathDataModulePerFlow(LightningDataModule):
                         for sample in sample_list:
                             # qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
                             # flow_id_list=qfeat[:,0]
-                            fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
+                            # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
                             fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
-                            if len(fid)==len(set(fid)):
+                            if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]):
                                 data_list.append(
                                     (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
                                 )

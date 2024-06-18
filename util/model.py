@@ -240,12 +240,12 @@ class FlowSimTransformer(TransformerBase):
     
 # LSTM Model
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers, enable_bidirectional=False):
+    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout,enable_bidirectional=False):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.bidirectional = enable_bidirectional
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional, dropout=dropout)
         self.num_directions = 2 if enable_bidirectional else 1
         # Adjust the fully connected layer based on bidirectionality
         self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
@@ -287,6 +287,7 @@ class FlowSimLstm(LightningModule):
         learning_rate=1e-3,
         batch_size=400,
         hidden_size=32,
+        dropout=0.2,
         enable_dist=False,
         enable_val=True,
         output_size=1,
@@ -299,14 +300,14 @@ class FlowSimLstm(LightningModule):
         self.batch_size = batch_size
         
         self.loss_fn = self._get_loss_fn(loss_fn_type)
-        self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, enable_bidirectional=enable_bidirectional)
+        self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
         
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir
         
         logging.info(
-            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, enable_bidirectional: {enable_bidirectional}")
+            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, enable_bidirectional: {enable_bidirectional}, dropout: {dropout}")
     
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":

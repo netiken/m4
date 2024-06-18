@@ -14,7 +14,7 @@ ps aux | head -1; ps aux | grep ^lichenni| sort -rnk 4 | more
 
 tensorboard --logdir /data2/lichenni/output_perflow --port 8009 --bind_all
 
-git add -A . ; git commit -m "transformer"; git push
+git add -A . ; git commit -m "debug dataset"; git push
 
 >/dev/null
 
