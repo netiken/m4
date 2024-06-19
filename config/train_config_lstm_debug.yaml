@@ -2,7 +2,7 @@
 
 # Dataset parameters
 dataset:
-  n_flows_list: [20000]
+  n_flows_list: [1000]
   n_hosts_list: [3]
   shard: 0
   shard_list: [0,500,500] # [start, end, num]
@@ -16,9 +16,9 @@ dataset:
 model:
   model_name: "lstm"
   n_layer: 2
-  loss_fn_type: "mse"
-  hidden_size: 32
-  dropout: 0.2
+  loss_fn_type: "l1"
+  hidden_size: 64
+  dropout: 0.0
   enable_bidirectional: False
 
 # Training parameters

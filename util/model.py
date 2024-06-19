@@ -191,11 +191,15 @@ class FlowSimTransformer(TransformerBase):
         estimated, _ = self.model_transformer(input,attention_mask=attention_mask)
 
         # Mask the output and target
-        masked_estimated = estimated[mask]
-        masked_output = output[mask]
-
+        # masked_estimated = estimated[mask]
+        # masked_output = output[mask]
+        est = torch.div(estimated, output).squeeze()
+        gt=torch.ones_like(est)
+        est=est.masked_fill(~attention_mask, 0)
+        gt=gt.masked_fill(~attention_mask, 0)
+        
         # Calculate the loss
-        loss = self.loss_fn(masked_estimated, masked_output)
+        loss = self.loss_fn(est, gt)
 
         if self.enable_dist:
             self.log(
@@ -327,16 +331,16 @@ class FlowSimLstm(LightningModule):
         # Generate a mask based on lengths
         lengths = torch.tensor(lengths)
         mask = torch.arange(output.size(1)).expand(len(lengths), output.size(1)) < lengths.unsqueeze(1)
+        attention_mask = mask.to(input.device)
         
         # Apply the mask to both estimated and output
         # masked_estimated = estimated[mask]
         # masked_output = output[mask]
         
-        est = torch.div(estimated, output)
+        est = torch.div(estimated, output).squeeze()
         gt=torch.ones_like(est)
-        est=est[mask]
-        gt=gt[mask]
-                
+        est=est.masked_fill(~attention_mask, 0)
+        gt=gt.masked_fill(~attention_mask, 0)
         
         # Calculate the loss
         loss = self.loss_fn(est, gt)
