@@ -31,4 +31,4 @@ python main_link.py --test_config=./config/test_config_lstm.yaml --mode=test --n
 
 python main_link.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --test_on_empirical
 
-python main_link.py --test_config=./config/test_config_transformer.yaml --mode=test --note=fct_transformer_noncausal --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical
+python main_link.py --test_config=./config/test_config_transformer.yaml --mode=test --note=fct_transformer_noncausal_b --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical

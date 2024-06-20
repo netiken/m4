@@ -167,8 +167,9 @@ class Attention(nn.Module):
             # manual implementation
             scores = torch.matmul(xq, xk.transpose(2, 3)) / math.sqrt(self.head_dim)
             assert hasattr(self, 'mask')
-            scores = scores.masked_fill(combined_mask == 0, float('-inf'))
-            # scores = scores + self.mask[:, :, :seqlen, :seqlen]   # Causal mask, (bs, n_local_heads, seqlen, cache_len + seqlen)
+            # scores = scores.masked_fill(combined_mask == 0, float('-inf'))
+            if self.enable_causal:
+                scores = scores + self.mask[:, :, :seqlen, :seqlen]   # Causal mask, (bs, n_local_heads, seqlen, cache_len + seqlen)
             scores = F.softmax(scores.float(), dim=-1).type_as(xq)
             scores = self.attn_dropout(scores)
             output = torch.matmul(scores, xv)  # (bs, n_local_heads, seqlen, head_dim)
