@@ -168,37 +168,19 @@ class PathDataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    for shard in np.arange(10000, 10200):
-                        for n_flows in [30000]:
-                            for n_hosts in [2, 3, 4, 5, 6, 7, 8]:
+                    for shard in np.arange(0, 2000):
+                        for n_flows in [1000]:
+                            for n_hosts in [3]:
                                 topo_type_cur = self.topo_type.replace(
-                                    "x-x", f"{n_hosts}-{n_hosts}"
+                                    "-x_", f"-{n_hosts}_"
                                 )
                                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{self.lr}Gbps"
-                                dir_input_tmp = f"{self.dir_input}/{spec}"
-                                if not os.path.exists(
-                                    f"{dir_input_tmp}/flow_src_dst.npy"
-                                ):
-                                    continue
-                                flow_src_dst = np.load(
-                                    f"{dir_input_tmp}/flow_src_dst.npy"
-                                )
-                                stats = decode_dict(
-                                    np.load(
-                                        f"{dir_input_tmp}/stats.npy",
-                                        allow_pickle=True,
-                                        encoding="bytes",
-                                    ).item()
-                                )
-                                n_flows_total = stats["n_flows"]
-                                if (
-                                    n_flows_total < 5000000
-                                    and len(flow_src_dst) == n_flows_total
-                                ):
-                                    data_list_test.append(
-                                        (spec, (0, n_hosts - 1), topo_type_cur)
-                                    )
-                                  
+                                for sample in [0]:
+                                    fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
+                                    if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]):
+                                        data_list_test.append(
+                                            (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
+                                        )
                 else:
                     data_list = self.__read_data_list(self.dir_output)
                     if self.test_on_train:
