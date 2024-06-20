@@ -25,4 +25,6 @@ python main_link.py --train_config=./config/train_config_lstm.yaml --mode=train 
 
 python main_link.py --train_config=./config/train_config_transformer.yaml --mode=train --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --note fct_transformer_noncausal
 
-python main_link.py --test_config=./config/test_config.yaml --mode=test --note=sizeNum --version_id 0 --dir_input=/data2/lichenni/path_perflow --dir_output=/data2/lichenni/output_perflow --test_on_train 
+python main_link.py --test_config=./config/test_config_transformer.yaml --mode=test --note=fct_transformer_noncausal --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --test_on_train 
+
+python main_link.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm_bi --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --test_on_train 

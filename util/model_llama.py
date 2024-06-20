@@ -149,19 +149,17 @@ class Attention(nn.Module):
 
         # Ensure attention_mask has the appropriate shape
         assert attention_mask is not None
-        
         attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
-        
         if self.enable_causal:
             # Create a causal mask
             causal_mask = torch.tril(torch.ones((seqlen, seqlen), device=x.device)).unsqueeze(0).unsqueeze(0)
             combined_mask = attention_mask * causal_mask
         else:
             combined_mask = attention_mask
-        
+
         combined_mask = combined_mask.expand(bsz, self.n_local_heads, seqlen, seqlen)
 
-        # flash implementation
+        # Flash implementation
         if self.flash:
             output = torch.nn.functional.scaled_dot_product_attention(xq, xk, xv, attn_mask=combined_mask, dropout_p=self.dropout if self.training else 0.0, is_causal=False)
         else:

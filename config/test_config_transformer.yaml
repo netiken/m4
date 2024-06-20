@@ -14,20 +14,27 @@ dataset:
 
 # Model parameters
 model:
-  model_name: "lstm"
+  model_name: "transformer"
   n_layer: 2
+  n_head: 8
+  n_embd: 16 
+  block_size: 2000
+  vocab_size: 2 #50257
+  output_dim: 1
+  dropout: 0.2
+  compile: False 
   loss_fn_type: "l1"
-  hidden_size: 64
-  dropout: 0.0
-  enable_bidirectional: True
+  enable_position: True
+  enable_causal: False
 
 # Training parameters
 training:
-  # gpu: [0,0,1,1,2,2,3,3]
-  gpu: [0,1,2,3]
-  n_epochs: 1000
-  batch_size: 32
+  gpu: [3]
+  n_epochs: 5
+  batch_size: 1
   learning_rate: 0.0001
-  num_workers: 16
-  enable_val: True
-  enable_dist: True
+  betas: [0.9, 0.95]
+  weight_decay: 0.02 
+  num_workers: 5
+  enable_val: False
+  enable_dist: False
