@@ -14,7 +14,7 @@ ps aux | head -1; ps aux | grep ^lichenni| sort -rnk 4 | more
 
 tensorboard --logdir /data2/lichenni/output_perflow --port 8009 --bind_all
 
-git add -A . ; git commit -m "wrong mask for transformer"; git push
+git add -A . ; git commit -m "after weekly meeting"; git push
 
 >/dev/null
 
