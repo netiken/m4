@@ -54,6 +54,8 @@ class PathDataModulePerFlow(LightningDataModule):
         topo_type="",
         output_type="queueLen",
         mode="train",
+        enable_segmentation=False,
+        segments_per_seq=200,
         test_on_train=False,
         test_on_empirical=False,
         test_on_manual=False,
@@ -73,6 +75,7 @@ class PathDataModulePerFlow(LightningDataModule):
         self.dir_output = dir_output
         self.lr = lr
         self.topo_type = topo_type
+        self.enable_segmentation=enable_segmentation
         data_list = []
         if mode == "train":
             for shard in shard_list:
@@ -88,9 +91,25 @@ class PathDataModulePerFlow(LightningDataModule):
                             # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
                             fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
                             if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]):
-                                data_list.append(
-                                    (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
-                                )
+                                if enable_segmentation:
+                                    
+                                    busy_periods=np.load(f"{dir_input}/{spec}/flow_id_per_period.npy", allow_pickle=True)
+                                    
+                                    weights = np.array([len(period) for period in busy_periods])
+                                    weights = weights / np.sum(weights)
+
+                                    # Sample indices from the array based on the weights
+                                    sample_indices = np.random.choice(len(busy_periods), segments_per_seq, replace=False, p=weights)
+
+                                    for segment_id in sample_indices:
+                                        data_list.append(
+                                            (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}", segment_id, busy_periods[segment_id])
+                                        )
+                                else:
+                                    data_list.append(
+                                        (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
+                                    )
+                                    
                             
             np.random.shuffle(data_list)
         self.data_list = data_list
@@ -253,18 +272,24 @@ class PathDataModulePerFlow(LightningDataModule):
         return train_part, test_part
 
     def __create_dataset(self, data_list, dir_input):
-        if self.output_type=="queueLen":
-            return PathDatasetQueueLen(
-                data_list,
-                dir_input,
-            )
-        elif self.output_type=="fctSldn":
-            return PathDatasetFctSldn(
+        if self.enable_segmentation:
+            return PathDatasetFctSldnSegment(
                 data_list,
                 dir_input,
             )
         else:
-            assert "output_type not supported"
+            if self.output_type=="queueLen":
+                return PathDatasetQueueLen(
+                    data_list,
+                    dir_input,
+                )
+            elif self.output_type=="fctSldn":
+                return PathDatasetFctSldn(
+                    data_list,
+                    dir_input,
+                )
+            else:
+                assert "output_type not supported"
             
     def __dump_data_list(self, path):
         with open(f"{path}/data_list.json", "w") as fp:
@@ -362,4 +387,58 @@ class PathDatasetFctSldn(Dataset):
         i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         
+        return input_data, output_data, spec + topo_type, src_dst_pair_target_str
+
+class PathDatasetFctSldnSegment(Dataset):
+    def __init__(
+        self,
+        data_list,
+        dir_input,
+    ):
+        self.data_list = data_list
+        self.dir_input = dir_input
+        self.use_first_epoch_logic = True
+        logging.info(
+            f"call PathDatasetFctSldn: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}"
+        )
+
+    def __len__(self):
+        return len(self.data_list)
+        
+    def __getitem__(self, idx):
+        spec, src_dst_pair_target, topo_type, segment_id, fid = self.data_list[idx]
+        src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])
+        
+        # load data
+        dir_input_tmp = f"{self.dir_input}/{spec}"
+        
+        # load feat
+        feat_path=f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
+        
+        if not os.path.exists(feat_path) or self.use_first_epoch_logic:
+            
+            # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+            sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
+            fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
+            
+            sizes_flowsim=sizes_flowsim[fid]
+            fats_flowsim=fats_flowsim[fid]
+            
+            # Calculate inter-arrival times and adjust the first element
+            fats_ia_flowsim=np.diff(fats_flowsim)
+            fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
+            
+            # Combine flow sizes and inter-arrival times into the input tensor
+            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim)).astype(np.float32)
+            
+            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
+            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
+            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
+            
+            np.savez(feat_path, input_data=input_data, output_data=output_data)
+        else:
+            feat=np.load(feat_path)
+            input_data=feat["input_data"]
+            output_data=feat["output_data"]
+            
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str
