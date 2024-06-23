@@ -38,6 +38,7 @@ def collate_fn_per_flow(batch):
         padded_outputs[i, :output.shape[0], :] = output
     
     return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs
+
 class PathDataModulePerFlow(LightningDataModule):
     def __init__(
         self,
@@ -90,21 +91,24 @@ class PathDataModulePerFlow(LightningDataModule):
                             # flow_id_list=qfeat[:,0]
                             # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
                             fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
-                            if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]):
+                            if len(fid)==len(set(fid))==(n_hosts-1)*n_flows and np.all(fid[:-1] <= fid[1:]):
                                 if enable_segmentation:
                                     
-                                    busy_periods=np.load(f"{dir_input}/{spec}/flow_id_per_period.npy", allow_pickle=True)
+                                    busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}s{sample}.npy", allow_pickle=True)
                                     
-                                    weights = np.array([len(period) for period in busy_periods])
-                                    weights = weights / np.sum(weights)
+                                    weights = np.array([len(period) if len(period)>5 else 0 for period in busy_periods])
+                                    
+                                    if np.sum(weights)>0:
+                                        
+                                        weights = weights / np.sum(weights)
 
-                                    # Sample indices from the array based on the weights
-                                    sample_indices = np.random.choice(len(busy_periods), segments_per_seq, replace=False, p=weights)
-
-                                    for segment_id in sample_indices:
-                                        data_list.append(
-                                            (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}", segment_id, busy_periods[segment_id])
-                                        )
+                                        # Sample indices from the array based on the weights
+                                        sample_indices = np.random.choice(len(busy_periods), min(segments_per_seq,np.count_nonzero(weights)), replace=False, p=weights)
+                                        
+                                        for segment_id in sample_indices:
+                                            data_list.append(
+                                                (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}", int(segment_id))
+                                            )
                                 else:
                                     data_list.append(
                                         (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
@@ -406,7 +410,7 @@ class PathDatasetFctSldnSegment(Dataset):
         return len(self.data_list)
         
     def __getitem__(self, idx):
-        spec, src_dst_pair_target, topo_type, segment_id, fid = self.data_list[idx]
+        spec, src_dst_pair_target, topo_type, segment_id = self.data_list[idx]
         src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])
         
         # load data
@@ -416,7 +420,8 @@ class PathDatasetFctSldnSegment(Dataset):
         feat_path=f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
-            
+            busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
+            fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
@@ -433,9 +438,9 @@ class PathDatasetFctSldnSegment(Dataset):
             
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
-            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
+            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
             
-            np.savez(feat_path, input_data=input_data, output_data=output_data)
+            # np.savez(feat_path, input_data=input_data, output_data=output_data)
         else:
             feat=np.load(feat_path)
             input_data=feat["input_data"]

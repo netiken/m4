@@ -26,7 +26,14 @@ class ExpActivation(nn.Module):
 
     def forward(self, x):
         return torch.exp(x)
+class WeightedL1Loss(nn.Module):
+    def __init__(self):
+        super(WeightedL1Loss, self).__init__()
 
+    def forward(self, prediction, target, weights):
+        elementwise_loss = torch.abs(prediction - target).sum()
+        weighted_loss=elementwise_loss/weights.sum()
+        return weighted_loss
 class TransformerBase(LightningModule):
     def __init__(
         self,
@@ -315,7 +322,8 @@ class FlowSimLstm(LightningModule):
     
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":
-            return nn.L1Loss()
+            # return nn.L1Loss()
+            return WeightedL1Loss()
         elif loss_fn_type == "mse":
             return nn.MSELoss()
         else:
@@ -343,7 +351,7 @@ class FlowSimLstm(LightningModule):
         gt=gt.masked_fill(~attention_mask, 0)
         
         # Calculate the loss
-        loss = self.loss_fn(est, gt)
+        loss = self.loss_fn(est, gt, lengths)
         
         self._log_loss(loss, tag)
         self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)
