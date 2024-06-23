@@ -102,6 +102,8 @@ if args.mode == "train":
         lr=lr,
         topo_type=dataset_config.get("topo_type", ""),
         output_type=dataset_config.get("output_type", "fctSldn"),
+        enable_segmentation=dataset_config.get("enable_segmentation", False),
+        segments_per_seq=dataset_config.get("segments_per_seq", 200),
     )
 
     # Init checkpointer
@@ -213,6 +215,8 @@ else:
         lr=dataset_config["lr"],
         topo_type=dataset_config.get("topo_type", ""),
         output_type=dataset_config.get("output_type", "fctSldn"),
+        enable_segmentation=dataset_config.get("enable_segmentation", False),
+        segments_per_seq=dataset_config.get("segments_per_seq", 200),
         mode=args.mode,
         test_on_train=args.test_on_train,
         test_on_empirical=args.test_on_empirical,
