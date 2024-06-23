@@ -1,4 +1,5 @@
 import numpy as np
+from enum import Enum
 
 UNIT_G = 1000000000
 UNIT_M = 1000000
@@ -15,6 +16,13 @@ DELAY_PROPAGATION_BASE = 1000  # 1us
 EPS = 1e-12
 
 SIZE_BUCKET_LIST_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, $\infty$)"]
+
+class SeqCodeEvent(Enum):
+    ARRIVAL_FIRST_PKT = 1
+    ARRIVAL_LAST_PKT = 2
+    QUEUE_START = 3
+    QUEUE_END = 4
+    
 
 SIZE_BUCKET_LIST_LABEL = [
     "(0, 0.25MTU)",
