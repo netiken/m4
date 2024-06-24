@@ -77,6 +77,7 @@ class PathDataModulePerFlow(LightningDataModule):
         self.lr = lr
         self.topo_type = topo_type
         self.enable_segmentation=enable_segmentation
+        self.segments_per_seq=segments_per_seq
         data_list = []
         if mode == "train":
             for shard in shard_list:
@@ -191,19 +192,36 @@ class PathDataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    for shard in np.arange(0, 2000):
-                        for n_flows in [1000]:
-                            for n_hosts in [3]:
+                    for shard in np.arange(0, 1000):
+                        for n_flows in [2000]:
+                            for n_hosts in [21]:
                                 topo_type_cur = self.topo_type.replace(
                                     "-x_", f"-{n_hosts}_"
                                 )
                                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{self.lr}Gbps"
                                 for sample in [0]:
                                     fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
-                                    if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]):
-                                        data_list_test.append(
-                                            (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
-                                        )
+                                    if len(fid)==len(set(fid))==(n_hosts-1)*n_flows and np.all(fid[:-1] <= fid[1:]):
+                                        if self.enable_segmentation:
+                                            busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}s{sample}.npy", allow_pickle=True)
+                                    
+                                            weights = np.array([len(period) if len(period)>5 else 0 for period in busy_periods])
+                                            
+                                            if np.sum(weights)>0:
+                                                
+                                                weights = weights / np.sum(weights)
+
+                                                # Sample indices from the array based on the weights
+                                                sample_indices = np.random.choice(len(busy_periods), min(self.segments_per_seq,np.count_nonzero(weights)), replace=False, p=weights)
+                                                
+                                                for segment_id in sample_indices:
+                                                    data_list.append(
+                                                        (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}", int(segment_id))
+                                                    )
+                                                else:
+                                                    data_list_test.append(
+                                                        (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
+                                                    )
                 else:
                     data_list = self.__read_data_list(self.dir_output)
                     if self.test_on_train:
@@ -411,7 +429,7 @@ class PathDatasetFctSldnSegment(Dataset):
         
     def __getitem__(self, idx):
         spec, src_dst_pair_target, topo_type, segment_id = self.data_list[idx]
-        src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])
+        src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])+f'_seg{segment_id}'
         
         # load data
         dir_input_tmp = f"{self.dir_input}/{spec}"
