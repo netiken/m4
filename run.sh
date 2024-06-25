@@ -14,7 +14,7 @@ ps aux | head -1; ps aux | grep ^lichenni| sort -rnk 4 | more
 
 tensorboard --logdir /data2/lichenni/output_perflow --port 8009 --bind_all
 
-git add -A . ; git commit -m "gen empirical dataset"; git push
+git add -A . ; git commit -m "gen res"; git push
 
 >/dev/null
 
@@ -25,10 +25,6 @@ python main_link.py --train_config=./config/train_config_lstm.yaml --mode=train 
 
 python main_link.py --train_config=./config/train_config_transformer.yaml --mode=train --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --note fct_transformer_noncausal_b
 
-python main_link.py --test_config=./config/test_config_transformer.yaml --mode=test --note=fct_transformer_noncausal --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --test_on_train 
+python main_link.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm_bi --version_id 0 --dir_input=/data2/lichenni/path_perflow_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical
 
-python main_link.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm_bi --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --test_on_train
-
-python main_link.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm_bi --version_id 0 --dir_input=/data2/lichenni/path_perflow_busy --dir_output=/data2/lichenni/output_perflow --test_on_train --test_on_empirical
-
-python main_link.py --test_config=./config/test_config_transformer.yaml --mode=test --note=fct_transformer_noncausal_b --version_id 0 --dir_input=/data2/lichenni/path_perflow_1k_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical
+python main_link.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm_bi_large --version_id 0 --dir_input=/data2/lichenni/path_perflow_busy --dir_output=/data2/lichenni/output_perflow --test_on_train

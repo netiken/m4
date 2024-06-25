@@ -215,13 +215,13 @@ class PathDataModulePerFlow(LightningDataModule):
                                                 sample_indices = np.random.choice(len(busy_periods), min(self.segments_per_seq,np.count_nonzero(weights)), replace=False, p=weights)
                                                 
                                                 for segment_id in sample_indices:
-                                                    data_list.append(
+                                                    data_list_test.append(
                                                         (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}", int(segment_id))
                                                     )
-                                                else:
-                                                    data_list_test.append(
-                                                        (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
-                                                    )
+                                        else:
+                                            data_list_test.append(
+                                                (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
+                                            )
                 else:
                     data_list = self.__read_data_list(self.dir_output)
                     if self.test_on_train:
