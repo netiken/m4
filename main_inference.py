@@ -9,8 +9,6 @@ import yaml
 
 class Inference:
     def __init__(self, config_path, checkpoint_path, model_name, device='cuda'):
-        
-        
         with open(config_path, 'r') as f:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
         
@@ -65,74 +63,69 @@ class Inference:
         return model
 
     def preprocess(self, data):
-        # Implement any required preprocessing here
         return torch.tensor(data, dtype=torch.float32).to(self.device)
 
     def postprocess(self, output):
-        # Implement any required postprocessing here
         return output.cpu().detach().numpy()
 
     def infer(self, data):
         data = self.preprocess(data)
         with torch.no_grad():
+            lengths = torch.tensor([len(data)]).to(self.device)
             if self.model_name == "lstm":
-                lengths = torch.tensor([len(data)]).to(self.device)
                 output, _ = self.model(data.unsqueeze(0), lengths)
             elif self.model_name == "transformer":
-                lengths = torch.tensor([len(data)]).to(self.device)
                 output, _ = self.model(data.unsqueeze(0), lengths)
             else:
                 raise ValueError(f"Unsupported model name: {self.model_name}")
 
         return self.postprocess(output)
+
 def load_data(dir_input, spec, topo_type="_topo-pl-21_s0"):
-    # load data
     dir_input_tmp = f"{dir_input}/{spec}"
     
-    # load feat
-    fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+    fid = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
     sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
     fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
     assert np.all(fid[:-1] <= fid[1:])
     
-    sizes_flowsim=sizes_flowsim[fid]
-    fats_flowsim=fats_flowsim[fid]
+    sizes_flowsim = sizes_flowsim[fid]
+    fats_flowsim = fats_flowsim[fid]
     
-    # Calculate inter-arrival times and adjust the first element
-    fats_ia_flowsim=np.diff(fats_flowsim)
-    fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
+    fats_ia_flowsim = np.diff(fats_flowsim)
+    fats_ia_flowsim = np.insert(fats_ia_flowsim, 0, 0)
     
-    # Combine flow sizes and inter-arrival times into the input tensor
     input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim)).astype(np.float32)
     
     fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
     i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
     output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
     
-    # np.savez(feat_path, input_data=input_data, output_data=output_data)
-        
     return input_data, output_data
 
 def main():
     parser = argparse.ArgumentParser(description='Interactive Inference Script')
-    parser.add_argument('--config', type=str, required=True, help='Path to the YAML configuration file',default='./config/test_config_lstm.yamll')
-    parser.add_argument('--model', type=str, required=True, choices=['lstm', 'transformer'], help='Model type',default='lstm')
-    parser.add_argument('--input', type=str, required=True, help='Path to the input data file (numpy format)',default='/data2/lichenni/path_perflow_busy_empirical')
-    parser.add_argument('--output', type=str, required=True, help='Path to save the output predictions (numpy format)', default='./res_inference')
+    parser.add_argument('--config', type=str, required=True, help='Path to the YAML configuration file', default='./config/test_config_lstm.yaml')
+    parser.add_argument('--model', type=str, required=True, choices=['lstm', 'transformer'], help='Model type', default='lstm')
+    parser.add_argument('--input', type=str, required=True, help='Path to the input data directory', default='/data2/lichenni/path_perflow_busy_empirical')
+    parser.add_argument('--output', type=str, required=True, help='Path to save the output predictions', default='./res_inference')
 
     args = parser.parse_args()
-    args.checkpoint=f"{args.output}/fct_lstm_bi_large_shard10000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
+    args.checkpoint = f"{args.output}/fct_lstm_bi_large_shard10000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
+    
     inference = Inference(config_path=args.config, checkpoint_path=args.checkpoint, model_name=args.model)
-    lr=10
+    lr = 10
+    
     for shard in np.arange(0, 1000):
         for n_flows in [2000]:
             for n_hosts in [21]:
                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
-                input_data,output_data = load_data(args.input,spec=spec)
+                input_data, output_data = load_data(args.input, spec=spec)
                 predictions = inference.infer(input_data)
 
-                np.save(args.output, predictions)
-                print(f"Predictions saved to {args.output}")
+                output_file = f"{args.output}/{spec}_predictions.npy"
+                np.save(output_file, predictions)
+                print(f"Predictions saved to {output_file}")
 
 if __name__ == '__main__':
     main()
