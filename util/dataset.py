@@ -440,6 +440,7 @@ class PathDatasetFctSldnSegment(Dataset):
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
             fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
+            fid=np.sort(fid)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
