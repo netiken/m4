@@ -21,7 +21,9 @@ class Inference:
         training_config = self.config["training"]
         
         if self.model_name == "lstm":
-            model = FlowSimLstm(
+            model = FlowSimLstm.load_from_checkpoint(
+                checkpoint_path, 
+                map_location=self.device,
                 n_layer=model_config["n_layer"],
                 loss_fn_type=model_config["loss_fn_type"],
                 learning_rate=training_config["learning_rate"],
@@ -35,7 +37,9 @@ class Inference:
                 enable_bidirectional=model_config.get("enable_bidirectional", False),
             )
         elif self.model_name == "transformer":
-            model = FlowSimTransformer(
+            model = FlowSimTransformer.load_from_checkpoint(
+                checkpoint_path, 
+                map_location=self.device,
                 n_layer=model_config["n_layer"],
                 n_head=model_config["n_head"],
                 n_embd=model_config["n_embd"],
@@ -57,7 +61,6 @@ class Inference:
         else:
             raise ValueError(f"Unsupported model name: {self.model_name}")
         
-        model = model.load_from_checkpoint(checkpoint_path, map_location=self.device)
         return model
 
     def preprocess(self, data):
@@ -69,7 +72,7 @@ class Inference:
     def infer(self, data):
         data = self.preprocess(data)
         with torch.no_grad():
-            lengths = torch.tensor([len(data)], dtype=torch.long).to(self.device)
+            lengths = np.array([len(data)])
             if self.model_name == "lstm":
                 output, _ = self.model(data.unsqueeze(0), lengths)
             elif self.model_name == "transformer":
@@ -92,7 +95,7 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10):
     
     fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
     i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
-    sldn = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
+    # sldn = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
     
     # pkt_head = np.clip(size, a_min=0, a_max=MTU)
     # delay_propagation = DELAY_PROPAGATION_BASE * 2
@@ -106,28 +109,29 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10):
     return size, fat, fid, fcts, i_fcts
 
 def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
-    n_flows_total = len(size)
+    # n_flows_total = len(size)
+    n_flows_total = 5
     active_flows = []
     n_active_flows = 0
     flow_completion_times = {}
+    flow_fct_sldn={}
     current_time = 0  # Initialize the current time
     
     i = 0
     while i < n_flows_total or len(active_flows) > 0:
         if i < n_flows_total:
-            flow_size, flow_at, flow_id = size[i], fat[i], fid[i]
-            flow_arrival_time = flow_at
+            flow_size, flow_arrival_time, flow_id = size[i], fat[i], fid[i]
         else:
             flow_arrival_time = float('inf')
         
-        # Perform inference for all active flows
         if active_flows:
             active_flow_inputs = np.array([[f[0], f[1]] for f in active_flows])
             active_flow_ids = np.array([f[2] for f in active_flows])
-            active_flow_inputs[:, 1] = np.diff(active_flow_inputs[:, 1], prepend=0)
+            active_flow_inputs[:, 1] = np.diff(active_flow_inputs[:, 1], prepend=active_flow_inputs[0, 1])
+            
             predictions = inference.infer(active_flow_inputs)
-            sldn_est = predictions[:, 0]
-            sldn_est_min_idx = np.argmin(sldn_est)
+            sldn_est = predictions[0, :, 0]
+            sldn_est_min_idx = np.argmin(sldn_est,axis=0)
             completed_flow_id = active_flow_ids[sldn_est_min_idx]
             fct_min = sldn_est[sldn_est_min_idx] * i_fcts[completed_flow_id]
             fat_min = active_flows[sldn_est_min_idx][1]
@@ -138,7 +142,7 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
             current_time = flow_arrival_time
-            active_flows.append((flow_size, flow_at, flow_id))
+            active_flows.append((flow_size, flow_arrival_time, flow_id))
             n_active_flows += 1
             print(f"Next event: Flow arrival at time {current_time}")
             i += 1  # Move to the next flow
@@ -146,26 +150,30 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
             # Next event is flow completion
             current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = current_time
+            flow_fct_sldn[completed_flow_id]=sldn_est
             n_active_flows -= 1
             print(f"Next event: Flow completion at time {current_time}")
             
             # If all active flows are completed, end the busy period
             if n_active_flows == 0:
-                print("Busy period reset")
                 active_flows = []
+                print("Busy period reset")
 
     # Compare recorded flow completion times with the ground truth
     for flow_id in flow_completion_times:
-        predicted_completion_time = flow_completion_times[flow_id]
+        predicted_completion_time = flow_completion_times[flow_id]-fat[flow_id]
         actual_completion_time = fcts[flow_id]
         print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
+        predicted_sldn=flow_fct_sldn[flow_id]
+        actual_sldn=fcts[flow_id]/i_fcts[flow_id]
+        print(f"Flow ID: {flow_id}, Predicted SLDN: {predicted_sldn}, Actual SLDN: {actual_sldn}") 
 
 def main():
     parser = argparse.ArgumentParser(description='Interactive Inference Script')
-    parser.add_argument('--config', type=str, required=True, help='Path to the YAML configuration file')
-    parser.add_argument('--model', type=str, required=True, choices=['lstm', 'transformer'], help='Model type')
-    parser.add_argument('--input', type=str, required=True, help='Path to the input data directory')
-    parser.add_argument('--output', type=str, required=True, help='Path to save the output predictions')
+    parser.add_argument('--config', type=str, required=False, help='Path to the YAML configuration file', default='./config/test_config_lstm.yaml')
+    parser.add_argument('--model', type=str, required=False, choices=['lstm', 'transformer'], help='Model type',default='lstm')
+    parser.add_argument('--input', type=str, required=False, help='Path to the input data directory',default='/data2/lichenni/path_perflow_busy')
+    parser.add_argument('--output', type=str, required=False, help='Path to save the output predictions',default='/data2/lichenni/output_perflow')
 
     args = parser.parse_args()
     args.checkpoint = f"{args.output}/fct_lstm_bi_large_shard10000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
