@@ -2,10 +2,9 @@ import torch
 import numpy as np
 from pytorch_lightning import LightningModule
 from util.model import FlowSimLstm, FlowSimTransformer
-from util.dataset import PathDatasetQueueLen, PathDatasetFctSldn, PathDatasetFctSldnSegment
-from torch.utils.data import DataLoader
 import argparse
 import yaml
+import os
 
 class Inference:
     def __init__(self, config_path, checkpoint_path, model_name, device='cuda'):
@@ -71,7 +70,7 @@ class Inference:
     def infer(self, data):
         data = self.preprocess(data)
         with torch.no_grad():
-            lengths = torch.tensor([len(data)]).to(self.device)
+            lengths = torch.tensor([len(data)], dtype=torch.long).to(self.device)
             if self.model_name == "lstm":
                 output, _ = self.model(data.unsqueeze(0), lengths)
             elif self.model_name == "transformer":
@@ -101,7 +100,65 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0"):
     i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
     output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
     
-    return input_data, output_data
+    return input_data, output_data, fid
+
+def interactive_inference(inference, input_data, fid, ground_truth):
+    active_flows = []
+    flow_completion_times = {}
+    busy_period_start = None
+
+    i = 0
+    while i < len(input_data):
+        flow = input_data[i]
+        flow_id = fid[i]
+        
+        # Add new flow to active flows
+        active_flows.append((flow, flow_id))
+        
+        # Perform inference for all active flows
+        active_flow_inputs = np.array([f[0] for f in active_flows])
+        predictions = inference.infer(active_flow_inputs)
+        
+        # Get flow completion times from predictions
+        completion_times = predictions[:, 0]
+        
+        # Determine busy period
+        if busy_period_start is None:
+            busy_period_start = flow[1]  # Flow arrival time
+
+        # Find the next event: either a new flow arrival or the earliest flow completion
+        if i < len(input_data) - 1:
+            next_flow_arrival_time = input_data[i + 1][1]
+        else:
+            next_flow_arrival_time = float('inf')  # No more flows arriving
+        
+        min_completion_time = min(completion_times)
+
+        if next_flow_arrival_time < min_completion_time:
+            # Next event is flow arrival
+            print(f"Next event: Flow arrival at time {next_flow_arrival_time}")
+            i += 1  # Move to the next flow
+        else:
+            # Next event is flow completion
+            print(f"Next event: Flow completion at time {min_completion_time}")
+            
+            # Record completion time for the flow that completed
+            completed_flow_index = np.argmin(completion_times)
+            completed_flow = active_flows[completed_flow_index]
+            completed_flow_id = completed_flow[1]
+            flow_completion_times[completed_flow_id] = min_completion_time
+
+            # If all active flows are completed, end the busy period
+            if len(active_flows) == completed_flow_index + 1:
+                busy_period_end = min_completion_time
+                print(f"Busy period from {busy_period_start} to {busy_period_end}")
+                busy_period_start = None  # Reset busy period
+
+    # Compare recorded flow completion times with the ground truth
+    for flow_id in flow_completion_times:
+        predicted_completion_time = flow_completion_times[flow_id]
+        actual_completion_time = ground_truth[flow_id]
+        print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
 
 def main():
     parser = argparse.ArgumentParser(description='Interactive Inference Script')
@@ -120,12 +177,10 @@ def main():
         for n_flows in [2000]:
             for n_hosts in [21]:
                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
-                input_data, output_data = load_data(args.input, spec=spec)
-                predictions = inference.infer(input_data)
-
-                output_file = f"{args.output}/{spec}_predictions.npy"
-                np.save(output_file, predictions)
-                print(f"Predictions saved to {output_file}")
+                input_data, output_data, fid = load_data(args.input, spec=spec)
+                
+                # Perform interactive inference
+                interactive_inference(inference, input_data, fid, output_data)
 
 if __name__ == '__main__':
     main()
