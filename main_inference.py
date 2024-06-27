@@ -110,7 +110,7 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10):
 
 def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
     # n_flows_total = len(size)
-    n_flows_total = 5
+    n_flows_total = 20
     active_flows = []
     n_active_flows = 0
     flow_completion_times = {}
@@ -119,11 +119,7 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
     
     i = 0
     while i < n_flows_total or len(active_flows) > 0:
-        if i < n_flows_total:
-            flow_size, flow_arrival_time, flow_id = size[i], fat[i], fid[i]
-        else:
-            flow_arrival_time = float('inf')
-        
+        flow_arrival_time = fat[i] if i<n_flows_total else float('inf')
         if active_flows:
             active_flow_inputs = np.array([[f[0], f[1]] for f in active_flows])
             active_flow_ids = np.array([f[2] for f in active_flows])
@@ -142,7 +138,7 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
             current_time = flow_arrival_time
-            active_flows.append((flow_size, flow_arrival_time, flow_id))
+            active_flows.append((size[i], flow_arrival_time, fid[i]))
             n_active_flows += 1
             print(f"Next event: Flow arrival at time {current_time}")
             i += 1  # Move to the next flow
