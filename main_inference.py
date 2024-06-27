@@ -155,15 +155,26 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
                 active_flows = []
                 print("Busy period reset")
 
+    data_dict = {}
     # Compare recorded flow completion times with the ground truth
     for flow_id in flow_completion_times:
-        predicted_completion_time = flow_completion_times[flow_id]-fat[flow_id]
+        predicted_completion_time = flow_completion_times[flow_id] - fat[flow_id]
         actual_completion_time = fcts[flow_id]
         print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
-        predicted_sldn=flow_fct_sldn[flow_id]
-        actual_sldn=fcts[flow_id]/i_fcts[flow_id]
-        print(f"Flow ID: {flow_id}, Predicted SLDN: {predicted_sldn}, Actual SLDN: {actual_sldn}") 
+        predicted_sldn = flow_fct_sldn[flow_id][0]
+        actual_sldn = fcts[flow_id] / i_fcts[flow_id]
+        print(f"Flow ID: {flow_id}, Predicted SLDN: {predicted_sldn}, Actual SLDN: {actual_sldn}")
 
+        data_dict[flow_id] = [predicted_completion_time, actual_completion_time, predicted_sldn, actual_sldn]
+
+        
+    # Converting lists to numpy arrays
+    sorted_flow_ids = sorted(data_dict.keys())
+    res = np.array([data_dict[flow_id] for flow_id in sorted_flow_ids])
+    # Saving the data to a .npz file
+    np.savez(f'./res/inference_{n_flows_total}.npz', 
+         fct=res[:, :2], 
+         sldn=res[:, 2:])
 def main():
     parser = argparse.ArgumentParser(description='Interactive Inference Script')
     parser.add_argument('--config', type=str, required=False, help='Path to the YAML configuration file', default='./config/test_config_lstm.yaml')

@@ -370,7 +370,7 @@ class FlowSimLstm(LightningModule):
         if tag == "test":
             test_dir = f"{self.save_dir}/{spec[0]}_{src_dst_pair_target_str[0]}"
             os.makedirs(test_dir, exist_ok=True)
-            np.savez(f"{test_dir}/res.npz", queue_len_est=estimated.cpu().numpy(), output=output.cpu().numpy())
+            np.savez(f"{test_dir}/res.npz", est=estimated.cpu().numpy(), output=output.cpu().numpy())
 
 
     def training_step(self, batch, batch_idx):
