@@ -1,11 +1,9 @@
 import torch
 import numpy as np
-from pytorch_lightning import LightningModule
 from util.model import FlowSimLstm, FlowSimTransformer
 from util.consts import MTU, HEADER_SIZE, BYTE_TO_BIT, DELAY_PROPAGATION_BASE
 import argparse
 import yaml
-import os
 
 class Inference:
     def __init__(self, config_path, checkpoint_path, model_name, device='cuda'):
@@ -81,7 +79,7 @@ class Inference:
 
         return self.postprocess(output)
 
-def load_data(dir_input, spec, topo_type="_topo-pl-21_s0",lr=10):
+def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10):
     dir_input_tmp = f"{dir_input}/{spec}"
     
     fid = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
@@ -92,72 +90,74 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0",lr=10):
     size = sizes_flowsim[fid].astype(np.float32)
     fat = fats_flowsim[fid].astype(np.float32)
     
-    fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
-    i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
-    sldn = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
+    fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
+    i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
+    sldn = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
     
-    pkt_head = np.clip(size, a_min=0, a_max=MTU)
-    delay_propagation = DELAY_PROPAGATION_BASE*2
-    pkt_size=(pkt_head + HEADER_SIZE) * BYTE_TO_BIT
-    delay_transmission = pkt_size / lr
-    DELAY_PROPAGATION_PERFLOW=delay_propagation+delay_transmission
-    fct_ideal=(
-                size + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE
-            ) * BYTE_TO_BIT / lr + DELAY_PROPAGATION_PERFLOW
-    return size, fat, sldn, fid, fct_ideal
+    # pkt_head = np.clip(size, a_min=0, a_max=MTU)
+    # delay_propagation = DELAY_PROPAGATION_BASE * 2
+    # pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
+    # delay_transmission = pkt_size / lr
+    # delay_propagation_perflow = delay_propagation + delay_transmission
+    # fct_ideal = (
+    #     size + np.ceil(size / MTU) * HEADER_SIZE
+    # ) * BYTE_TO_BIT / lr + delay_propagation_perflow
 
-def interactive_inference(inference, size, fat, sldn, fid, fct_ideal):
+    return size, fat, fid, fcts, i_fcts
+
+def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
     n_flows_total = len(size)
     active_flows = []
     n_active_flows = 0
     flow_completion_times = {}
     current_time = 0  # Initialize the current time
-
+    
     i = 0
     while i < n_flows_total or len(active_flows) > 0:
         if i < n_flows_total:
-            flow_size,flow_at,flow_id = size[i], fat[i], fid[i] 
+            flow_size, flow_at, flow_id = size[i], fat[i], fid[i]
+            flow_arrival_time = flow_at
         else:
             flow_arrival_time = float('inf')
         
         # Perform inference for all active flows
         if active_flows:
-            active_flow_inputs = np.array([[f[0],f[1]] for f in active_flows])
+            active_flow_inputs = np.array([[f[0], f[1]] for f in active_flows])
             active_flow_ids = np.array([f[2] for f in active_flows])
-            active_flow_inputs[1]=np.diff(active_flow_inputs[:,1],prepend=0)
+            active_flow_inputs[:, 1] = np.diff(active_flow_inputs[:, 1], prepend=0)
             predictions = inference.infer(active_flow_inputs)
             sldn_est = predictions[:, 0]
             sldn_est_min_idx = np.argmin(sldn_est)
-            completed_flow_id=active_flow_ids[sldn_est_min_idx]
-            fct_min = sldn_est[sldn_est_min_idx]*fct_ideal[completed_flow_id]
+            completed_flow_id = active_flow_ids[sldn_est_min_idx]
+            fct_min = sldn_est[sldn_est_min_idx] * i_fcts[completed_flow_id]
             fat_min = active_flows[sldn_est_min_idx][1]
-            flow_completion_time=fat_min+fct_min
+            flow_completion_time = fat_min + fct_min
         else:
             flow_completion_time = float('inf')
 
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
             current_time = flow_arrival_time
-            active_flows.append((flow_size,flow_at, flow_id))
-            n_active_flows+=1
+            active_flows.append((flow_size, flow_at, flow_id))
+            n_active_flows += 1
             print(f"Next event: Flow arrival at time {current_time}")
             i += 1  # Move to the next flow
         else:
             # Next event is flow completion
             current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = current_time
-            n_active_flows-=1
+            n_active_flows -= 1
             print(f"Next event: Flow completion at time {current_time}")
             
             # If all active flows are completed, end the busy period
-            if n_active_flows==0:
-                print(f"Busy period reset")
+            if n_active_flows == 0:
+                print("Busy period reset")
                 active_flows = []
 
     # Compare recorded flow completion times with the ground truth
     for flow_id in flow_completion_times:
         predicted_completion_time = flow_completion_times[flow_id]
-        actual_completion_time = ground_truth[flow_id]
+        actual_completion_time = fcts[flow_id]
         print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
 
 def main():
@@ -173,16 +173,15 @@ def main():
     lr = 10
     inference = Inference(config_path=args.config, checkpoint_path=args.checkpoint, model_name=args.model)
     
-    
     # for shard in np.arange(0, 1000):
     for shard in [0]:
         for n_flows in [2000]:
             for n_hosts in [21]:
                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
-                size, fat, sldn, fid,fct_ideal = load_data(args.input, spec=spec,lr=lr)
+                size, fat, fid, fcts, i_fcts = load_data(args.input, spec=spec, lr=lr)
                 
                 # Perform interactive inference
-                interactive_inference(inference, size, fat, sldn, fid, fid,fct_ideal)
+                interactive_inference(inference, size, fat, fid, fcts, i_fcts)
 
 if __name__ == '__main__':
     main()
