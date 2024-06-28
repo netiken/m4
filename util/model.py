@@ -30,9 +30,15 @@ class WeightedL1Loss(nn.Module):
     def __init__(self):
         super(WeightedL1Loss, self).__init__()
 
-    def forward(self, prediction, target, weights):
-        elementwise_loss = torch.abs(prediction - target).sum()
-        weighted_loss=elementwise_loss/weights.sum()
+    def forward(self, prediction, target, weights, loss_average="perflow"):
+        if loss_average == "perflow":
+            elementwise_loss = torch.abs(prediction - target).sum()
+            weighted_loss=elementwise_loss/weights.sum()
+        elif loss_average == "perperiod":
+            sequencewise_loss = torch.abs(prediction - target).mean(dim=1)
+            weighted_loss = torch.mean(sequencewise_loss)
+        else:
+            raise ValueError(f"Unsupported loss average type: {loss_average}")
         return weighted_loss
 class TransformerBase(LightningModule):
     def __init__(
@@ -304,6 +310,7 @@ class FlowSimLstm(LightningModule):
         output_size=1,
         input_size=2,
         enable_bidirectional=False,
+        loss_average="perflow", # perflow, perperiod
         save_dir=None,
     ):
         super(FlowSimLstm, self).__init__()
@@ -316,9 +323,9 @@ class FlowSimLstm(LightningModule):
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir
-        
+        self.loss_average = loss_average
         logging.info(
-            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, enable_bidirectional: {enable_bidirectional}, dropout: {dropout}")
+            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, enable_bidirectional: {enable_bidirectional}, dropout: {dropout}, loss_average: {loss_average}")
     
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":
@@ -351,7 +358,7 @@ class FlowSimLstm(LightningModule):
         gt=gt.masked_fill(~attention_mask, 0)
         
         # Calculate the loss
-        loss = self.loss_fn(est, gt, lengths)
+        loss = self.loss_fn(est, gt, lengths, self.loss_average)
         
         self._log_loss(loss, tag)
         self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)

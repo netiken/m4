@@ -12,7 +12,7 @@ git submodule status --recursive
 
 ps aux | head -1; ps aux | grep ^lichenni| sort -rnk 4 | more
 
-tensorboard --logdir /data2/lichenni/output_perflow --port 8009 --bind_all
+tensorboard --logdir /data2/lichenni/output_perflow/ --port 8009 --bind_all
 
 git add -A . ; git commit -m "wrap up res"; git push
 

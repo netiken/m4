@@ -104,6 +104,7 @@ if args.mode == "train":
         output_type=dataset_config.get("output_type", "fctSldn"),
         enable_segmentation=dataset_config.get("enable_segmentation", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
+        sampling_method=dataset_config.get("sampling_method", "uniform"),
     )
 
     # Init checkpointer
@@ -164,6 +165,7 @@ if args.mode == "train":
             input_size=2,
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
+            loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
         )
     elif model_name == "transformer":
         model = FlowSimTransformer(
@@ -217,6 +219,7 @@ else:
         output_type=dataset_config.get("output_type", "fctSldn"),
         enable_segmentation=dataset_config.get("enable_segmentation", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
+        sampling_method=dataset_config.get("sampling_method", "uniform"),
         mode=args.mode,
         test_on_train=args.test_on_train,
         test_on_empirical=args.test_on_empirical,
@@ -256,6 +259,7 @@ else:
             input_size=2,
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
+            loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
             save_dir=tb_logger.log_dir,
         )
     elif model_name == "transformer":
