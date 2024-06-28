@@ -35,7 +35,7 @@ class WeightedL1Loss(nn.Module):
             elementwise_loss = torch.abs(prediction - target).sum()
             weighted_loss=elementwise_loss/weights.sum()
         elif loss_average == "perperiod":
-            sequencewise_loss = torch.abs(prediction - target).mean(dim=1)
+            sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / weights.to(prediction.device)
             weighted_loss = torch.mean(sequencewise_loss)
         else:
             raise ValueError(f"Unsupported loss average type: {loss_average}")
