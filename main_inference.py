@@ -4,6 +4,7 @@ from util.model import FlowSimLstm, FlowSimTransformer
 from util.consts import MTU, HEADER_SIZE, BYTE_TO_BIT, DELAY_PROPAGATION_BASE
 import argparse
 import yaml
+from collections import deque
 
 class Inference:
     def __init__(self, config_path, checkpoint_path, model_name, device='cuda'):
@@ -108,24 +109,30 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10):
 
     return size, fat, fid, fcts, i_fcts
 
-def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
+def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_flows=5):
     # n_flows_total = len(size)
     n_flows_total = 20
     active_flows = []
-    n_active_flows = 0
+    waiting_flow_idx = deque()
+    inflight_flows = 0
     flow_completion_times = {}
     flow_fct_sldn = {}
-    current_time = 0
+    current_time = 0  # Initialize the current time
     
     i = 0
     while i < n_flows_total or len(active_flows) > 0:
-        flow_arrival_time = fat[i] if i < n_flows_total else float('inf')
-        
+        if i < n_flows_total and inflight_flows <= max_inflight_flows:
+            flow_arrival_time = fat[i]
+            if inflight_flows > max_inflight_flows:
+                waiting_flow_idx.append(i)
+        else:
+            flow_arrival_time = float('inf')
+
         if active_flows:
             active_flow_inputs = np.array([[f[0], f[1]] for f in active_flows])
             active_flow_ids = np.array([f[2] for f in active_flows])
             active_flow_inputs[:, 1] = np.diff(active_flow_inputs[:, 1], prepend=active_flow_inputs[0, 1])
-            
+
             predictions = inference.infer(active_flow_inputs)
             sldn_est = predictions[0, :, 0]
             sldn_est_min_idx = np.argmin(sldn_est, axis=0)
@@ -140,19 +147,22 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
             # Next event is flow arrival
             current_time = flow_arrival_time
             active_flows.append((size[i], flow_arrival_time, fid[i]))
-            n_active_flows += 1
+            inflight_flows += 1
             print(f"Next event: Flow arrival at time {current_time}")
             i += 1
         else:
             current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = current_time
             flow_fct_sldn[completed_flow_id] = sldn_est
-            n_active_flows -= 1
+            inflight_flows -= 1
+            if len(waiting_flow_idx):
+                ready_flow_idx = waiting_flow_idx.popleft()
+                ready_flow_id = fid[ready_flow_idx]
+                active_flows.append((size[ready_flow_id], current_time+1, ready_flow_id))
             print(f"Next event: Flow completion at time {current_time}")
-            
-            # If all active flows are completed, end the busy period
-            if n_active_flows == 0:
-                active_flows = []
+
+            if inflight_flows == 0:
+                active_flows=[]
                 print("Busy period reset")
 
     data_dict = {}
@@ -180,6 +190,7 @@ def main():
     parser.add_argument('--model', type=str, required=False, choices=['lstm', 'transformer'], help='Model type', default='lstm')
     parser.add_argument('--input', type=str, required=False, help='Path to the input data directory', default='/data2/lichenni/path_perflow_busy')
     parser.add_argument('--output', type=str, required=False, help='Path to save the output predictions', default='/data2/lichenni/output_perflow')
+    parser.add_argument('--max_inflight_flows', type=int, default=5, help='Maximum number of inflight flows')
 
     args = parser.parse_args()
     args.checkpoint = f"{args.output}/fct_lstm_bi_large_shard10000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
@@ -195,7 +206,7 @@ def main():
                 size, fat, fid, fcts, i_fcts = load_data(args.input, spec=spec, lr=lr)
                 
                 # Perform interactive inference
-                interactive_inference(inference, size, fat, fid, fcts, i_fcts)
+                interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_flows=args.max_inflight_flows)
 
 if __name__ == '__main__':
     main()
