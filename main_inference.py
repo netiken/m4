@@ -114,12 +114,13 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
     active_flows = []
     n_active_flows = 0
     flow_completion_times = {}
-    flow_fct_sldn={}
-    current_time = 0  # Initialize the current time
+    flow_fct_sldn = {}
+    current_time = 0
     
     i = 0
     while i < n_flows_total or len(active_flows) > 0:
-        flow_arrival_time = fat[i] if i<n_flows_total else float('inf')
+        flow_arrival_time = fat[i] if i < n_flows_total else float('inf')
+        
         if active_flows:
             active_flow_inputs = np.array([[f[0], f[1]] for f in active_flows])
             active_flow_ids = np.array([f[2] for f in active_flows])
@@ -127,7 +128,7 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
             
             predictions = inference.infer(active_flow_inputs)
             sldn_est = predictions[0, :, 0]
-            sldn_est_min_idx = np.argmin(sldn_est,axis=0)
+            sldn_est_min_idx = np.argmin(sldn_est, axis=0)
             completed_flow_id = active_flow_ids[sldn_est_min_idx]
             fct_min = sldn_est[sldn_est_min_idx] * i_fcts[completed_flow_id]
             fat_min = active_flows[sldn_est_min_idx][1]
@@ -141,12 +142,11 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
             active_flows.append((size[i], flow_arrival_time, fid[i]))
             n_active_flows += 1
             print(f"Next event: Flow arrival at time {current_time}")
-            i += 1  # Move to the next flow
+            i += 1
         else:
-            # Next event is flow completion
             current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = current_time
-            flow_fct_sldn[completed_flow_id]=sldn_est
+            flow_fct_sldn[completed_flow_id] = sldn_est
             n_active_flows -= 1
             print(f"Next event: Flow completion at time {current_time}")
             
@@ -167,20 +167,19 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts):
 
         data_dict[flow_id] = [predicted_completion_time, actual_completion_time, predicted_sldn, actual_sldn]
 
-        
-    # Converting lists to numpy arrays
     sorted_flow_ids = sorted(data_dict.keys())
     res = np.array([data_dict[flow_id] for flow_id in sorted_flow_ids])
     # Saving the data to a .npz file
     np.savez(f'./res/inference_{n_flows_total}.npz', 
-         fct=res[:, :2], 
-         sldn=res[:, 2:])
+             fct=res[:, :2], 
+             sldn=res[:, 2:])
+
 def main():
     parser = argparse.ArgumentParser(description='Interactive Inference Script')
     parser.add_argument('--config', type=str, required=False, help='Path to the YAML configuration file', default='./config/test_config_lstm.yaml')
-    parser.add_argument('--model', type=str, required=False, choices=['lstm', 'transformer'], help='Model type',default='lstm')
-    parser.add_argument('--input', type=str, required=False, help='Path to the input data directory',default='/data2/lichenni/path_perflow_busy')
-    parser.add_argument('--output', type=str, required=False, help='Path to save the output predictions',default='/data2/lichenni/output_perflow')
+    parser.add_argument('--model', type=str, required=False, choices=['lstm', 'transformer'], help='Model type', default='lstm')
+    parser.add_argument('--input', type=str, required=False, help='Path to the input data directory', default='/data2/lichenni/path_perflow_busy')
+    parser.add_argument('--output', type=str, required=False, help='Path to save the output predictions', default='/data2/lichenni/output_perflow')
 
     args = parser.parse_args()
     args.checkpoint = f"{args.output}/fct_lstm_bi_large_shard10000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
