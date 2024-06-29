@@ -13,14 +13,14 @@ dataset:
   output_type: "fctSldn" # fctSldn, queueLen
   enable_segmentation: True
   segments_per_seq: 100
-  sampling_method: "balanced" # uniform, weighted, balanced
+  sampling_method: "balanced" # weighted, uniform, balanced
 
 # Model parameters
 model:
   model_name: "lstm"
   n_layer: 2
   loss_fn_type: "l1"
-  hidden_size: 64
+  hidden_size: 128
   dropout: 0.0
   enable_bidirectional: True
 
@@ -28,8 +28,8 @@ model:
 training:
   gpu: [3]
   n_epochs: 4
-  batch_size: 2
+  batch_size: 128
   learning_rate: 0.001
-  num_workers: 1
+  num_workers: 16
   enable_val: True
   enable_dist: False
