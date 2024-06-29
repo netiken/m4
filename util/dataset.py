@@ -98,7 +98,6 @@ class PathDataModulePerFlow(LightningDataModule):
                                 if enable_segmentation:
                                     busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}s{sample}.npy", allow_pickle=True)
                                     
-                                    # weights = np.array([len(period) if len(period)>5 else 0 for period in busy_periods])
                                     len_per_period = np.array([len(period) for period in busy_periods])
                                     
                                     if np.sum(len_per_period)>0:
@@ -224,7 +223,6 @@ class PathDataModulePerFlow(LightningDataModule):
                                         if self.enable_segmentation:
                                             busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}s{sample}.npy", allow_pickle=True)
                                     
-                                            # weights = np.array([len(period) if len(period)>5 else 0 for period in busy_periods])
                                             len_per_period = np.array([len(period) for period in busy_periods])
                                             
                                             if np.sum(len_per_period)>0:

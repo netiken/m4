@@ -348,10 +348,6 @@ class FlowSimLstm(LightningModule):
         mask = torch.arange(output.size(1)).expand(len(lengths), output.size(1)) < lengths.unsqueeze(1)
         attention_mask = mask.to(input.device)
         
-        # Apply the mask to both estimated and output
-        # masked_estimated = estimated[mask]
-        # masked_output = output[mask]
-        
         est = torch.div(estimated, output).squeeze()
         gt=torch.ones_like(est)
         est=est.masked_fill(~attention_mask, 0)

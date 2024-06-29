@@ -21,7 +21,7 @@ git add -A . ; git commit -m "debug periods"; git push
 time run ../ckpts/model_llama.bin ../ckpts/model_mlp.bin ../ckpts/data_lr10Gbps_7 -b 10 -e 576 -n 7 -t 1 -f 30 -k 18000 -p 1 -c 0 -x 30 
 
 
-python main_link.py --train_config=./config/train_config_lstm.yaml --mode=train --dir_input=/data2/lichenni/path_perflow_busy --dir_output=/data2/lichenni/output_perflow --note fct_lstm_bi_weighted
+python main_link.py --train_config=./config/train_config_lstm.yaml --mode=train --dir_input=/data2/lichenni/path_perflow_busy --dir_output=/data2/lichenni/output_perflow --note fct_lstm_bi_uniform_small
 
 python main_link.py --train_config=./config/train_config_transformer.yaml --mode=train --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --note fct_transformer_noncausal_b
 
