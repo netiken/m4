@@ -12,7 +12,7 @@ def process_spec(spec_idx, spec, topo_type, dir_input,flow_size):
 
     # Load FAT and FCT data
     fid = np.load(f'{input_tmp}/fid{topo_type}.npy')
-    fat = np.load(f'{input_tmp}/fat.npy')
+    fat = np.load(f'{input_tmp}/fat{topo_type}.npy')
     fct = np.load(f'{input_tmp}/fct{topo_type}.npy')
 
     # Create a list of all start and end events
@@ -48,7 +48,7 @@ def main():
     lr = 10
     
     # for target_str in ["_lognormal", "_empirical_lognormal", "_exp", "_empirical_exp"]:
-    for target_str in ["_busy_close","_busy_empirical_close"]:
+    for target_str in ["_busy_close"]:
         
         result_file = f'./res/num_active_flows_time{target_str}.npy'
 
@@ -63,7 +63,7 @@ def main():
             flow_sizes_list = []
             data_list = []
             flow_size_list=[]
-            for shard in np.arange(500):
+            for shard in np.arange(1):
             # for shard in [688]:
                 for n_flows in [2000]:
                     for n_hosts in [21]:

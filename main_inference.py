@@ -114,9 +114,10 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
     if max_inflight_flows==0:
         max_inflight_flows=1000000
     n_flows_total = len(size)
+    print(f"Total number of flows: {n_flows_total}")
     # n_flows_total = 1000
     active_flows = []
-    waiting_flow_idx = deque()
+    completed_flow_idx_list=[]
     inflight_flows = 0
     flow_completion_times = {}
     flow_fct_sldn = {}
@@ -126,11 +127,10 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
     while i < n_flows_total or len(active_flows) > 0:
         # assert i==fid[i]
         flow_arrival_time = float('inf')
+        flow_completion_time = float('inf')
         if i < n_flows_total:
             if inflight_flows < max_inflight_flows:
-                flow_arrival_time = fat[i]
-            else:
-                waiting_flow_idx.append(i)
+                flow_arrival_time = np.maximum(fat[i],current_time+1)
                 # print(f"Flow {i} added to queue")
 
         if active_flows:
@@ -140,13 +140,14 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
 
             predictions = inference.infer(active_flow_inputs)
             sldn_est = predictions[0, :, 0]
-            sldn_est_min_idx = np.argmin(sldn_est, axis=0)
+            
+            mask = np.isin(np.arange(len(sldn_est)), completed_flow_idx_list, invert=True)
+            masked_sldn_est = np.ma.array(sldn_est, mask=~mask)
+            sldn_est_min_idx = np.argmin(masked_sldn_est, axis=0)
             completed_flow_id = active_flow_ids[sldn_est_min_idx]
             fct_min = sldn_est[sldn_est_min_idx] * i_fcts[completed_flow_id]
             fat_min = active_flows[sldn_est_min_idx][1]
             flow_completion_time = fat_min + fct_min
-        else:
-            flow_completion_time = float('inf')
 
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
@@ -158,30 +159,27 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
         else:
             # Next event is flow completion
             current_time = flow_completion_time
-            flow_completion_times[completed_flow_id] = current_time
+            flow_completion_times[completed_flow_id] = fct_min
             flow_fct_sldn[completed_flow_id] = sldn_est
+            completed_flow_idx_list.append(sldn_est_min_idx)
             inflight_flows -= 1
             # print(f"Event: Flow {completed_flow_id} Completion at {current_time}")
-            if waiting_flow_idx and inflight_flows < max_inflight_flows:
-                ready_flow_idx = waiting_flow_idx.popleft()
-                active_flows.append((size[ready_flow_idx], current_time + 1, fid[ready_flow_idx]))
-                inflight_flows += 1
-                # print(f"Event: Flow {i} Arrival at {current_time + 1} from queue")
-                i += 1
 
             if inflight_flows == 0:
                 active_flows = []
+                completed_flow_idx_list=[]
                 # print("Busy period reset")
-
+                
+        print(f"Current time: {current_time}, Inflight flows: {inflight_flows}, Active flows: {len(active_flows)}")
     data_dict = {}
     # Compare recorded flow completion times with the ground truth
     for flow_id in flow_completion_times:
-        predicted_completion_time = flow_completion_times[flow_id] - fat[flow_id]
+        predicted_completion_time = flow_completion_times[flow_id]
         actual_completion_time = fcts[flow_id]
-        print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
+        # print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
         predicted_sldn = flow_fct_sldn[flow_id][0]
         actual_sldn = fcts[flow_id] / i_fcts[flow_id]
-        print(f"Flow ID: {flow_id}, Predicted SLDN: {predicted_sldn}, Actual SLDN: {actual_sldn}")
+        # print(f"Flow ID: {flow_id}, Predicted SLDN: {predicted_sldn}, Actual SLDN: {actual_sldn}")
 
         data_dict[flow_id] = [predicted_completion_time, actual_completion_time, predicted_sldn, actual_sldn]
 
@@ -208,11 +206,10 @@ def main():
     
     
     # for max_inflight_flows in [0, 4, 6, 15]:
-    for max_inflight_flows in [0]:
+    for max_inflight_flows in [6]:
         fct,sldn=[], []
-        for shard in np.arange(0, 500):
-        # for shard in [0]:
-            print(f"Shard: {shard}")
+        # for shard in np.arange(0, 500, 50):
+        for shard in [0]:
             for n_flows in [2000]:
                 for n_hosts in [21]:
                     spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
@@ -220,11 +217,12 @@ def main():
                     
                     # Perform interactive inference
                     fct_tmp,sldn_tmp=interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_flows=max_inflight_flows)
+                    print(f"Finished inference with workload={shard}. fct shape: {fct_tmp.shape}, sldn shape: {sldn_tmp.shape}")
                     fct.append(fct_tmp)
                     sldn.append(sldn_tmp)
         fct=np.array(fct)
         sldn=np.array(sldn)
         print(f"Finished inference with {max_inflight_flows} inflight flows. fct shape: {fct.shape}, sldn shape: {sldn.shape}")
-        np.savez(f'./res/inference_{max_inflight_flows}_{max_inflight_flows}.npz', fct=fct, sldn=sldn)
+        np.savez(f'./res/inference_{max_inflight_flows}.npz', fct=fct, sldn=sldn)
 if __name__ == '__main__':
     main()
