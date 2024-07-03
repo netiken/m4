@@ -128,9 +128,10 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
         # assert i==fid[i]
         flow_arrival_time = float('inf')
         flow_completion_time = float('inf')
+        sldn_est_min_idx=None
         if i < n_flows_total:
             if inflight_flows < max_inflight_flows:
-                flow_arrival_time = np.maximum(fat[i],current_time+1)
+                flow_arrival_time = np.maximum(fat[i],current_time)
                 # print(f"Flow {i} added to queue")
 
         if active_flows:
@@ -152,8 +153,8 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
             current_time = flow_arrival_time
-            active_flows.append((size[i], flow_arrival_time, fid[i]))
             inflight_flows += 1
+            active_flows.append((size[i], flow_arrival_time, fid[i]))
             # print(f"Event: Flow {i} Arrival at {current_time}")
             i += 1
         else:
@@ -170,7 +171,7 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
                 completed_flow_idx_list=[]
                 # print("Busy period reset")
                 
-        print(f"Current time: {current_time}, Inflight flows: {inflight_flows}, Active flows: {len(active_flows)}")
+        # print(f"Current time: {current_time}, Inflight flows: {inflight_flows}, Active flows: {len(active_flows)}")
     data_dict = {}
     # Compare recorded flow completion times with the ground truth
     for flow_id in flow_completion_times:
@@ -203,13 +204,13 @@ def main():
     
     lr = 10
     inference = Inference(config_path=args.config, checkpoint_path=args.checkpoint, model_name=args.model)
-    
+    empirical_str=''
+    args.input+=empirical_str
     
     # for max_inflight_flows in [0, 4, 6, 15]:
     for max_inflight_flows in [6]:
         fct,sldn=[], []
-        # for shard in np.arange(0, 500, 50):
-        for shard in [0]:
+        for shard in np.arange(0, 20):
             for n_flows in [2000]:
                 for n_hosts in [21]:
                     spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
@@ -223,6 +224,6 @@ def main():
         fct=np.array(fct)
         sldn=np.array(sldn)
         print(f"Finished inference with {max_inflight_flows} inflight flows. fct shape: {fct.shape}, sldn shape: {sldn.shape}")
-        np.savez(f'./res/inference_{max_inflight_flows}.npz', fct=fct, sldn=sldn)
+        np.savez(f'./res/inference_{max_inflight_flows}{empirical_str}.npz', fct=fct, sldn=sldn)
 if __name__ == '__main__':
     main()
