@@ -47,7 +47,8 @@ def main():
     topo_type = "_topo-pl-x_"
     lr = 10
     
-    for target_str in ["_lognormal", "_empirical_lognormal", "_exp", "_empirical_exp"]:
+    # for target_str in ["_lognormal", "_empirical_lognormal", "_exp", "_empirical_exp"]:
+    for target_str in ["_busy_close","_busy_empirical_close"]:
         
         result_file = f'./res/num_active_flows_time{target_str}.npy'
 
@@ -62,19 +63,15 @@ def main():
             flow_sizes_list = []
             data_list = []
             flow_size_list=[]
-            for shard in np.arange(1000):
+            for shard in np.arange(500):
             # for shard in [688]:
-                for n_flows in [20000]:
-                    for n_hosts in [3]:
+                for n_flows in [2000]:
+                    for n_hosts in [21]:
                         for shard_seed in [0]:
-                            topo_type_cur = topo_type.replace("-x_", f"-{n_hosts}_") + "s%d" % (shard_seed)
+                            topo_type_cur = topo_type.replace("-x_", f"-{n_hosts}_") + "s%d_i0" % (shard_seed)
                             spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
-                            dir_input_tmp = f"{dir_input}/{spec}"
-
-                            # fat = np.load(f'{dir_input}/{spec}/fat.npy')
-                            # fct = np.load(f'{dir_input}/{spec}/fct{topo_type_cur}.npy')
                             fid = np.load(f'{dir_input}/{spec}/fid{topo_type_cur}.npy')
-                            if len(fid) == len(set(fid)):
+                            if len(fid)==len(set(fid))==(n_hosts-1)*n_flows and np.all(fid[:-1] <= fid[1:]):
                                 data_list.append((spec, topo_type_cur))
                                 statss = np.load(f'{dir_input}/{spec}/stats.npy', allow_pickle=True)
                                 flow_size_list.append(statss.item().get("size_dist_candidate"))

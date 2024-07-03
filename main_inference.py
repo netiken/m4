@@ -83,7 +83,8 @@ class Inference:
 
         return self.postprocess(output)
 
-def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10):
+def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10,max_inflight_flows=0):
+    topo_type+=f"_i{max_inflight_flows}"
     dir_input_tmp = f"{dir_input}/{spec}"
     
     fid = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
@@ -110,8 +111,10 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10):
     return size, fat, fid, fcts, i_fcts
 
 def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_flows=5):
-    # n_flows_total = len(size)
-    n_flows_total = 20
+    if max_inflight_flows==0:
+        max_inflight_flows=1000000
+    n_flows_total = len(size)
+    # n_flows_total = 1000
     active_flows = []
     waiting_flow_idx = deque()
     inflight_flows = 0
@@ -121,12 +124,14 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
     
     i = 0
     while i < n_flows_total or len(active_flows) > 0:
-        if i < n_flows_total and inflight_flows <= max_inflight_flows:
-            flow_arrival_time = fat[i]
-            if inflight_flows > max_inflight_flows:
+        # assert i==fid[i]
+        flow_arrival_time = float('inf')
+        if i < n_flows_total:
+            if inflight_flows < max_inflight_flows:
+                flow_arrival_time = fat[i]
+            else:
                 waiting_flow_idx.append(i)
-        else:
-            flow_arrival_time = float('inf')
+                # print(f"Flow {i} added to queue")
 
         if active_flows:
             active_flow_inputs = np.array([[f[0], f[1]] for f in active_flows])
@@ -148,22 +153,25 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
             current_time = flow_arrival_time
             active_flows.append((size[i], flow_arrival_time, fid[i]))
             inflight_flows += 1
-            print(f"Next event: Flow arrival at time {current_time}")
+            # print(f"Event: Flow {i} Arrival at {current_time}")
             i += 1
         else:
+            # Next event is flow completion
             current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = current_time
             flow_fct_sldn[completed_flow_id] = sldn_est
             inflight_flows -= 1
-            if len(waiting_flow_idx):
+            # print(f"Event: Flow {completed_flow_id} Completion at {current_time}")
+            if waiting_flow_idx and inflight_flows < max_inflight_flows:
                 ready_flow_idx = waiting_flow_idx.popleft()
-                ready_flow_id = fid[ready_flow_idx]
-                active_flows.append((size[ready_flow_id], current_time+1, ready_flow_id))
-            print(f"Next event: Flow completion at time {current_time}")
+                active_flows.append((size[ready_flow_idx], current_time + 1, fid[ready_flow_idx]))
+                inflight_flows += 1
+                # print(f"Event: Flow {i} Arrival at {current_time + 1} from queue")
+                i += 1
 
             if inflight_flows == 0:
-                active_flows=[]
-                print("Busy period reset")
+                active_flows = []
+                # print("Busy period reset")
 
     data_dict = {}
     # Compare recorded flow completion times with the ground truth
@@ -179,34 +187,44 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
 
     sorted_flow_ids = sorted(data_dict.keys())
     res = np.array([data_dict[flow_id] for flow_id in sorted_flow_ids])
+    return res[:, :2], res[:, 2:]
     # Saving the data to a .npz file
-    np.savez(f'./res/inference_{n_flows_total}.npz', 
-             fct=res[:, :2], 
-             sldn=res[:, 2:])
+    # np.savez(f'./res/inference_{n_flows_total}_{max_inflight_flows}.npz', 
+            #  fct=res[:, :2], 
+            #  sldn=res[:, 2:])
 
 def main():
     parser = argparse.ArgumentParser(description='Interactive Inference Script')
     parser.add_argument('--config', type=str, required=False, help='Path to the YAML configuration file', default='./config/test_config_lstm.yaml')
     parser.add_argument('--model', type=str, required=False, choices=['lstm', 'transformer'], help='Model type', default='lstm')
-    parser.add_argument('--input', type=str, required=False, help='Path to the input data directory', default='/data2/lichenni/path_perflow_busy')
+    parser.add_argument('--input', type=str, required=False, help='Path to the input data directory', default='/data2/lichenni/path_perflow_busy_close')
     parser.add_argument('--output', type=str, required=False, help='Path to save the output predictions', default='/data2/lichenni/output_perflow')
-    parser.add_argument('--max_inflight_flows', type=int, default=5, help='Maximum number of inflight flows')
 
     args = parser.parse_args()
-    args.checkpoint = f"{args.output}/fct_lstm_bi_large_shard10000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
+    args.checkpoint = f"{args.output}/fct_lstm_bi_uniform_shard5000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
     
     lr = 10
     inference = Inference(config_path=args.config, checkpoint_path=args.checkpoint, model_name=args.model)
     
-    # for shard in np.arange(0, 1000):
-    for shard in [0]:
-        for n_flows in [2000]:
-            for n_hosts in [21]:
-                spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
-                size, fat, fid, fcts, i_fcts = load_data(args.input, spec=spec, lr=lr)
-                
-                # Perform interactive inference
-                interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_flows=args.max_inflight_flows)
-
+    
+    # for max_inflight_flows in [0, 4, 6, 15]:
+    for max_inflight_flows in [0]:
+        fct,sldn=[], []
+        for shard in np.arange(0, 500):
+        # for shard in [0]:
+            print(f"Shard: {shard}")
+            for n_flows in [2000]:
+                for n_hosts in [21]:
+                    spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
+                    size, fat, fid, fcts, i_fcts = load_data(args.input, spec=spec, lr=lr,max_inflight_flows=max_inflight_flows)
+                    
+                    # Perform interactive inference
+                    fct_tmp,sldn_tmp=interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_flows=max_inflight_flows)
+                    fct.append(fct_tmp)
+                    sldn.append(sldn_tmp)
+        fct=np.array(fct)
+        sldn=np.array(sldn)
+        print(f"Finished inference with {max_inflight_flows} inflight flows. fct shape: {fct.shape}, sldn shape: {sldn.shape}")
+        np.savez(f'./res/inference_{max_inflight_flows}_{max_inflight_flows}.npz', fct=fct, sldn=sldn)
 if __name__ == '__main__':
     main()

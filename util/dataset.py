@@ -210,7 +210,7 @@ class PathDataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    for shard in np.arange(0, 1000):
+                    for shard in np.arange(0, 500):
                         for n_flows in [2000]:
                             for n_hosts in [21]:
                                 topo_type_cur = self.topo_type.replace(
