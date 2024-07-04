@@ -117,7 +117,7 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
     print(f"Total number of flows: {n_flows_total}")
     # n_flows_total = 1000
     active_flows = []
-    completed_flow_idx_list=[]
+    completed_flow_idx_set=set()
     inflight_flows = 0
     flow_completion_times = {}
     flow_fct_sldn = {}
@@ -142,11 +142,12 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
             predictions = inference.infer(active_flow_inputs)
             sldn_est = predictions[0, :, 0]
             
-            mask = np.isin(np.arange(len(sldn_est)), completed_flow_idx_list, invert=True)
-            masked_sldn_est = np.ma.array(sldn_est, mask=~mask)
-            sldn_est_min_idx = np.argmin(masked_sldn_est, axis=0)
+            sldn_est = np.where(np.isin(np.arange(len(sldn_est)), list(completed_flow_idx_set)), np.inf, sldn_est)
+            sldn_est_min_idx = np.argmin(sldn_est, axis=0)
+            
             completed_flow_id = active_flow_ids[sldn_est_min_idx]
-            fct_min = sldn_est[sldn_est_min_idx] * i_fcts[completed_flow_id]
+            sldn_min=sldn_est[sldn_est_min_idx]
+            fct_min = sldn_min * i_fcts[completed_flow_id]
             fat_min = active_flows[sldn_est_min_idx][1]
             flow_completion_time = fat_min + fct_min
 
@@ -161,14 +162,14 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
             # Next event is flow completion
             current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = fct_min
-            flow_fct_sldn[completed_flow_id] = sldn_est
-            completed_flow_idx_list.append(sldn_est_min_idx)
+            flow_fct_sldn[completed_flow_id] = sldn_min
+            completed_flow_idx_set.add(sldn_est_min_idx)
             inflight_flows -= 1
             # print(f"Event: Flow {completed_flow_id} Completion at {current_time}")
 
             if inflight_flows == 0:
                 active_flows = []
-                completed_flow_idx_list=[]
+                completed_flow_idx_set=set()
                 # print("Busy period reset")
                 
         # print(f"Current time: {current_time}, Inflight flows: {inflight_flows}, Active flows: {len(active_flows)}")
@@ -178,7 +179,8 @@ def interactive_inference(inference, size, fat, fid, fcts, i_fcts, max_inflight_
         predicted_completion_time = flow_completion_times[flow_id]
         actual_completion_time = fcts[flow_id]
         # print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
-        predicted_sldn = flow_fct_sldn[flow_id][0]
+        predicted_sldn = flow_fct_sldn[flow_id]
+        assert predicted_sldn != np.inf
         actual_sldn = fcts[flow_id] / i_fcts[flow_id]
         # print(f"Flow ID: {flow_id}, Predicted SLDN: {predicted_sldn}, Actual SLDN: {actual_sldn}")
 
@@ -204,13 +206,14 @@ def main():
     
     lr = 10
     inference = Inference(config_path=args.config, checkpoint_path=args.checkpoint, model_name=args.model)
+    # empirical_str='_empirical'
     empirical_str=''
     args.input+=empirical_str
     
     # for max_inflight_flows in [0, 4, 6, 15]:
-    for max_inflight_flows in [6]:
+    for max_inflight_flows in [0]:
         fct,sldn=[], []
-        for shard in np.arange(0, 20):
+        for shard in np.arange(0, 10):
             for n_flows in [2000]:
                 for n_hosts in [21]:
                     spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"

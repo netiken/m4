@@ -12,7 +12,8 @@ def process_spec(spec_idx, spec, topo_type, dir_input,flow_size):
 
     # Load FAT and FCT data
     fid = np.load(f'{input_tmp}/fid{topo_type}.npy')
-    fat = np.load(f'{input_tmp}/fat{topo_type}.npy')
+    # fat = np.load(f'{input_tmp}/fat{topo_type}.npy')
+    fat = np.load(f'{input_tmp}/fat.npy')
     fct = np.load(f'{input_tmp}/fct{topo_type}.npy')
 
     # Create a list of all start and end events
@@ -48,8 +49,8 @@ def main():
     lr = 10
     
     # for target_str in ["_lognormal", "_empirical_lognormal", "_exp", "_empirical_exp"]:
-    for target_str in ["_busy_close"]:
-        
+    # for target_str in ["_busy_close","_busy_close_empirical"]:
+    for target_str in ["_busy","_busy_empirical"]:
         result_file = f'./res/num_active_flows_time{target_str}.npy'
 
         # Check if result file already exists
@@ -63,12 +64,12 @@ def main():
             flow_sizes_list = []
             data_list = []
             flow_size_list=[]
-            for shard in np.arange(1):
+            for shard in np.arange(500):
             # for shard in [688]:
                 for n_flows in [2000]:
                     for n_hosts in [21]:
                         for shard_seed in [0]:
-                            topo_type_cur = topo_type.replace("-x_", f"-{n_hosts}_") + "s%d_i0" % (shard_seed)
+                            topo_type_cur = topo_type.replace("-x_", f"-{n_hosts}_") + "s%d" % (shard_seed)
                             spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
                             fid = np.load(f'{dir_input}/{spec}/fid{topo_type_cur}.npy')
                             if len(fid)==len(set(fid))==(n_hosts-1)*n_flows and np.all(fid[:-1] <= fid[1:]):

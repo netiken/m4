@@ -206,7 +206,7 @@ def plot_cdf(
         loc=loc,
     )
 
-    # plt.ylim((ylim_low, 1))
+    plt.ylim((ylim_low, 100))
     if xlim_bottom:
         plt.xlim(left=xlim_bottom)
     if xlim:
