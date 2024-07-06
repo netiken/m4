@@ -227,24 +227,26 @@ class PathDataModulePerFlow(LightningDataModule):
                                             
                                             if np.sum(len_per_period)>0:
                                                 # Sample indices from the array based on the weights
-                                                if self.sampling_method=="uniform":
-                                                    weights = len_per_period > 0
-                                                elif self.sampling_method=="weighted":
-                                                    weights = len_per_period
-                                                elif self.sampling_method=="balanced":
-                                                    # Create a dictionary to count the number of periods for each length
-                                                    unique_lengths, counts = np.unique(len_per_period, return_counts=True)
+                                                # if self.sampling_method=="uniform":
+                                                #     weights = len_per_period > 0
+                                                # elif self.sampling_method=="weighted":
+                                                #     weights = len_per_period
+                                                # elif self.sampling_method=="balanced":
+                                                #     # Create a dictionary to count the number of periods for each length
+                                                #     unique_lengths, counts = np.unique(len_per_period, return_counts=True)
                                                     
-                                                    # Assign equal weight to each length category
-                                                    length_weights = 1.0 / unique_lengths.size
+                                                #     # Assign equal weight to each length category
+                                                #     length_weights = 1.0 / unique_lengths.size
                                                     
-                                                    # Calculate the weight for each period
-                                                    weights = np.zeros(len(busy_periods))
-                                                    for length, count in zip(unique_lengths, counts):
-                                                        period_indices = np.where(len_per_period == length)[0]
-                                                        weights[period_indices] = length_weights / count
-                                                else:
-                                                    raise ValueError(f"Unsupported sampling method: {self.sampling_method}")
+                                                #     # Calculate the weight for each period
+                                                #     weights = np.zeros(len(busy_periods))
+                                                #     for length, count in zip(unique_lengths, counts):
+                                                #         period_indices = np.where(len_per_period == length)[0]
+                                                #         weights[period_indices] = length_weights / count
+                                                # else:
+                                                #     raise ValueError(f"Unsupported sampling method: {self.sampling_method}")
+                                                
+                                                weights = len_per_period > 0
                                                 
                                                 weights = weights / np.sum(weights)
 
