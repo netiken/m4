@@ -1,20 +1,10 @@
 from torch.utils.data import Dataset
 import numpy as np
 from torch.utils.data import DataLoader
-from torch.nn.utils.rnn import pad_sequence
 from pytorch_lightning import LightningDataModule
 import torch
 from .consts import (
-    P99_PERCENTILE_LIST,
-    PERCENTILE_METHOD,
-    MTU,
-    HEADER_SIZE,
-    BYTE_TO_BIT,
-    BDP_DICT,
-    LINK_TO_DELAY_DICT,
-    get_size_bucket_list,
-    get_size_bucket_list_output,
-    get_base_delay_pmn,
+    PLACEHOLDER
 )
 from .func import decode_dict
 import json
@@ -31,7 +21,7 @@ def collate_fn_per_flow(batch):
     # Pad sequences
     max_len = max(lengths)
     padded_inputs = np.zeros((len(inputs), max_len, inputs[0].shape[1]), dtype=np.float32)
-    padded_outputs = np.zeros((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)
+    padded_outputs = np.ones((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)*PLACEHOLDER
     
     for i, (input, output) in enumerate(zip(inputs, outputs)):
         padded_inputs[i, :input.shape[0], :] = input
@@ -557,6 +547,7 @@ class PathFctSldnSegment(Dataset):
             fsd_flowsim=fsd_flowsim[fid]
             
             flows_fg =np.logical_and(fsd_flowsim[:,0]==src_dst_pair_target[0], fsd_flowsim[:,1]==src_dst_pair_target[1])
+            assert np.sum(flows_fg)>0
             # Calculate inter-arrival times and adjust the first element
             fats_ia_flowsim=np.diff(fats_flowsim)
             fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
@@ -570,7 +561,8 @@ class PathFctSldnSegment(Dataset):
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
-            output_data[~flows_fg] = 0
+            assert (output_data>=1.0).all()
+            output_data[~flows_fg] = PLACEHOLDER
             
             # np.savez(feat_path, input_data=input_data, output_data=output_data)
         else:

@@ -1,13 +1,8 @@
 import torch
-import torch.distributed as dist
-
 from pytorch_lightning import LightningModule
 import torch.nn as nn
 from .consts import (
-    EPS,
-    SIZE_BUCKET_LIST_LABEL,
-    SIZE_BUCKET_LIST_LABEL_OUTPUT,
-    P99_PERCENTILE_LIST,
+    PLACEHOLDER
 )
 from .func import (
     serialize_fp32
@@ -344,13 +339,12 @@ class FlowSimLstm(LightningModule):
         estimated, _ = self.model_lstm(input, lengths)
         
         # Generate a mask based on lengths
-        attention_mask = (output.squeeze() != 0)
+        attention_mask = (output.squeeze() != PLACEHOLDER)
     
         est = torch.div(estimated, output).squeeze()
         gt=torch.ones_like(est)
-        est=est.masked_fill(~attention_mask, 0)
-        gt=gt.masked_fill(~attention_mask, 0)
-        
+        est=est.masked_fill(~attention_mask, 0.0)
+        gt=gt.masked_fill(~attention_mask, 0.0)
         # Calculate the loss
         loss = self.loss_fn(est, gt, self.loss_average)
         
