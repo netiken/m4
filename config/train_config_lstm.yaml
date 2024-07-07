@@ -5,7 +5,7 @@ dataset:
   n_flows_list: [2000]
   n_hosts_list: [21]
   shard: 0
-  shard_list: [0,5000,5000] # [start, end, num]
+  shard_list: [0,2000,2000] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
@@ -14,6 +14,7 @@ dataset:
   enable_segmentation: True
   segments_per_seq: 200
   sampling_method: "weighted" # weighted, uniform, balanced
+  enable_path: True
 
 # Model parameters
 model:

@@ -31,6 +31,7 @@ class WeightedL1Loss(nn.Module):
         super(WeightedL1Loss, self).__init__()
 
     def forward(self, prediction, target, weights, loss_average="perflow"):
+        prediction = torch.nan_to_num(prediction, nan=1.0)
         if loss_average == "perflow":
             elementwise_loss = torch.abs(prediction - target).sum()
             weighted_loss=elementwise_loss/weights.sum()

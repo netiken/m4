@@ -2,7 +2,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 
-from util.dataset import PathDataModulePerFlow
+from util.dataset import DataModulePerFlow
 from util.arg_parser import create_config
 from util.func import (
     fix_seed,
@@ -89,7 +89,7 @@ if args.mode == "train":
     with open(f"{tb_logger.log_dir}/config.yaml", "w") as f:
         yaml.dump(config, f)
 
-    datamodule = PathDataModulePerFlow(
+    datamodule = DataModulePerFlow(
         dir_input=dir_input,
         shard_list=shard_list,
         n_flows_list=n_flows_list,
@@ -105,6 +105,7 @@ if args.mode == "train":
         enable_segmentation=dataset_config.get("enable_segmentation", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
         sampling_method=dataset_config.get("sampling_method", "uniform"),
+        enable_path=dataset_config.get("enable_path", False),
     )
 
     # Init checkpointer
@@ -203,7 +204,7 @@ else:
     logging.info(f"Save to: {tb_logger.log_dir}")
     logging.info(args)
 
-    datamodule = PathDataModulePerFlow(
+    datamodule = DataModulePerFlow(
         dir_input=dir_input,
         shard_list=shard_list,
         n_flows_list=n_flows_list,
@@ -220,6 +221,7 @@ else:
         enable_segmentation=dataset_config.get("enable_segmentation", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
         sampling_method=dataset_config.get("sampling_method", "uniform"),
+        enable_path=dataset_config.get("enable_path", False),
         mode=args.mode,
         test_on_train=args.test_on_train,
         test_on_empirical=args.test_on_empirical,
