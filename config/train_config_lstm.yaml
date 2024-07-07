@@ -13,7 +13,7 @@ dataset:
   output_type: "fctSldn" # fctSldn, queueLen
   enable_segmentation: True
   segments_per_seq: 200
-  sampling_method: "uniform" # weighted, uniform, balanced
+  sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: True
 
 # Model parameters
@@ -22,7 +22,7 @@ model:
   input_size: 8
   n_layer: 2
   loss_fn_type: "l1"
-  hidden_size: 128
+  hidden_size: 256
   dropout: 0.0
   enable_bidirectional: True
 

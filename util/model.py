@@ -1,9 +1,6 @@
 import torch
 from pytorch_lightning import LightningModule
 import torch.nn as nn
-from .consts import (
-    PLACEHOLDER
-)
 from .func import (
     serialize_fp32
 )
@@ -30,7 +27,7 @@ class WeightedL1Loss(nn.Module):
             elementwise_loss = torch.abs(prediction - target).sum()
             weighted_loss=elementwise_loss/target.sum()
         elif loss_average == "perperiod":
-            sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / target.to(prediction.device)
+            sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / target.sum(dim=1).to(prediction.device)
             weighted_loss = torch.mean(sequencewise_loss)
         else:
             raise ValueError(f"Unsupported loss average type: {loss_average}")
@@ -339,7 +336,7 @@ class FlowSimLstm(LightningModule):
         estimated, _ = self.model_lstm(input, lengths)
         
         # Generate a mask based on lengths
-        attention_mask = (output.squeeze() != PLACEHOLDER)
+        attention_mask = (output.squeeze() >= 1.0)
     
         est = torch.div(estimated, output).squeeze()
         gt=torch.ones_like(est)
