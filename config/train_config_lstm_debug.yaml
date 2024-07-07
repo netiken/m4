@@ -3,7 +3,7 @@
 # Dataset parameters
 dataset:
   n_flows_list: [2000]
-  n_hosts_list: [21]
+  n_hosts_list: [7]
   shard: 0
   shard_list: [0,500,500] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
@@ -19,6 +19,7 @@ dataset:
 # Model parameters
 model:
   model_name: "lstm"
+  input_size: 8
   n_layer: 2
   loss_fn_type: "l1"
   hidden_size: 128
@@ -29,8 +30,8 @@ model:
 training:
   gpu: [3]
   n_epochs: 4
-  batch_size: 128
-  learning_rate: 0.001
+  batch_size: 2
+  learning_rate: 0.0001
   num_workers: 16
   enable_val: True
   enable_dist: False

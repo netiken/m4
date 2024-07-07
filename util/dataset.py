@@ -31,7 +31,7 @@ def collate_fn_per_flow(batch):
     # Pad sequences
     max_len = max(lengths)
     padded_inputs = np.zeros((len(inputs), max_len, inputs[0].shape[1]), dtype=np.float32)
-    padded_outputs = np.ones((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)
+    padded_outputs = np.zeros((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)
     
     for i, (input, output) in enumerate(zip(inputs, outputs)):
         padded_inputs[i, :input.shape[0], :] = input
@@ -95,10 +95,11 @@ class DataModulePerFlow(LightningDataModule):
                             # qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
                             # flow_id_list=qfeat[:,0]
                             # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
-                            fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
-                            if len(fid)==len(set(fid))==(n_hosts-1)*n_flows and np.all(fid[:-1] <= fid[1:]):
+                            file_suffix=f"s{sample}_i0"
+                            fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
+                            if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
                                 if enable_segmentation:
-                                    busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}s{sample}.npy", allow_pickle=True)
+                                    busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
                                     
                                     len_per_period = np.array([len(period) for period in busy_periods])
                                     
@@ -128,7 +129,7 @@ class DataModulePerFlow(LightningDataModule):
                                             
                                         for segment_id in sample_indices:
                                             data_list.append(
-                                                (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}", int(segment_id))
+                                                (spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id))
                                             )
                                 else:
                                     data_list.append(
@@ -220,10 +221,11 @@ class DataModulePerFlow(LightningDataModule):
                                 )
                                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{self.lr}Gbps"
                                 for sample in [0]:
-                                    fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}s{sample}.npy")
-                                    if len(fid)==len(set(fid))==(n_hosts-1)*n_flows and np.all(fid[:-1] <= fid[1:]):
+                                    file_suffix=f"s{sample}_i0"
+                                    fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
+                                    if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
                                         if self.enable_segmentation:
-                                            busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}s{sample}.npy", allow_pickle=True)
+                                            busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
                                     
                                             len_per_period = np.array([len(period) for period in busy_periods])
                                             
@@ -257,7 +259,7 @@ class DataModulePerFlow(LightningDataModule):
                                                 
                                                 for segment_id in sample_indices:
                                                     data_list_test.append(
-                                                        (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}", int(segment_id))
+                                                        (spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id))
                                                     )
                                         else:
                                             data_list_test.append(
@@ -543,7 +545,8 @@ class PathFctSldnSegment(Dataset):
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
             fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
-            fid=np.sort(fid)
+            fid=np.arange(np.min(fid), np.max(fid)+1)
+            # fid=np.sort(fid)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
@@ -558,9 +561,9 @@ class PathFctSldnSegment(Dataset):
             fats_ia_flowsim=np.diff(fats_flowsim)
             fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
             
-            link_padding = np.zeros((len(fid), 7))
+            link_padding = np.zeros((len(fid), 6))
             for flow_idx in range(len(fid)):
-                link_padding[flow_idx, fsd_flowsim[flow_idx]] = 1
+                link_padding[flow_idx, fsd_flowsim[flow_idx,0]:fsd_flowsim[flow_idx,1]] = 1
             # Combine flow sizes and inter-arrival times into the input tensor
             input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, link_padding)).astype(np.float32)
             

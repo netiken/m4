@@ -30,13 +30,12 @@ class WeightedL1Loss(nn.Module):
     def __init__(self):
         super(WeightedL1Loss, self).__init__()
 
-    def forward(self, prediction, target, weights, loss_average="perflow"):
-        prediction = torch.nan_to_num(prediction, nan=1.0)
+    def forward(self, prediction, target, loss_average="perflow"):
         if loss_average == "perflow":
             elementwise_loss = torch.abs(prediction - target).sum()
-            weighted_loss=elementwise_loss/weights.sum()
+            weighted_loss=elementwise_loss/target.sum()
         elif loss_average == "perperiod":
-            sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / weights.to(prediction.device)
+            sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / target.to(prediction.device)
             weighted_loss = torch.mean(sequencewise_loss)
         else:
             raise ValueError(f"Unsupported loss average type: {loss_average}")
@@ -345,17 +344,15 @@ class FlowSimLstm(LightningModule):
         estimated, _ = self.model_lstm(input, lengths)
         
         # Generate a mask based on lengths
-        lengths = torch.tensor(lengths)
-        mask = torch.arange(output.size(1)).expand(len(lengths), output.size(1)) < lengths.unsqueeze(1)
-        attention_mask = mask.to(input.device)
-        
+        attention_mask = (output.squeeze() != 0)
+    
         est = torch.div(estimated, output).squeeze()
         gt=torch.ones_like(est)
         est=est.masked_fill(~attention_mask, 0)
         gt=gt.masked_fill(~attention_mask, 0)
         
         # Calculate the loss
-        loss = self.loss_fn(est, gt, lengths, self.loss_average)
+        loss = self.loss_fn(est, gt, self.loss_average)
         
         self._log_loss(loss, tag)
         self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)
