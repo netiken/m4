@@ -1,7 +1,7 @@
 import numpy as np
 from enum import Enum
 
-PLACEHOLDER = 0.9
+PLACEHOLDER = 0.99
 
 UNIT_G = 1000000000
 UNIT_M = 1000000

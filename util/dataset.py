@@ -536,7 +536,7 @@ class PathFctSldnSegment(Dataset):
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
             fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
             fid=np.arange(np.min(fid), np.max(fid)+1)
-            fid=np.sort(fid)
+            # fid=np.sort(fid)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
