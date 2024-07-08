@@ -203,9 +203,9 @@ class DataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    for shard in np.arange(0, 500):
+                    for shard in np.arange(0, 200):
                         for n_flows in [2000]:
-                            for n_hosts in [21]:
+                            for n_hosts in [3,5,7]:
                                 topo_type_cur = self.topo_type.replace(
                                     "-x_", f"-{n_hosts}_"
                                 )
