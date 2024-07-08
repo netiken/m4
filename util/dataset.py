@@ -91,7 +91,7 @@ class DataModulePerFlow(LightningDataModule):
                                 if enable_segmentation:
                                     busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
                                     
-                                    len_per_period = np.array([len(period) for period in busy_periods])
+                                    len_per_period = np.array([int(period[1])-int(period[0])+1 for period in busy_periods])
                                     
                                     if np.sum(len_per_period)>0:
                                         # Sample indices from the array based on the weights
@@ -216,8 +216,8 @@ class DataModulePerFlow(LightningDataModule):
                                     if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
                                         if self.enable_segmentation:
                                             busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
-                                    
-                                            len_per_period = np.array([len(period) for period in busy_periods])
+
+                                            len_per_period = np.array([int(period[1])-int(period[0])+1 for period in busy_periods])
                                             
                                             if np.sum(len_per_period)>0:
                                                 # Sample indices from the array based on the weights
@@ -534,8 +534,8 @@ class PathFctSldnSegment(Dataset):
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
-            fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
-            fid=np.arange(np.min(fid), np.max(fid)+1)
+            busy_period=busy_periods[segment_id]
+            fid=np.arange(busy_period[0], busy_period[1]+1)
             # fid=np.sort(fid)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
