@@ -536,7 +536,7 @@ class PathFctSldnSegment(Dataset):
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
             busy_period=busy_periods[segment_id]
             fid=np.arange(busy_period[0], busy_period[1]+1)
-            # fid=np.sort(fid)
+            fid=np.sort(fid)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
@@ -557,6 +557,7 @@ class PathFctSldnSegment(Dataset):
                 link_padding[flow_idx, fsd_flowsim[flow_idx,0]:fsd_flowsim[flow_idx,1]] = 1
             # Combine flow sizes and inter-arrival times into the input tensor
             input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, link_padding)).astype(np.float32)
+            assert (input_data>=0.0).all()
             
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
