@@ -72,6 +72,9 @@ class DataModulePerFlow(LightningDataModule):
         self.segments_per_seq=segments_per_seq
         self.sampling_method=sampling_method
         self.enable_path=enable_path
+        logging.info(
+            f"call DataModulePerFlow: dir_input={dir_input}, dir_output={dir_output}, lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}"
+        )
         data_list = []
         if mode == "train":
             for shard in shard_list:
@@ -220,26 +223,6 @@ class DataModulePerFlow(LightningDataModule):
                                             len_per_period = np.array([int(period[1])-int(period[0])+1 for period in busy_periods])
                                             
                                             if np.sum(len_per_period)>0:
-                                                # Sample indices from the array based on the weights
-                                                # if self.sampling_method=="uniform":
-                                                #     weights = len_per_period > 0
-                                                # elif self.sampling_method=="weighted":
-                                                #     weights = len_per_period
-                                                # elif self.sampling_method=="balanced":
-                                                #     # Create a dictionary to count the number of periods for each length
-                                                #     unique_lengths, counts = np.unique(len_per_period, return_counts=True)
-                                                    
-                                                #     # Assign equal weight to each length category
-                                                #     length_weights = 1.0 / unique_lengths.size
-                                                    
-                                                #     # Calculate the weight for each period
-                                                #     weights = np.zeros(len(busy_periods))
-                                                #     for length, count in zip(unique_lengths, counts):
-                                                #         period_indices = np.where(len_per_period == length)[0]
-                                                #         weights[period_indices] = length_weights / count
-                                                # else:
-                                                #     raise ValueError(f"Unsupported sampling method: {self.sampling_method}")
-                                                
                                                 weights = len_per_period > 0
                                                 
                                                 weights = weights / np.sum(weights)
@@ -478,8 +461,9 @@ class LinkFctSldnSegment(Dataset):
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
-            fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
-            fid=np.sort(fid)
+            # fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
+            busy_period=busy_periods[segment_id]
+            fid=np.arange(busy_period[0], busy_period[1]+1)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
@@ -493,10 +477,12 @@ class LinkFctSldnSegment(Dataset):
             
             # Combine flow sizes and inter-arrival times into the input tensor
             input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim)).astype(np.float32)
+            assert (input_data>=0.0).all()
             
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
+            assert (output_data>=1.0).all()
             
             # np.savez(feat_path, input_data=input_data, output_data=output_data)
         else:
@@ -536,7 +522,6 @@ class PathFctSldnSegment(Dataset):
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
             busy_period=busy_periods[segment_id]
             fid=np.arange(busy_period[0], busy_period[1]+1)
-            fid=np.sort(fid)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
