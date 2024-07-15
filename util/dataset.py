@@ -77,6 +77,8 @@ class DataModulePerFlow(LightningDataModule):
         )
         data_list = []
         if mode == "train":
+            if enable_segmentation:
+                weights=[]
             for shard in shard_list:
                 for n_flows in n_flows_list:
                     for n_hosts in n_hosts_list:
@@ -97,39 +99,42 @@ class DataModulePerFlow(LightningDataModule):
                                     len_per_period = np.array([int(period[1])-int(period[0])+1 for period in busy_periods])
                                     
                                     if np.sum(len_per_period)>0:
-                                        # Sample indices from the array based on the weights
-                                        if sampling_method=="uniform":
-                                            weights = len_per_period > 0
-                                        elif sampling_method=="weighted":
-                                            weights = len_per_period
-                                        elif sampling_method=="balanced":
-                                            # Create a dictionary to count the number of periods for each length
-                                            unique_lengths, counts = np.unique(len_per_period, return_counts=True)
-                                            
-                                            # Assign equal weight to each length category
-                                            length_weights = 1.0 / unique_lengths.size
-                                            
-                                            # Calculate the weight for each period
-                                            weights = np.zeros(len(busy_periods))
-                                            for length, count in zip(unique_lengths, counts):
-                                                period_indices = np.where(len_per_period == length)[0]
-                                                weights[period_indices] = length_weights / count
-                                        else:
-                                            raise ValueError(f"Unsupported sampling method: {sampling_method}")
-                                            
-                                        weights = weights / np.sum(weights)        
-                                        sample_indices = np.random.choice(len(busy_periods), segments_per_seq, replace= True, p=weights)
-                                            
-                                        for segment_id in sample_indices:
-                                            data_list.append(
-                                                (spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id))
-                                            )
+                                        weights.extend(len_per_period)
+                                        data_list.extend(
+                                            [(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id)) for segment_id in range(len(busy_periods))]
+                                        )
+                                    assert len(weights)==len(data_list)
                                 else:
                                     data_list.append(
                                         (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
                                     )
                                     
-                            
+            if enable_segmentation:
+                n_samples=len(shard_list)*len(n_flows_list)*len(n_hosts_list)*len(sample_list)*segments_per_seq
+                 # Sample indices from the array based on the weights
+                if sampling_method=="uniform":
+                    weights = weights > 0
+                elif sampling_method=="weighted":
+                    weights = weights
+                elif sampling_method=="balanced":
+                    # Create a dictionary to count the number of periods for each length
+                    unique_lengths, counts = np.unique(weights, return_counts=True)
+                    # Assign equal weight to each length category
+                    length_weights = 1.0 / unique_lengths.size
+                    # Calculate the weight for each period
+                    weights_new = np.zeros(len(weights))
+                    for length, count in zip(unique_lengths, counts):
+                        period_indices = np.where(len_per_period == length)[0]
+                        weights_new[period_indices] = length_weights / count
+                    weights=weights_new
+                else:
+                    raise ValueError(f"Unsupported sampling method: {sampling_method}")
+                    
+                weights = weights / np.sum(weights)        
+                sample_indices = np.random.choice(len(weights), min(len(weights),n_samples), replace=False, p=weights)
+                    
+                data_list = [data_list[i] for i in sample_indices]
+                                
             np.random.shuffle(data_list)
         self.data_list = data_list
         self.test_on_train = test_on_train
