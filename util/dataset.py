@@ -119,7 +119,7 @@ class DataModulePerFlow(LightningDataModule):
                     weights = len_per_period_all
                 elif sampling_method=="balanced":
                     # Bin the lengths
-                    bins=[5, 50, 500, 5000]
+                    bins=[2, 4, 8, 16, 32, 64, 128, 256, 512]
                     binned_lengths = np.digitize(len_per_period_all, bins)
                     
                     # Create a dictionary to count the number of periods for each length
