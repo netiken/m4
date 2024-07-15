@@ -118,15 +118,19 @@ class DataModulePerFlow(LightningDataModule):
                 elif sampling_method=="weighted":
                     weights = len_per_period_all
                 elif sampling_method=="balanced":
+                    # Bin the lengths
+                    bins=[5, 50, 500, 5000]
+                    binned_lengths = np.digitize(len_per_period_all, bins)
+                    
                     # Create a dictionary to count the number of periods for each length
-                    unique_lengths, counts = np.unique(len_per_period_all, return_counts=True)
-                    print(f"num of unique_lengths: {len(unique_lengths)}")
+                    unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
+                    print(f"num of unique_lengths: {len(unique_lengths)}, num of counts: {np.min(counts)}, {np.max(counts)}")
                     # Assign equal weight to each length category
                     length_weights = 1.0 / unique_lengths.size
                     # Calculate the weight for each period
-                    weights = np.zeros(len(len_per_period_all))
+                    weights = np.zeros(len(binned_lengths))
                     for length, count in zip(unique_lengths, counts):
-                        period_indices = np.where(len_per_period_all == length)[0]
+                        period_indices = np.where(binned_lengths == length)[0]
                         weights[period_indices] = length_weights / count
                 else:
                     raise ValueError(f"Unsupported sampling method: {sampling_method}")
