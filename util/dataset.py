@@ -118,7 +118,7 @@ class DataModulePerFlow(LightningDataModule):
                                             raise ValueError(f"Unsupported sampling method: {sampling_method}")
                                             
                                         weights = weights / np.sum(weights)        
-                                        sample_indices = np.random.choice(len(busy_periods), min(segments_per_seq,np.count_nonzero(weights)), replace=False, p=weights)
+                                        sample_indices = np.random.choice(len(busy_periods), segments_per_seq, replace= True, p=weights)
                                             
                                         for segment_id in sample_indices:
                                             data_list.append(
@@ -206,9 +206,10 @@ class DataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    for shard in np.arange(0, 200):
+                    for shard in np.arange(0, 1000):
                         for n_flows in [2000]:
-                            for n_hosts in [3,5,7]:
+                            # for n_hosts in [3,5,7]:
+                            for n_hosts in [21]:
                                 topo_type_cur = self.topo_type.replace(
                                     "-x_", f"-{n_hosts}_"
                                 )
