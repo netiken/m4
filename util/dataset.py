@@ -229,7 +229,7 @@ class DataModulePerFlow(LightningDataModule):
                                                 weights = weights / np.sum(weights)
 
                                                 # Sample indices from the array based on the weights
-                                                sample_indices = np.random.choice(len(busy_periods), min(self.segments_per_seq,np.count_nonzero(weights)), replace=False, p=weights)
+                                                sample_indices = np.random.choice(len(busy_periods), self.segments_per_seq, replace=True, p=weights)
                                                 
                                                 for segment_id in sample_indices:
                                                     data_list_test.append(
