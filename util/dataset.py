@@ -100,15 +100,9 @@ class DataModulePerFlow(LightningDataModule):
                                     
                                     if np.sum(len_per_period)>0:
                                         data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][1]))) for segment_id in range(len(busy_periods))]
-                                        if len(len_per_period)<segments_per_seq*10:
-                                            len_per_period_all.extend(len_per_period)
-                                            data_list.extend(data_list_per_period)
-                                        else:
-                                            sample_idx=np.random.choice(len(len_per_period), segments_per_seq*10, replace=False)
-                                            len_per_period_all.extend([len_per_period[i] for i in sample_idx])
-                                            data_list.extend(
-                                                [data_list_per_period[i] for i in sample_idx]
-                                            )
+                                        len_per_period_all.extend(len_per_period)
+                                        data_list.extend(data_list_per_period)
+                                        
                                     assert len(len_per_period_all)==len(data_list)
                                 else:
                                     data_list.append(
@@ -126,6 +120,7 @@ class DataModulePerFlow(LightningDataModule):
                 elif sampling_method=="balanced":
                     # Create a dictionary to count the number of periods for each length
                     unique_lengths, counts = np.unique(len_per_period_all, return_counts=True)
+                    print(f"num of unique_lengths: {len(unique_lengths)}")
                     # Assign equal weight to each length category
                     length_weights = 1.0 / unique_lengths.size
                     # Calculate the weight for each period
