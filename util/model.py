@@ -23,17 +23,17 @@ class WeightedL1Loss(nn.Module):
         super(WeightedL1Loss, self).__init__()
 
     def forward(self, prediction, target, loss_average="perflow"):
-        if loss_average == "perflow":
-            elementwise_loss = torch.abs(prediction - target).sum()
-            weighted_loss=elementwise_loss/target.sum()
-        elif loss_average == "perperiod":
-            if prediction.dim() >1:
-                sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / target.sum(dim=1).to(prediction.device)
-            else:
-                sequencewise_loss = torch.abs(prediction - target).sum() / target.sum().to(prediction.device)
-            weighted_loss = torch.mean(sequencewise_loss)
-        else:
-            raise ValueError(f"Unsupported loss average type: {loss_average}")
+        # if loss_average == "perflow":
+        elementwise_loss = torch.abs(prediction - target).sum()
+        weighted_loss=elementwise_loss/target.sum()
+        # elif loss_average == "perperiod":
+        #     if prediction.dim() >1:
+        #         sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / target.sum(dim=1).to(prediction.device)
+        #     else:
+        #         sequencewise_loss = torch.abs(prediction - target).sum() / target.sum().to(prediction.device)
+        #     weighted_loss = torch.mean(sequencewise_loss)
+        # else:
+        #     raise ValueError(f"Unsupported loss average type: {loss_average}")
         return weighted_loss
 class TransformerBase(LightningModule):
     def __init__(
