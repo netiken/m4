@@ -4,7 +4,8 @@ from torch.utils.data import DataLoader
 from pytorch_lightning import LightningDataModule
 import torch
 from .consts import (
-    PLACEHOLDER
+    PLACEHOLDER,
+    balance_bins
 )
 from .func import decode_dict
 import json
@@ -119,8 +120,7 @@ class DataModulePerFlow(LightningDataModule):
                     weights = len_per_period_all
                 elif sampling_method=="balanced":
                     # Bin the lengths
-                    bins=[2, 4, 8, 16, 32, 64, 128, 256, 512]
-                    binned_lengths = np.digitize(len_per_period_all, bins)
+                    binned_lengths = np.digitize(len_per_period_all, balance_bins)
                     
                     # Create a dictionary to count the number of periods for each length
                     unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
@@ -217,39 +217,49 @@ class DataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    for shard in np.arange(0, 1000):
-                        for n_flows in [2000]:
-                            # for n_hosts in [3,5,7]:
-                            for n_hosts in [21]:
+                    shard_list=np.arange(0, 1000)
+                    n_flows_list=[2000]
+                    n_hosts_list=[21]
+                    sample_list=[0]
+                    if self.enable_segmentation:
+                        len_per_period_all=[]
+                        
+                    for shard in shard_list:
+                        for n_flows in n_flows_list:
+                            for n_hosts in n_hosts_list:
                                 topo_type_cur = self.topo_type.replace(
                                     "-x_", f"-{n_hosts}_"
                                 )
                                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{self.lr}Gbps"
-                                for sample in [0]:
+                                for sample in sample_list:
                                     file_suffix=f"s{sample}_i0"
                                     fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
                                     if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
                                         if self.enable_segmentation:
                                             busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
 
-                                            len_per_period = np.array([int(period[1])-int(period[0])+1 for period in busy_periods])
+                                            len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             
                                             if np.sum(len_per_period)>0:
-                                                weights = len_per_period > 0
-                                                
-                                                weights = weights / np.sum(weights)
-
-                                                # Sample indices from the array based on the weights
-                                                sample_indices = np.random.choice(len(busy_periods), self.segments_per_seq, replace=True, p=weights)
-                                                
-                                                for segment_id in sample_indices:
-                                                    data_list_test.append(
-                                                        (spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id))
-                                                    )
+                                                data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][1]))) for segment_id in range(len(busy_periods))]
+                                                len_per_period_all.extend(len_per_period)
+                                                data_list_test.extend(data_list_per_period)
+                                            assert len(len_per_period_all)==len(data_list_test)
                                         else:
                                             data_list_test.append(
                                                 (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
                                             )
+                    if self.enable_segmentation:
+                        len_per_period_all=np.array(len_per_period_all)
+                        n_samples=len(shard_list)*len(n_flows_list)*len(n_hosts_list)*len(sample_list)*self.segments_per_seq
+                        
+                        weights = len_per_period_all > 0
+                        weights = weights / np.sum(weights)        
+                        sample_indices = np.random.choice(len(weights), n_samples, replace=True, p=weights)
+                            
+                        data_list_test = [data_list_test[i] for i in sample_indices]
+                        n_mean = np.mean([len_per_period_all[i] for i in sample_indices])  
+                        logging.info(f"mean num of flows per busy period: {n_mean}")  
                 else:
                     data_list = self.__read_data_list(self.dir_output)
                     if self.test_on_train:
