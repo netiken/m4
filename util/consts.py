@@ -93,3 +93,11 @@ def get_base_delay_pmn(sizes, n_links_passed, lr_bottleneck,flow_idx_target,flow
     delay_transmission = np.multiply(pkt_size / lr_bottleneck,flow_idx_target) + pkt_size / (lr_bottleneck*4)*(n_links_passed-2)-np.multiply(pkt_size / lr_bottleneck,flow_idx_nontarget_internal)
 
     return delay_propagation + delay_transmission
+
+def get_base_delay_link(sizes, n_links_passed, lr_bottleneck):
+    pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
+    delay_propagation = DELAY_PROPAGATION_BASE * n_links_passed
+    pkt_size=(pkt_head + HEADER_SIZE) * BYTE_TO_BIT
+    delay_transmission = pkt_size / lr_bottleneck
+
+    return delay_propagation + delay_transmission

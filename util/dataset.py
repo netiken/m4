@@ -5,7 +5,11 @@ from pytorch_lightning import LightningDataModule
 import torch
 from .consts import (
     PLACEHOLDER,
-    balance_bins
+    balance_bins,
+    get_base_delay_link,
+    MTU,
+    HEADER_SIZE,
+    BYTE_TO_BIT,
 )
 from .func import decode_dict
 import json
@@ -487,6 +491,7 @@ class LinkFctSldnSegment(Dataset):
         logging.info(
             f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}"
         )
+        self.lr=10.0
 
     def __len__(self):
         return len(self.data_list)
@@ -509,16 +514,22 @@ class LinkFctSldnSegment(Dataset):
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
-            
+            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")
+            n_links_passed=np.ones_like(fcts_flowsim)*2
+            base_delay=get_base_delay_link(sizes_flowsim,n_links_passed,self.lr)
+            i_fcts_flowsim = (sizes_flowsim + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE) * BYTE_TO_BIT / self.lr + base_delay
+            fcts_flowsim += base_delay
+            sldn_flowsim=np.divide(fcts_flowsim, i_fcts_flowsim)
+                    
             sizes_flowsim=sizes_flowsim[fid]
             fats_flowsim=fats_flowsim[fid]
-            
+            sldn_flowsim=sldn_flowsim[fid]
             # Calculate inter-arrival times and adjust the first element
             fats_ia_flowsim=np.diff(fats_flowsim)
             fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
             
             # Combine flow sizes and inter-arrival times into the input tensor
-            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim)).astype(np.float32)
+            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim,sldn_flowsim)).astype(np.float32)
             assert (input_data>=0.0).all()
             
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
