@@ -20,7 +20,7 @@ dataset:
 # Model parameters
 model:
   model_name: "lstm"
-  input_size: 2
+  input_size: 3
   n_layer: 2
   loss_fn_type: "l1"
   hidden_size: 256
@@ -32,7 +32,7 @@ training:
   # gpu: [0,0,1,1,2,2,3,3]
   gpu: [0,1,2,3]
   n_epochs: 1000
-  batch_size: 64
+  batch_size: 32
   learning_rate: 0.0001
   num_workers: 32
   enable_val: True
