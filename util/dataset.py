@@ -257,11 +257,8 @@ class DataModulePerFlow(LightningDataModule):
                         len_per_period_all=np.array(len_per_period_all)
                         n_samples=len(shard_list)*len(n_flows_list)*len(n_hosts_list)*len(sample_list)*self.segments_per_seq
                         
-                        # if self.sampling_method=="uniform":
-                        #     weights = len_per_period_all > 0
-                        # elif self.sampling_method=="weighted":
-                        #     weights = len_per_period_all
-                        # elif self.sampling_method=="balanced":
+                        # weights = len_per_period_all > 0
+                        
                         # Bin the lengths
                         binned_lengths = np.digitize(len_per_period_all, balance_bins)
                         
@@ -275,8 +272,6 @@ class DataModulePerFlow(LightningDataModule):
                         for length, count in zip(unique_lengths, counts):
                             period_indices = np.where(binned_lengths == length)[0]
                             weights[period_indices] = length_weights / count
-                        # else:
-                        #     raise ValueError(f"Unsupported sampling method: {self.sampling_method}")
                 
                         weights = weights / np.sum(weights)        
                         sample_indices = np.random.choice(len(weights), n_samples, replace=True, p=weights)
