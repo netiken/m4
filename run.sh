@@ -28,3 +28,10 @@ python main_train.py --train_config=./config/train_config_transformer.yaml --mod
 python main_train.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm_balanced_flowsim --version_id 0 --dir_input=/data2/lichenni/path_perflow_link_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical
 
 python main_train.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_lstm_balanced_flowsim --version_id 0 --dir_input=/data2/lichenni/path_perflow_link --dir_output=/data2/lichenni/output_perflow --test_on_train
+
+cargo run --release -- --root=./data_test --mixes spec/motivation.mix.json mlsys-test
+cargo run --release -- --root=./data_test --mixes spec/motivation.mix.json ns3-config
+
+cargo run --release -- --root=./data_test --mixes spec/test.mix.json mlsys-test
+cargo run --release -- --root=./data_test --mixes spec/test.mix.json ns3-config
+
