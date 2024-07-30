@@ -18,7 +18,7 @@ import os
 
 # Custom collate function to handle variable sequence lengths
 def collate_fn_per_flow(batch):
-    inputs, outputs, specs, src_dst_pairs = zip(*batch)
+    inputs, outputs, specs, src_dst_pairs, adj_matrices = zip(*batch)
     
     # Get lengths of each sequence in the batch
     lengths = np.array([x.shape[0] for x in inputs]).astype(np.int64)
@@ -32,7 +32,14 @@ def collate_fn_per_flow(batch):
         padded_inputs[i, :input.shape[0], :] = input
         padded_outputs[i, :output.shape[0], :] = output
     
-    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs
+    # Pad adjacency matrices to the maximum size in the batch
+    max_num_flows = max([adj.shape[0] for adj in adj_matrices])
+    max_num_links = max([adj.shape[1] for adj in adj_matrices])
+    padded_adj_matrices = np.zeros((len(adj_matrices), max_num_flows, max_num_links), dtype=np.float32)
+    
+    for i, adj in enumerate(adj_matrices):
+        padded_adj_matrices[i, :adj.shape[0], :adj.shape[1]] = adj
+    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, torch.tensor(padded_adj_matrices)
 
 class DataModulePerFlow(LightningDataModule):
     def __init__(
@@ -495,10 +502,7 @@ class LinkFctSldnSegment(Dataset):
         spec, src_dst_pair_target, topo_type, segment_id, busy_period = self.data_list[idx]
         src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])+f'_seg{segment_id}'
         
-        # load data
         dir_input_tmp = f"{self.dir_input}/{spec}"
-        
-        # load feat
         feat_path=f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
@@ -509,22 +513,24 @@ class LinkFctSldnSegment(Dataset):
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
-            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")
+            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
+            
+            sizes_flowsim=sizes_flowsim[fid]
+            fats_flowsim=fats_flowsim[fid]
+            
             n_links_passed=np.ones_like(fcts_flowsim)*2
             base_delay=get_base_delay_link(sizes_flowsim,n_links_passed,self.lr)
             i_fcts_flowsim = (sizes_flowsim + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE) * BYTE_TO_BIT / self.lr + base_delay
             fcts_flowsim += base_delay
+            
             sldn_flowsim=np.divide(fcts_flowsim, i_fcts_flowsim)
-                    
-            sizes_flowsim=sizes_flowsim[fid]
-            fats_flowsim=fats_flowsim[fid]
-            sldn_flowsim=sldn_flowsim[fid]
+            
             # Calculate inter-arrival times and adjust the first element
             fats_ia_flowsim=np.diff(fats_flowsim)
             fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
             
             # Combine flow sizes and inter-arrival times into the input tensor
-            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim,sldn_flowsim)).astype(np.float32)
+            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim)).astype(np.float32)
             assert (input_data>=0.0).all()
             
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
@@ -532,14 +538,25 @@ class LinkFctSldnSegment(Dataset):
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
             assert (output_data>=1.0).all()
             
+            # Compute the adjacency matrix for the bipartite graph
+            adj_matrix = self.compute_adjacency_matrix(fid)
+            
             # np.savez(feat_path, input_data=input_data, output_data=output_data)
         else:
             feat=np.load(feat_path)
             input_data=feat["input_data"]
             output_data=feat["output_data"]
             
-        return input_data, output_data, spec + topo_type, src_dst_pair_target_str
-
+        return input_data, output_data, spec + topo_type, src_dst_pair_target_str, adj_matrix
+    
+    def compute_adjacency_matrix(self, flow_ids):
+        num_flows = len(flow_ids)
+        num_links = 1  # Only one link in this case
+        adj_matrix = np.zeros((num_flows, num_links), dtype=np.float32)
+        adj_matrix[:, 0] = 1  # Connect each flow to the single link
+        
+        return adj_matrix
+    
 class PathFctSldnSegment(Dataset):
     def __init__(
         self,

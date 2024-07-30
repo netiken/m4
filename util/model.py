@@ -249,6 +249,20 @@ class FlowSimTransformer(TransformerBase):
             self.weight_decay, self.learning_rate, self.betas
         )
         return optimizer
+# GCN model
+class GCNLayer(nn.Module):
+    def __init__(self, c_in, c_out):
+        super(GCNLayer, self).__init__()
+        self.projection = nn.Linear(c_in, c_out)
+
+    def forward(self, node_feats, adj_matrix):
+        node_feats = self.projection(node_feats)
+        node_feats = torch.matmul(adj_matrix.transpose(-1, -2), node_feats)
+        
+        # Normalize the node features
+        degree_matrix = adj_matrix.sum(dim=1, keepdim=True).float() + 1e-6
+        node_feats = node_feats / degree_matrix
+        return node_feats
     
 # LSTM Model
 class LSTMModel(nn.Module):
@@ -295,6 +309,8 @@ class FlowSimLstm(LightningModule):
     def __init__(
         self,
         n_layer=2,
+        gcn_layers=2,
+        gcn_hidden_size=32,
         loss_fn_type="l1",
         learning_rate=1e-3,
         batch_size=400,
@@ -313,7 +329,10 @@ class FlowSimLstm(LightningModule):
         self.batch_size = batch_size
         
         self.loss_fn = self._get_loss_fn(loss_fn_type)
-        self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
+        # GCN layers
+        self.gcn_layers = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_layers)])
+        
+        self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
         
         self.enable_dist = enable_dist
         self.enable_val = enable_val
@@ -331,12 +350,16 @@ class FlowSimLstm(LightningModule):
         else:
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
         
-    def forward(self, x,lengths):
-        return self.model_lstm(x,lengths)
+    def forward(self, x,lengths,adj_matrix):
+        x_gnn=x[:,:,[0,2]]
+        for gcn in self.gcn_layers:
+            x_gnn = gcn(x_gnn, adj_matrix)
+        x=torch.cat((x,x_gnn),dim=-1)
+        return self.model_lstm(x, lengths)
     
     def step(self, batch, batch_idx, tag=None):
-        input, output, lengths, spec, src_dst_pair_target_str = batch
-        estimated, _ = self.model_lstm(input, lengths)
+        input, output, lengths, spec, src_dst_pair_target_str,adj_matrix = batch
+        estimated, _ = self(input, lengths,adj_matrix)
         
         # Generate a mask based on lengths
         attention_mask = (output.squeeze() >= 1.0)
