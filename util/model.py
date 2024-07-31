@@ -304,7 +304,7 @@ class LSTMModel(nn.Module):
             logging.info("Attention enabled")
             self.attention = Attention(hidden_size * self.num_directions)
         self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
-        self.layer_norm = nn.LayerNorm(hidden_size * self.num_directions)
+        # self.layer_norm = nn.LayerNorm(hidden_size * self.num_directions)
     
     def init_hidden(self, batch_size, device):
         h_t = torch.zeros(self.num_layers * self.num_directions, batch_size, self.hidden_size).to(device)
@@ -332,7 +332,7 @@ class LSTMModel(nn.Module):
         lstm_out, _ = nn.utils.rnn.pad_packed_sequence(packed_output, batch_first=True)
         
         # Apply Layer Normalization
-        lstm_out = self.layer_norm(lstm_out)
+        # lstm_out = self.layer_norm(lstm_out)
         
         # Apply attention
         if self.enable_attention:
@@ -438,7 +438,7 @@ class FlowSimLstm(LightningModule):
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, tag="train")
         # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(self.model_lstm.parameters(), max_norm=1.0)
+        # torch.nn.utils.clip_grad_norm_(self.model_lstm.parameters(), max_norm=1.0)
         return loss
 
     def validation_step(self, batch, batch_idx):
