@@ -263,6 +263,16 @@ class GCNLayer(nn.Module):
         degree_matrix = adj_matrix.sum(dim=-1, keepdim=True).float() + 1e-6
         node_feats = node_feats / degree_matrix
         return node_feats
+
+class Attention(nn.Module):
+    def __init__(self, hidden_size):
+        super(Attention, self).__init__()
+        self.attn = nn.Linear(hidden_size, 1)
+
+    def forward(self, lstm_out):
+        attn_weights = torch.softmax(self.attn(lstm_out), dim=1)
+        context = torch.bmm(attn_weights.permute(0, 2, 1), lstm_out).squeeze(1)
+        return context, attn_weights
     
 # LSTM Model
 class LSTMModel(nn.Module):
@@ -271,11 +281,19 @@ class LSTMModel(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.bidirectional = enable_bidirectional
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional, dropout=dropout)
         self.num_directions = 2 if enable_bidirectional else 1
+        
         # Adjust the fully connected layer based on bidirectionality
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional, dropout=dropout)
+        self.attention = Attention(hidden_size * self.num_directions)
         self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
-
+        self.layer_norm = nn.LayerNorm(hidden_size * self.num_directions)
+    
+    def init_hidden(self, batch_size, device):
+        h_t = torch.zeros(self.num_layers * self.num_directions, batch_size, self.hidden_size).to(device)
+        c_t = torch.zeros(self.num_layers * self.num_directions, batch_size, self.hidden_size).to(device)
+        return h_t, c_t
+    
     def forward(self, x,lengths):
         batch_size = x.size(0)
         h_t, c_t = self.init_hidden(batch_size, x.device)
@@ -296,14 +314,16 @@ class LSTMModel(nn.Module):
         # Unpack the output sequence
         lstm_out, _ = nn.utils.rnn.pad_packed_sequence(packed_output, batch_first=True)
         
+        # Apply Layer Normalization
+        lstm_out = self.layer_norm(lstm_out)
+        
+        # Apply attention
+        lstm_out, _ = self.attention(lstm_out)
         # Apply the fully connected layer to each time step
         out = self.fc(lstm_out)
         return out, (h_t, c_t)
 
-    def init_hidden(self, batch_size, device):
-        h_0 = torch.zeros(self.num_layers * self.num_directions, batch_size, self.hidden_size, device=device)
-        c_0 = torch.zeros(self.num_layers * self.num_directions, batch_size, self.hidden_size, device=device)
-        return h_0, c_0
+    
 
 class FlowSimLstm(LightningModule):
     def __init__(
@@ -321,6 +341,7 @@ class FlowSimLstm(LightningModule):
         output_size=1,
         input_size=2,
         enable_bidirectional=False,
+        enable_gcn=False,
         loss_average="perflow", # perflow, perperiod
         save_dir=None,
     ):
@@ -330,10 +351,13 @@ class FlowSimLstm(LightningModule):
         
         self.loss_fn = self._get_loss_fn(loss_fn_type)
         # GCN layers
-        self.gcn_n_layer = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
+        if enable_gcn:
+            self.gcn_layer = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
         
-        self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
-        
+            self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
+        else:
+            self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
+        self.enable_gcn = enable_gcn
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir
@@ -351,10 +375,11 @@ class FlowSimLstm(LightningModule):
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
         
     def forward(self, x,lengths,adj_matrix):
-        x_gnn=x[:,:,[0,2]]
-        for gcn in self.gcn_n_layer:
-            x_gnn = gcn(x_gnn, adj_matrix)
-        x=torch.cat((x,x_gnn),dim=-1)
+        if self.enable_gcn:
+            x_gnn=x[:,:,[0,2]]
+            for gcn in self.gcn_layer:
+                x_gnn = gcn(x_gnn, adj_matrix)
+            x=torch.cat((x,x_gnn),dim=-1)
         return self.model_lstm(x, lengths)
     
     def step(self, batch, batch_idx, tag=None):
@@ -392,7 +417,10 @@ class FlowSimLstm(LightningModule):
 
 
     def training_step(self, batch, batch_idx):
-        return self.step(batch, batch_idx, tag="train")
+        loss = self.step(batch, batch_idx, tag="train")
+        # Gradient clipping
+        torch.nn.utils.clip_grad_norm_(self.model_lstm.parameters(), max_norm=1.0)
+        return loss
 
     def validation_step(self, batch, batch_idx):
         if self.enable_val:
