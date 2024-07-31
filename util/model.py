@@ -257,10 +257,10 @@ class GCNLayer(nn.Module):
 
     def forward(self, node_feats, adj_matrix):
         node_feats = self.projection(node_feats)
-        node_feats = torch.matmul(adj_matrix.transpose(-1, -2), node_feats)
+        node_feats = torch.bmm(adj_matrix.transpose(-1, -2), node_feats)
         
         # Normalize the node features
-        degree_matrix = adj_matrix.sum(dim=1, keepdim=True).float() + 1e-6
+        degree_matrix = adj_matrix.sum(dim=-1, keepdim=True).float() + 1e-6
         node_feats = node_feats / degree_matrix
         return node_feats
     
