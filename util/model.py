@@ -309,7 +309,7 @@ class FlowSimLstm(LightningModule):
     def __init__(
         self,
         n_layer=2,
-        gcn_layers=2,
+        gcn_n_layer=2,
         gcn_hidden_size=32,
         loss_fn_type="l1",
         learning_rate=1e-3,
@@ -330,7 +330,7 @@ class FlowSimLstm(LightningModule):
         
         self.loss_fn = self._get_loss_fn(loss_fn_type)
         # GCN layers
-        self.gcn_layers = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_layers)])
+        self.gcn_n_layer = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
         
         self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
         
@@ -339,7 +339,7 @@ class FlowSimLstm(LightningModule):
         self.save_dir = save_dir
         self.loss_average = loss_average
         logging.info(
-            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, enable_bidirectional: {enable_bidirectional}, dropout: {dropout}, loss_average: {loss_average}")
+            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, dropout: {dropout}, loss_average: {loss_average}")
     
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":
@@ -352,7 +352,7 @@ class FlowSimLstm(LightningModule):
         
     def forward(self, x,lengths,adj_matrix):
         x_gnn=x[:,:,[0,2]]
-        for gcn in self.gcn_layers:
+        for gcn in self.gcn_n_layer:
             x_gnn = gcn(x_gnn, adj_matrix)
         x=torch.cat((x,x_gnn),dim=-1)
         return self.model_lstm(x, lengths)
