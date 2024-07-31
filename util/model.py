@@ -291,16 +291,18 @@ class Attention(nn.Module):
     
 # LSTM Model
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout,enable_bidirectional=False):
+    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout,enable_bidirectional=False,enable_attention=False):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.bidirectional = enable_bidirectional
         self.num_directions = 2 if enable_bidirectional else 1
-        
+        self.enable_attention = enable_attention
         # Adjust the fully connected layer based on bidirectionality
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional, dropout=dropout)
-        self.attention = Attention(hidden_size * self.num_directions)
+        if enable_attention:
+            logging.info("Attention enabled")
+            self.attention = Attention(hidden_size * self.num_directions)
         self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
         self.layer_norm = nn.LayerNorm(hidden_size * self.num_directions)
     
@@ -333,7 +335,8 @@ class LSTMModel(nn.Module):
         lstm_out = self.layer_norm(lstm_out)
         
         # Apply attention
-        lstm_out, _ = self.attention(lstm_out)
+        if self.enable_attention:
+            lstm_out, _ = self.attention(lstm_out)
         # Apply the fully connected layer to each time step
         out = self.fc(lstm_out)
         return out, (h_t, c_t)
