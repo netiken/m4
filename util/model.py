@@ -267,11 +267,26 @@ class GCNLayer(nn.Module):
 class Attention(nn.Module):
     def __init__(self, hidden_size):
         super(Attention, self).__init__()
-        self.attn = nn.Linear(hidden_size, 1)
+        self.hidden_size = hidden_size
+        self.attn = nn.Linear(hidden_size * 2, hidden_size)
+        self.v = nn.Parameter(torch.rand(hidden_size))
 
     def forward(self, lstm_out):
-        attn_weights = torch.softmax(self.attn(lstm_out), dim=1)
-        context = torch.bmm(attn_weights.permute(0, 2, 1), lstm_out).squeeze(1)
+        seq_len = lstm_out.size(1)
+        
+        # Repeat hidden state for each time step
+        hidden = lstm_out[:, -1, :].unsqueeze(1).repeat(1, seq_len, 1)
+        
+        # Concatenate hidden state with LSTM output
+        energy = torch.tanh(self.attn(torch.cat((hidden, lstm_out), dim=2)))
+        
+        # Compute attention scores
+        attn_weights = energy.matmul(self.v)  # [batch_size, seq_len]
+        attn_weights = torch.softmax(attn_weights, dim=1).unsqueeze(-1)  # [batch_size, seq_len, 1]
+        
+        # Compute context vector
+        context = attn_weights * lstm_out  # [batch_size, seq_len, hidden_size]
+        
         return context, attn_weights
     
 # LSTM Model
@@ -352,6 +367,7 @@ class FlowSimLstm(LightningModule):
         self.loss_fn = self._get_loss_fn(loss_fn_type)
         # GCN layers
         if enable_gcn:
+            logging.info(f"GCN enabled with {gcn_n_layer} layers and hidden size {gcn_hidden_size}")
             self.gcn_layer = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
         
             self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
