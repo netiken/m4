@@ -102,6 +102,10 @@ class DataModulePerFlow(LightningDataModule):
                             # qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
                             # flow_id_list=qfeat[:,0]
                             # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
+                            
+                            statss = np.load(f'{dir_input}/{spec}/stats.npy', allow_pickle=True)
+                            if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
+                            
                             file_suffix=f"s{sample}_i0"
                             fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
                             if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
@@ -243,6 +247,9 @@ class DataModulePerFlow(LightningDataModule):
                                 )
                                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{self.lr}Gbps"
                                 for sample in sample_list:
+                                    statss = np.load(f'{self.dir_input}/{spec}/stats.npy', allow_pickle=True)
+                                    if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
+                                    
                                     file_suffix=f"s{sample}_i0"
                                     fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
                                     if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
