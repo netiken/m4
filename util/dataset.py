@@ -232,7 +232,7 @@ class DataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    shard_list=np.arange(0, 1000)
+                    shard_list=np.arange(0, 200)
                     n_flows_list=[2000]
                     n_hosts_list=[21]
                     sample_list=[0]
