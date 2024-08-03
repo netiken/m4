@@ -19,8 +19,8 @@ EPS = 1e-12
 
 SIZE_BUCKET_LIST_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, $\infty$)"]
 
-balance_bins=[2, 4, 8, 16, 32, 64, 128, 256, 512]
-balance_bins_label=["(0, 2)", "[2, 4)", "[4, 8)", "[8, 16)", "[16, 32)", "[32, 64)", "[64, 128)", "[128, 256)", "[256, 512)", "[512, $\infty$)"]
+balance_bins=[4, 8, 16, 32, 64, 128, 256]
+balance_bins_label=["(0, 4)", "[4, 8)", "[8, 16)", "[16, 32)", "[32, 64)", "[64, 128)", "[128, 256)", "[256, $\infty$)"]
 
 class QueueEvent(Enum):
     ARRIVAL_FIRST_PKT = 1

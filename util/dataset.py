@@ -103,8 +103,8 @@ class DataModulePerFlow(LightningDataModule):
                             # flow_id_list=qfeat[:,0]
                             # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
                             
-                            statss = np.load(f'{dir_input}/{spec}/stats.npy', allow_pickle=True)
-                            if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
+                            # statss = np.load(f'{dir_input}/{spec}/stats.npy', allow_pickle=True)
+                            # if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
                             
                             file_suffix=f"s{sample}_i0"
                             fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
@@ -139,7 +139,7 @@ class DataModulePerFlow(LightningDataModule):
                     
                     # Create a dictionary to count the number of periods for each length
                     unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
-                    print(f"num of unique_lengths: {len(unique_lengths)}, num of counts: {np.min(counts)}, {np.max(counts)}")
+                    print(f"num of unique_lengths: {len(unique_lengths)}, num of counts: {counts}")
                     # Assign equal weight to each length category
                     length_weights = 1.0 / unique_lengths.size
                     # Calculate the weight for each period
@@ -151,8 +151,9 @@ class DataModulePerFlow(LightningDataModule):
                     raise ValueError(f"Unsupported sampling method: {sampling_method}")
                     
                 weights = weights / np.sum(weights)        
-                sample_indices = np.random.choice(len(weights), n_samples, replace=True, p=weights)
-                    
+                # sample_indices = np.random.choice(len(weights), n_samples, replace=True, p=weights)
+                sample_indices = np.random.choice(len(weights), min(n_samples, len(weights)), replace=False, p=weights)
+                
                 data_list = [data_list[i] for i in sample_indices]
                 n_mean = np.mean([len_per_period_all[i] for i in sample_indices])  
                 logging.info(f"mean num of flows per busy period: {n_mean}")  
@@ -247,8 +248,8 @@ class DataModulePerFlow(LightningDataModule):
                                 )
                                 spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{self.lr}Gbps"
                                 for sample in sample_list:
-                                    statss = np.load(f'{self.dir_input}/{spec}/stats.npy', allow_pickle=True)
-                                    if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
+                                    # statss = np.load(f'{self.dir_input}/{spec}/stats.npy', allow_pickle=True)
+                                    # if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
                                     
                                     file_suffix=f"s{sample}_i0"
                                     fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
@@ -278,7 +279,7 @@ class DataModulePerFlow(LightningDataModule):
                         
                         # Create a dictionary to count the number of periods for each length
                         unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
-                        print(f"num of unique_lengths: {len(unique_lengths)}, num of counts: {np.min(counts)}, {np.max(counts)}")
+                        print(f"num of unique_lengths: {len(unique_lengths)}, num of counts: {counts}")
                         # Assign equal weight to each length category
                         length_weights = 1.0 / unique_lengths.size
                         # Calculate the weight for each period
@@ -288,7 +289,7 @@ class DataModulePerFlow(LightningDataModule):
                             weights[period_indices] = length_weights / count
                 
                         weights = weights / np.sum(weights)        
-                        sample_indices = np.random.choice(len(weights), n_samples, replace=True, p=weights)
+                        sample_indices = np.random.choice(len(weights), min(n_samples, len(weights)), replace=False, p=weights)
                             
                         data_list_test = [data_list_test[i] for i in sample_indices]
                         n_mean = np.mean([len_per_period_all[i] for i in sample_indices])  
