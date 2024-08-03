@@ -490,79 +490,80 @@ class LinkFctSldn(Dataset):
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str
 
 class LinkFctSldnSegment(Dataset):
-    def __init__(
-        self,
-        data_list,
-        dir_input,
-    ):
+    def __init__(self, data_list, dir_input):
         self.data_list = data_list
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
+        self.lr = 10.0
         logging.info(
             f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}"
         )
-        self.lr=10.0
 
     def __len__(self):
         return len(self.data_list)
-        
+
     def __getitem__(self, idx):
         spec, src_dst_pair_target, topo_type, segment_id, busy_period = self.data_list[idx]
-        src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])+f'_seg{segment_id}'
+        src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target]) + f'_seg{segment_id}'
         
         dir_input_tmp = f"{self.dir_input}/{spec}"
-        feat_path=f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
+        feat_path = f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
-            # busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
-            # fid=[int(flow_id) for flow_id in busy_periods[segment_id]]
-            # busy_period=busy_periods[segment_id]
-            fid=np.arange(busy_period[0], busy_period[1]+1)
-            # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
-            sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
-            fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
+            fid = np.arange(busy_period[0], busy_period[1] + 1)
+            sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
+            fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
-            
-            sizes_flowsim=sizes_flowsim[fid]
-            fats_flowsim=fats_flowsim[fid]
-            
-            n_links_passed=np.ones_like(fcts_flowsim)*2
-            base_delay=get_base_delay_link(sizes_flowsim,n_links_passed,self.lr)
+
+            n_links_passed = np.ones_like(fcts_flowsim) * 2
+            base_delay = get_base_delay_link(sizes_flowsim, n_links_passed, self.lr)
             i_fcts_flowsim = (sizes_flowsim + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE) * BYTE_TO_BIT / self.lr + base_delay
             fcts_flowsim += base_delay
             
-            sldn_flowsim=np.divide(fcts_flowsim, i_fcts_flowsim)
+            sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
             
             # Calculate inter-arrival times and adjust the first element
-            fats_ia_flowsim=np.diff(fats_flowsim)
-            fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
+            fats_ia_flowsim = np.diff(fats_flowsim)
+            fats_ia_flowsim = np.insert(fats_ia_flowsim, 0, 0)
             
-            # Combine flow sizes and inter-arrival times into the input tensor
-            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim)).astype(np.float32)
-            assert (input_data>=0.0).all()
+            # Generate positional encoding
+            positional_encodings = self.get_positional_encoding(len(fid), 3)
+
+            # Combine flow sizes, inter-arrival times, and positional encodings into the input tensor
+            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings)).astype(np.float32)
+            assert (input_data >= 0.0).all()
             
-            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
-            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
-            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
-            assert (output_data>=1.0).all()
+            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
+            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
+            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
+            assert (output_data >= 1.0).all()
             
             # Compute the adjacency matrix for the bipartite graph
             adj_matrix = self.compute_adjacency_matrix(fid)
             
-            # np.savez(feat_path, input_data=input_data, output_data=output_data)
+            # Optionally save features for future epochs
+            # np.savez(feat_path, input_data=input_data, output_data=output_data, adj_matrix=adj_matrix)
         else:
-            feat=np.load(feat_path)
-            input_data=feat["input_data"]
-            output_data=feat["output_data"]
-            
+            feat = np.load(feat_path)
+            input_data = feat["input_data"]
+            output_data = feat["output_data"]
+            adj_matrix = feat["adj_matrix"]
+
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str, adj_matrix
-    
-    def compute_adjacency_matrix(self, flow_ids):
-        num_flows = len(flow_ids)
+
+    def get_positional_encoding(self, seq_len, d_model):
+        pe = np.zeros((seq_len, d_model))
+        position = np.arange(0, seq_len).reshape(-1, 1)
+        div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
+        pe[:, 0::2] = np.sin(position * div_term)
+        pe[:, 1::2] = np.cos(position * div_term)
+        return pe
+
+    def compute_adjacency_matrix(self, fid):
+        num_flows = len(fid)
         num_links = 1  # Only one link in this case
         adj_matrix = np.zeros((num_flows, num_links), dtype=np.float32)
         adj_matrix[:, 0] = 1  # Connect each flow to the single link
-        
         return adj_matrix
     
 class PathFctSldnSegment(Dataset):
