@@ -156,7 +156,8 @@ class DataModulePerFlow(LightningDataModule):
                 
                 data_list = [data_list[i] for i in sample_indices]
                 n_mean = np.mean([len_per_period_all[i] for i in sample_indices])  
-                logging.info(f"mean num of flows per busy period: {n_mean}")  
+                n_max=np.max([len_per_period_all[i] for i in sample_indices])
+                logging.info(f"mean num of flows per busy period: mean-{n_mean}, max-{n_max}")  
             np.random.shuffle(data_list)
         self.data_list = data_list
         self.test_on_train = test_on_train
@@ -495,6 +496,7 @@ class LinkFctSldnSegment(Dataset):
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
         self.lr = 10.0
+        self.enable_positional_encoding = True
         logging.info(
             f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}"
         )
@@ -527,11 +529,13 @@ class LinkFctSldnSegment(Dataset):
             fats_ia_flowsim = np.insert(fats_ia_flowsim, 0, 0)
             
             # Generate positional encoding
-            positional_encodings = self.get_positional_encoding(len(fid), 3)
-
-            # Combine flow sizes, inter-arrival times, and positional encodings into the input tensor
-            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings)).astype(np.float32)
-            assert (input_data >= 0.0).all()
+            if self.enable_positional_encoding:
+                positional_encodings = self.get_positional_encoding(len(fid), 3)
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings)).astype(np.float32)
+            else:
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim)).astype(np.float32)
+            
+            # assert (input_data >= 0.0).all()
             
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
@@ -547,7 +551,6 @@ class LinkFctSldnSegment(Dataset):
             feat = np.load(feat_path)
             input_data = feat["input_data"]
             output_data = feat["output_data"]
-            adj_matrix = feat["adj_matrix"]
 
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str, adj_matrix
 
@@ -555,8 +558,8 @@ class LinkFctSldnSegment(Dataset):
         pe = np.zeros((seq_len, d_model))
         position = np.arange(0, seq_len).reshape(-1, 1)
         div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
-        pe[:, 0::2] = np.sin(position * div_term)
-        pe[:, 1::2] = np.cos(position * div_term)
+        pe[:, 0::2] = np.sin(position * div_term[:d_model//2])
+        pe[:, 1::2] = np.cos(position * div_term[:d_model//2])
         return pe
 
     def compute_adjacency_matrix(self, fid):
