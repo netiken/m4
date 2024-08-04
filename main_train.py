@@ -103,6 +103,7 @@ if args.mode == "train":
         topo_type=dataset_config.get("topo_type", ""),
         output_type=dataset_config.get("output_type", "fctSldn"),
         enable_segmentation=dataset_config.get("enable_segmentation", False),
+        enable_positional_encoding=model_config.get("enable_positional_encoding", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
         sampling_method=dataset_config.get("sampling_method", "uniform"),
         enable_path=dataset_config.get("enable_path", False),
@@ -168,6 +169,7 @@ if args.mode == "train":
             input_size=model_config["input_size"],
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
+            enable_positional_encoding=model_config.get("enable_positional_encoding", False),
             loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
         )
     elif model_name == "transformer":
@@ -221,6 +223,7 @@ else:
         topo_type=dataset_config.get("topo_type", ""),
         output_type=dataset_config.get("output_type", "fctSldn"),
         enable_segmentation=dataset_config.get("enable_segmentation", False),
+        enable_positional_encoding=model_config.get("enable_positional_encoding", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
         sampling_method=dataset_config.get("sampling_method", "uniform"),
         enable_path=dataset_config.get("enable_path", False),
@@ -265,6 +268,7 @@ else:
             input_size=model_config["input_size"],
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
+            enable_positional_encoding=model_config.get("enable_positional_encoding", False),
             loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
             save_dir=tb_logger.log_dir,
         )

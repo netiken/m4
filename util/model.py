@@ -23,17 +23,17 @@ class WeightedL1Loss(nn.Module):
         super(WeightedL1Loss, self).__init__()
 
     def forward(self, prediction, target, loss_average="perflow"):
-        # if loss_average == "perflow":
-        elementwise_loss = torch.abs(prediction - target).sum()
-        weighted_loss=elementwise_loss/target.sum()
-        # elif loss_average == "perperiod":
-        #     if prediction.dim() >1:
-        #         sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / target.sum(dim=1).to(prediction.device)
-        #     else:
-        #         sequencewise_loss = torch.abs(prediction - target).sum() / target.sum().to(prediction.device)
-        #     weighted_loss = torch.mean(sequencewise_loss)
-        # else:
-        #     raise ValueError(f"Unsupported loss average type: {loss_average}")
+        if loss_average == "perflow":
+            elementwise_loss = torch.abs(prediction - target).sum()
+            weighted_loss=elementwise_loss/target.sum()
+        elif loss_average == "perperiod":
+            if prediction.dim() >1:
+                sequencewise_loss = torch.abs(prediction - target).sum(dim=1) / target.sum(dim=1).to(prediction.device)
+            else:
+                sequencewise_loss = torch.abs(prediction - target).sum() / target.sum().to(prediction.device)
+            weighted_loss = torch.mean(sequencewise_loss)
+        else:
+            raise ValueError(f"Unsupported loss average type: {loss_average}")
         return weighted_loss
 class TransformerBase(LightningModule):
     def __init__(
@@ -291,7 +291,7 @@ class Attention(nn.Module):
     
 # LSTM Model
 class LSTMModel(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout,enable_bidirectional=False,enable_attention=False):
+    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout,enable_bidirectional=False,enable_positional_encoding=False,enable_attention=False):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -299,7 +299,7 @@ class LSTMModel(nn.Module):
         self.num_directions = 2 if enable_bidirectional else 1
         self.enable_attention = enable_attention
         # Adjust the fully connected layer based on bidirectionality
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional, dropout=dropout)
+        self.lstm = nn.LSTM(input_size*2 if enable_positional_encoding else input_size, hidden_size, num_layers, batch_first=True, bidirectional=enable_bidirectional, dropout=dropout)
         if enable_attention:
             logging.info("Attention enabled")
             self.attention = Attention(hidden_size * self.num_directions)
@@ -359,6 +359,7 @@ class FlowSimLstm(LightningModule):
         output_size=1,
         input_size=2,
         enable_bidirectional=False,
+        enable_positional_encoding=False,
         enable_gcn=False,
         loss_average="perflow", # perflow, perperiod
         save_dir=None,
@@ -373,16 +374,16 @@ class FlowSimLstm(LightningModule):
             logging.info(f"GCN enabled with {gcn_n_layer} layers and hidden size {gcn_hidden_size}")
             self.gcn_layer = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
         
-            self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
+            self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
         else:
-            self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional)
+            self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
         self.enable_gcn = enable_gcn
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir
         self.loss_average = loss_average
         logging.info(
-            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, dropout: {dropout}, loss_average: {loss_average}")
+            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}")
     
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":

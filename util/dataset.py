@@ -58,6 +58,7 @@ class DataModulePerFlow(LightningDataModule):
         output_type="queueLen",
         mode="train",
         enable_segmentation=False,
+        enable_positional_encoding=False,
         segments_per_seq=200,
         sampling_method="uniform", # uniform, weighted, balanced
         enable_path=False,
@@ -84,6 +85,7 @@ class DataModulePerFlow(LightningDataModule):
         self.segments_per_seq=segments_per_seq
         self.sampling_method=sampling_method
         self.enable_path=enable_path
+        self.enable_positional_encoding=enable_positional_encoding
         logging.info(
             f"call DataModulePerFlow: dir_input={dir_input}, dir_output={dir_output}, lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}"
         )
@@ -162,6 +164,7 @@ class DataModulePerFlow(LightningDataModule):
         self.data_list = data_list
         self.test_on_train = test_on_train
         self.test_on_empirical = test_on_empirical
+        self.sampling_method=sampling_method
         self.test_on_manual = test_on_manual
         self.output_type=output_type
         
@@ -188,10 +191,12 @@ class DataModulePerFlow(LightningDataModule):
             self.train = self.__create_dataset(
                 self.train_list,
                 self.dir_input,
+                self.enable_positional_encoding
             )
             self.val = self.__create_dataset(
                 self.val_list,
                 self.dir_input,
+                self.enable_positional_encoding
             )
 
             self.__dump_data_list(self.dir_output)
@@ -273,28 +278,31 @@ class DataModulePerFlow(LightningDataModule):
                         len_per_period_all=np.array(len_per_period_all)
                         n_samples=len(shard_list)*len(n_flows_list)*len(n_hosts_list)*len(sample_list)*self.segments_per_seq
                         
-                        # weights = len_per_period_all > 0
-                        
-                        # Bin the lengths
-                        binned_lengths = np.digitize(len_per_period_all, balance_bins)
-                        
-                        # Create a dictionary to count the number of periods for each length
-                        unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
-                        print(f"num of unique_lengths: {len(unique_lengths)}, num of counts: {counts}")
-                        # Assign equal weight to each length category
-                        length_weights = 1.0 / unique_lengths.size
-                        # Calculate the weight for each period
-                        weights = np.zeros(len(binned_lengths))
-                        for length, count in zip(unique_lengths, counts):
-                            period_indices = np.where(binned_lengths == length)[0]
-                            weights[period_indices] = length_weights / count
+                        if self.sampling_method=="uniform":
+                            weights = len_per_period_all > 0
+                        elif self.sampling_method=="balanced":
+                            # Bin the lengths
+                            binned_lengths = np.digitize(len_per_period_all, balance_bins)
+                            
+                            # Create a dictionary to count the number of periods for each length
+                            unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
+                            print(f"num of unique_lengths: {len(unique_lengths)}, num of counts: {counts}")
+                            # Assign equal weight to each length category
+                            length_weights = 1.0 / unique_lengths.size
+                            # Calculate the weight for each period
+                            weights = np.zeros(len(binned_lengths))
+                            for length, count in zip(unique_lengths, counts):
+                                period_indices = np.where(binned_lengths == length)[0]
+                                weights[period_indices] = length_weights / count
                 
                         weights = weights / np.sum(weights)        
                         sample_indices = np.random.choice(len(weights), min(n_samples, len(weights)), replace=False, p=weights)
                             
                         data_list_test = [data_list_test[i] for i in sample_indices]
+                        
                         n_mean = np.mean([len_per_period_all[i] for i in sample_indices])  
-                        logging.info(f"mean num of flows per busy period: {n_mean}")  
+                        n_max=np.max([len_per_period_all[i] for i in sample_indices])
+                        logging.info(f"mean num of flows per busy period: mean-{n_mean}, max-{n_max}")  
                 else:
                     data_list = self.__read_data_list(self.dir_output)
                     if self.test_on_train:
@@ -304,6 +312,7 @@ class DataModulePerFlow(LightningDataModule):
             self.test = self.__create_dataset(
                 data_list_test,
                 self.dir_input,
+                self.enable_positional_encoding
             )
             logging.info(f"#tracks: test-{len(data_list_test)}")
 
@@ -366,7 +375,7 @@ class DataModulePerFlow(LightningDataModule):
 
         return train_part, test_part
 
-    def __create_dataset(self, data_list, dir_input):
+    def __create_dataset(self, data_list, dir_input,enable_positional_encoding):
         if self.enable_segmentation:
             if self.enable_path:
                 return PathFctSldnSegment(
@@ -377,6 +386,7 @@ class DataModulePerFlow(LightningDataModule):
                 return LinkFctSldnSegment(
                     data_list,
                     dir_input,
+                    enable_positional_encoding,
                 )
         else:
             if self.output_type=="queueLen":
@@ -491,14 +501,14 @@ class LinkFctSldn(Dataset):
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str
 
 class LinkFctSldnSegment(Dataset):
-    def __init__(self, data_list, dir_input):
+    def __init__(self, data_list, dir_input,enable_positional_encoding):
         self.data_list = data_list
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
         self.lr = 10.0
-        self.enable_positional_encoding = True
+        self.enable_positional_encoding = enable_positional_encoding
         logging.info(
-            f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}"
+            f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}"
         )
 
     def __len__(self):
