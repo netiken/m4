@@ -114,10 +114,11 @@ class DataModulePerFlow(LightningDataModule):
                                 if enable_segmentation:
                                     busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
                                     
-                                    len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
+                                    # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
+                                    len_per_period = [len(period) for period in busy_periods]
                                     
                                     if np.sum(len_per_period)>0:
-                                        data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][1]))) for segment_id in range(len(busy_periods))]
+                                        data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][0]))) for segment_id in range(len(busy_periods))]
                                         len_per_period_all.extend(len_per_period)
                                         data_list.extend(data_list_per_period)
                                         
@@ -263,10 +264,11 @@ class DataModulePerFlow(LightningDataModule):
                                         if self.enable_segmentation:
                                             busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
 
-                                            len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
+                                            # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
+                                            len_per_period = [len(period) for period in busy_periods]
                                             
                                             if np.sum(len_per_period)>0:
-                                                data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][1]))) for segment_id in range(len(busy_periods))]
+                                                data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][0]))) for segment_id in range(len(busy_periods))]
                                                 len_per_period_all.extend(len_per_period)
                                                 data_list_test.extend(data_list_per_period)
                                             assert len(len_per_period_all)==len(data_list_test)
@@ -515,14 +517,16 @@ class LinkFctSldnSegment(Dataset):
         return len(self.data_list)
 
     def __getitem__(self, idx):
-        spec, src_dst_pair_target, topo_type, segment_id, busy_period = self.data_list[idx]
+        spec, src_dst_pair_target, topo_type, segment_id, _ = self.data_list[idx]
         src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target]) + f'_seg{segment_id}'
         
         dir_input_tmp = f"{self.dir_input}/{spec}"
         feat_path = f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
-            fid = np.arange(busy_period[0], busy_period[1] + 1)
+            busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
+            fid=np.array(busy_periods[segment_id])
+            # fid = np.arange(busy_period[0], busy_period[1] + 1)
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
             fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
