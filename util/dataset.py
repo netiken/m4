@@ -120,7 +120,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if np.sum(len_per_period)>0:
                                         data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][0]))) for segment_id in range(len(busy_periods))]
                                         
-                                        sample_indices = np.random.choice(len(len_per_period), min(segments_per_seq*3, len(len_per_period)), replace=False)
+                                        sample_indices = np.random.choice(len(len_per_period), segments_per_seq*10, replace=True)
                                         
                                         len_per_period_all.extend([len_per_period[i] for i in sample_indices])
                                         data_list.extend([data_list_per_period[i] for i in sample_indices])
