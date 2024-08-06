@@ -10,6 +10,8 @@ from .consts import (
     MTU,
     HEADER_SIZE,
     BYTE_TO_BIT,
+    LINK_TO_DELAY_DICT,
+    get_base_delay_pmn
 )
 from .func import decode_dict
 import json
@@ -385,6 +387,7 @@ class DataModulePerFlow(LightningDataModule):
                 return PathFctSldnSegment(
                     data_list,
                     dir_input,
+                    enable_positional_encoding,
                 )
             else:
                 return LinkFctSldnSegment(
@@ -596,58 +599,88 @@ class PathFctSldnSegment(Dataset):
         self,
         data_list,
         dir_input,
+        enable_positional_encoding
     ):
         self.data_list = data_list
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
+        self.lr = 10.0
+        self.enable_positional_encoding = enable_positional_encoding
         logging.info(
-            f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}"
+            f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}"
         )
 
     def __len__(self):
         return len(self.data_list)
         
     def __getitem__(self, idx):
-        spec, src_dst_pair_target, topo_type, segment_id, busy_period = self.data_list[idx]
+        spec, src_dst_pair_target, topo_type, segment_id, _ = self.data_list[idx]
         src_dst_pair_target_str = "_".join([str(x) for x in src_dst_pair_target])+f'_seg{segment_id}'
         
         # load data
         dir_input_tmp = f"{self.dir_input}/{spec}"
-        
-        # load feat
         feat_path=f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
-            # busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
-            # busy_period=busy_periods[segment_id]
-            fid=np.arange(busy_period[0], busy_period[1]+1)
+            n_hosts = int(spec.split("_")[2][6:])
+            
+            busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
+            fid=np.array(busy_periods[segment_id])
+            # fid=np.arange(busy_period[0], busy_period[1]+1)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
-            sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")
-            fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")
-            fsd_flowsim=np.load(f"{dir_input_tmp}/fsd.npy")
+            sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
+            fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")[fid]
+            fsd_flowsim=np.load(f"{dir_input_tmp}/fsd.npy")[fid]
             
-            sizes_flowsim=sizes_flowsim[fid]
-            fats_flowsim=fats_flowsim[fid]
-            fsd_flowsim=fsd_flowsim[fid]
+             # find foreground/background flows for flowsim
+            flow_idx_target_flowsim = np.logical_and(
+                fsd_flowsim[:, 0] == src_dst_pair_target[0],
+                fsd_flowsim[:, 1] == src_dst_pair_target[1],
+            )
+            flow_idx_nontarget_flowsim=~flow_idx_target_flowsim
+            flow_idx_nontarget_internal_flowsim=np.logical_and(
+                fsd_flowsim[:, 0] != src_dst_pair_target[0],
+                fsd_flowsim[:, 1] != src_dst_pair_target[1],
+            )
+
+            # compute propagation delay
+            n_links_passed = abs(fsd_flowsim[:, 0] - fsd_flowsim[:, 1])+flow_idx_nontarget_flowsim+flow_idx_nontarget_internal_flowsim
+            delay_comp=LINK_TO_DELAY_DICT[n_hosts][fsd_flowsim[:,0]]+LINK_TO_DELAY_DICT[n_hosts][fsd_flowsim[:,1]]
+            DELAY_PROPAGATION_PERFLOW = get_base_delay_pmn(
+                sizes=sizes_flowsim, n_links_passed=n_links_passed, lr_bottleneck=self.lr,flow_idx_target=flow_idx_target_flowsim,flow_idx_nontarget_internal=flow_idx_nontarget_internal_flowsim
+            )+delay_comp
+
+            # load sldns from flowsim
+            fcts_flowsim = (
+                np.load(f"{dir_input_tmp}/fct_flowsim.npy") + DELAY_PROPAGATION_PERFLOW
+            )[fid]
+            i_fcts_flowsim = (
+                sizes_flowsim + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE
+            ) * BYTE_TO_BIT / self.lr + DELAY_PROPAGATION_PERFLOW
+            sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
+            sldn_flowsim = np.clip(sldn_flowsim, a_max=None, a_min=1.0)
             
-            flows_fg =np.logical_and(fsd_flowsim[:,0]==src_dst_pair_target[0], fsd_flowsim[:,1]==src_dst_pair_target[1])
-            assert np.sum(flows_fg)>0
             # Calculate inter-arrival times and adjust the first element
             fats_ia_flowsim=np.diff(fats_flowsim)
             fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
             
-            link_padding = np.zeros((len(fid), 6))
-            for flow_idx in range(len(fid)):
-                link_padding[flow_idx, fsd_flowsim[flow_idx,0]:fsd_flowsim[flow_idx,1]] = 1
-            # Combine flow sizes and inter-arrival times into the input tensor
-            input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, link_padding)).astype(np.float32)
-            assert (input_data>=0.0).all()
+            sizes_flowsim=np.log1p(sizes_flowsim)
+            fats_ia_flowsim=np.log1p(fats_ia_flowsim)
             
-            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
-            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
+            # Generate positional encoding
+            if self.enable_positional_encoding:
+                positional_encodings = self.get_positional_encoding(len(fid), 3)
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings)).astype(np.float32)
+            else:
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim)).astype(np.float32)
+            
+            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
+            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
             assert (output_data>=1.0).all()
-            output_data[~flows_fg] = PLACEHOLDER
+            
+            # Compute the adjacency matrix for the bipartite graph
+            adj_matrix = self.compute_adjacency_matrix(fid,n_hosts,fsd_flowsim)
             
             # np.savez(feat_path, input_data=input_data, output_data=output_data)
         else:
@@ -655,4 +688,20 @@ class PathFctSldnSegment(Dataset):
             input_data=feat["input_data"]
             output_data=feat["output_data"]
             
-        return input_data, output_data, spec + topo_type, src_dst_pair_target_str
+        return input_data, output_data, spec + topo_type, src_dst_pair_target_str, adj_matrix
+    
+    def get_positional_encoding(self, seq_len, d_model):
+        pe = np.zeros((seq_len, d_model))
+        position = np.arange(0, seq_len).reshape(-1, 1)
+        div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
+        pe[:, 0::2] = np.sin(position * div_term[:d_model//2])
+        pe[:, 1::2] = np.cos(position * div_term[:d_model//2])
+        return pe
+
+    def compute_adjacency_matrix(self, fid, n_hosts, fsd_flowsim):
+        num_flows = len(fid)
+        num_links = 1  # Only one link in this case
+        adj_matrix = np.zeros((num_flows, num_links), dtype=np.float32)
+        for flow_idx in range(len(fid)):
+            adj_matrix[flow_idx, fsd_flowsim[flow_idx,0]:fsd_flowsim[flow_idx,1]] = 1
+        return adj_matrix

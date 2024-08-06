@@ -3,7 +3,8 @@
 # Dataset parameters
 dataset:
   n_flows_list: [2000]
-  n_hosts_list: [21]
+  n_hosts_list: [3,5,7]
+  # n_hosts_list: [21]
   shard: 0
   shard_list: [0,200,200] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
@@ -14,7 +15,7 @@ dataset:
   enable_segmentation: True
   segments_per_seq: 20
   sampling_method: "balanced" # weighted, uniform, balanced
-  enable_path: False
+  enable_path: True
 
 # Model parameters
 model:
