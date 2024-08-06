@@ -546,14 +546,16 @@ class LinkFctSldnSegment(Dataset):
             
             sizes_flowsim=np.log1p(sizes_flowsim)
             fats_ia_flowsim=np.log1p(fats_ia_flowsim)
-            seq_len=np.full((len(fid), 1), len(fid))
+            
+            # seq_len=np.full((len(fid), 1), len(fid))
+
             # Generate positional encoding
             if self.enable_positional_encoding:
                 positional_encodings = self.get_positional_encoding(len(fid), 3)
-                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings))
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings)).astype(np.float32)
             else:
-                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim))
-            input_data = np.column_stack((input_data, seq_len)).astype(np.float32)
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim)).astype(np.float32)
+            # input_data = np.column_stack((input_data, seq_len)).astype(np.float32)
             
             # assert (input_data >= 0.0).all()
             
