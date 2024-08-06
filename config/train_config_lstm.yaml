@@ -28,7 +28,7 @@ model:
   gcn_hidden_size: 3
   dropout: 0.0
   enable_bidirectional: True
-  enable_positional_encoding: True
+  enable_positional_encoding: False
 
 # Training parameters
 training:
@@ -37,6 +37,6 @@ training:
   n_epochs: 1000
   batch_size: 32
   learning_rate: 0.0001
-  num_workers: 16
+  num_workers: 4
   enable_val: True
   enable_dist: True

@@ -119,10 +119,12 @@ class DataModulePerFlow(LightningDataModule):
                                     
                                     if np.sum(len_per_period)>0:
                                         data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][0]))) for segment_id in range(len(busy_periods))]
-                                        len_per_period_all.extend(len_per_period)
-                                        data_list.extend(data_list_per_period)
                                         
-                                    assert len(len_per_period_all)==len(data_list)
+                                        sample_indices = np.random.choice(len(len_per_period), min(segments_per_seq*3, len(len_per_period)), replace=False)
+                                        
+                                        len_per_period_all.extend([len_per_period[i] for i in sample_indices])
+                                        data_list.extend([data_list_per_period[i] for i in sample_indices])
+                                        
                                 else:
                                     data_list.append(
                                         (spec, (0, n_hosts - 1), topo_type_cur+f"s{sample}")
@@ -542,12 +544,16 @@ class LinkFctSldnSegment(Dataset):
             fats_ia_flowsim = np.diff(fats_flowsim)
             fats_ia_flowsim = np.insert(fats_ia_flowsim, 0, 0)
             
+            sizes_flowsim=np.log1p(sizes_flowsim)
+            fats_ia_flowsim=np.log1p(fats_ia_flowsim)
+            seq_len=np.full((len(fid), 1), len(fid))
             # Generate positional encoding
             if self.enable_positional_encoding:
                 positional_encodings = self.get_positional_encoding(len(fid), 3)
-                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings)).astype(np.float32)
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings))
             else:
-                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim)).astype(np.float32)
+                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim))
+            input_data = np.column_stack((input_data, seq_len)).astype(np.float32)
             
             # assert (input_data >= 0.0).all()
             
