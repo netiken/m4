@@ -33,7 +33,7 @@ def collate_fn_link(batch):
         padded_inputs[i, :input.shape[0], :] = input
         padded_outputs[i, :output.shape[0], :] = output
     
-    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, None
+    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, None,None
 
 def collate_fn_path(batch):
     inputs, outputs, specs, src_dst_pairs, edge_indices = zip(*batch)
@@ -50,29 +50,20 @@ def collate_fn_path(batch):
         padded_inputs[i, :input.shape[0], :] = input
         padded_outputs[i, :output.shape[0], :] = output
     
-    # Determine the maximum number of nodes
-    max_num_nodes = max([edge_index.max() + 1 for edge_index in edge_indices])
+    # Determine the maximum number of edges
+    max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
     
-    # Process edge indices
+    # Pad edge indices
     padded_edge_indices = []
-    print(f"edge_indices: {np.array(edge_indices).shape}")
+    edge_indices_len = []
     for edge_index in edge_indices:
-        edge_index = np.array(edge_index)
-        if edge_index.ndim != 2 or edge_index.shape[0] != 2:
-            raise ValueError(f"Edge index must be 2D with shape (2, num_edges), but got shape {edge_index.shape}")
-        
-        num_flows = edge_index.max() - max_num_nodes + 1
-        link_node_offset = torch.tensor(max_num_nodes - num_flows, dtype=torch.long)
-        edge_index = torch.tensor(edge_index, dtype=torch.long)  # Convert to torch tensor
-        
-        new_edge_index = edge_index.clone()  # Clone the tensor
-        new_edge_index[0] += link_node_offset
-        new_edge_index[1] += link_node_offset
-        padded_edge_indices.append(new_edge_index)
+        padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
+        padded_edge_index[:, :edge_index.shape[1]] = edge_index
+        padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
+        edge_indices_len.append(edge_index.shape[1])
     
-    padded_edge_indices = torch.cat(padded_edge_indices, dim=1)
-    
-    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, padded_edge_indices
+    padded_edge_indices = torch.stack(padded_edge_indices)
+    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, padded_edge_indices, np.array(edge_indices_len)
 
 
 class DataModulePerFlow(LightningDataModule):
@@ -648,6 +639,7 @@ class PathFctSldnSegment(Dataset):
             
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
             fid=np.array(busy_periods[segment_id])
+            fid=np.sort(fid)
             # fid=np.arange(busy_period[0], busy_period[1]+1)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
@@ -668,23 +660,22 @@ class PathFctSldnSegment(Dataset):
             # compute propagation delay
             n_links_passed = abs(fsd_flowsim[:, 0] - fsd_flowsim[:, 1])+flow_idx_nontarget_flowsim+flow_idx_nontarget_internal_flowsim
             delay_comp=LINK_TO_DELAY_DICT[n_hosts][fsd_flowsim[:,0]]+LINK_TO_DELAY_DICT[n_hosts][fsd_flowsim[:,1]]
-            DELAY_PROPAGATION_PERFLOW = get_base_delay_pmn(
+            base_delay = get_base_delay_pmn(
                 sizes=sizes_flowsim, n_links_passed=n_links_passed, lr_bottleneck=self.lr,flow_idx_target=flow_idx_target_flowsim,flow_idx_nontarget_internal=flow_idx_nontarget_internal_flowsim
             )+delay_comp
 
             # load sldns from flowsim
-            fcts_flowsim = (
-                np.load(f"{dir_input_tmp}/fct_flowsim.npy") + DELAY_PROPAGATION_PERFLOW
-            )[fid]
+            fcts_flowsim = (np.load(f"{dir_input_tmp}/fct_flowsim.npy"))[fid]+ base_delay
             i_fcts_flowsim = (
                 sizes_flowsim + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE
-            ) * BYTE_TO_BIT / self.lr + DELAY_PROPAGATION_PERFLOW
+            ) * BYTE_TO_BIT / self.lr + base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
             sldn_flowsim = np.clip(sldn_flowsim, a_max=None, a_min=1.0)
             
             # Calculate inter-arrival times and adjust the first element
             fats_ia_flowsim=np.diff(fats_flowsim)
             fats_ia_flowsim=np.insert(fats_ia_flowsim, 0, 0)
+            assert (fats_ia_flowsim>=0).all()
             
             sizes_flowsim=np.log1p(sizes_flowsim)
             fats_ia_flowsim=np.log1p(fats_ia_flowsim)
@@ -698,7 +689,7 @@ class PathFctSldnSegment(Dataset):
             
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
-            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)[fid]
+            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
             assert (output_data>=1.0).all()
             
             # Compute the adjacency matrix for the bipartite graph
@@ -726,7 +717,7 @@ class PathFctSldnSegment(Dataset):
             src = fsd_flowsim[i, 0]
             dst = fsd_flowsim[i, 1]
             flow_node_idx = n_hosts + i - 1
-            
+            assert src < dst
             for link_idx in range(src, dst):
                 edge_index.append([link_idx, flow_node_idx])
                 edge_index.append([flow_node_idx, link_idx])

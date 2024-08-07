@@ -369,11 +369,11 @@ class FlowSimLstm(LightningModule):
         self.batch_size = batch_size
         self.loss_fn = self._get_loss_fn(loss_fn_type)
         self.enable_gcn = enable_gcn
-        
+        self.gcn_hidden_size=gcn_hidden_size
         # GCN layers
         if enable_gcn:
             logging.info(f"GCN enabled with {gcn_n_layer} layers and hidden size {gcn_hidden_size}")
-            self.gcn_layers = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
+            self.gcn_layers = nn.ModuleList([GCNLayer(input_size if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
             self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
         else:
             self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
@@ -393,21 +393,35 @@ class FlowSimLstm(LightningModule):
         else:
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
         
-    def forward(self, x,lengths,edge_index):
+    def forward(self, x, lengths, edge_index, edge_index_len):
         if self.enable_gcn:
-            num_flow_nodes = x.size(1)
-            num_link_nodes = edge_index.max().item() + 1 - num_flow_nodes
-            link_node_feats = torch.full((x.size(0), num_link_nodes, x.size(2)), 10.0, device=x.device)
-            x_gnn_input = torch.cat([x, link_node_feats], dim=1)
-            for gcn in self.gcn_layers:
-                x_gnn_input = gcn(x_gnn_input, edge_index)
-            x_gnn_output = x_gnn_input[:, :num_flow_nodes, :]
-            x = torch.cat((x, x_gnn_output), dim=-1)
+            batch_size = x.size(0)
+            feature_dim = x.size(2)
+            
+            batch_gnn_output = torch.zeros((batch_size, x.size(1), self.gcn_hidden_size), device=x.device)
+            for i in range(batch_size):
+                num_flow_nodes = lengths[i]
+                edge_index_trimmed = edge_index[i, :, :edge_index_len[i]]
+                max_node_index = edge_index_trimmed.max().item()
+                num_link_nodes = max_node_index + 1 - num_flow_nodes
+                
+                link_node_feats = torch.full((num_link_nodes, feature_dim), 10.0, device=x.device)
+                x_gnn_input = torch.cat([link_node_feats, x[i, :num_flow_nodes, :]], dim=0)
+                
+                for gcn in self.gcn_layers:
+                    x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
+                
+                x_gnn_output = x_gnn_input[num_link_nodes:, :]
+                batch_gnn_output[i, :num_flow_nodes, :] = x_gnn_output
+            
+            x = torch.cat((x, batch_gnn_output), dim=-1)
+        
         return self.model_lstm(x, lengths)
+
     
     def step(self, batch, batch_idx, tag=None):
-        input, output, lengths, spec, src_dst_pair_target_str,edge_index = batch
-        estimated, _ = self(input, lengths,edge_index)
+        input, output, lengths, spec, src_dst_pair_target_str,edge_index,edge_index_len = batch
+        estimated, _ = self(input, lengths,edge_index,edge_index_len)
         
         # Generate a mask based on lengths
         attention_mask = (output.squeeze() >= 1.0)
