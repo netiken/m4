@@ -20,7 +20,7 @@ import os
 
 # Custom collate function to handle variable sequence lengths
 def collate_fn_per_flow(batch):
-    inputs, outputs, specs, src_dst_pairs, adj_matrices = zip(*batch)
+    inputs, outputs, specs, src_dst_pairs, edge_indices = zip(*batch)
     
     # Get lengths of each sequence in the batch
     lengths = np.array([x.shape[0] for x in inputs]).astype(np.int64)
@@ -34,14 +34,21 @@ def collate_fn_per_flow(batch):
         padded_inputs[i, :input.shape[0], :] = input
         padded_outputs[i, :output.shape[0], :] = output
     
-    # Pad adjacency matrices to the maximum size in the batch
-    max_num_flows = max([adj.shape[0] for adj in adj_matrices])
-    max_num_links = max([adj.shape[1] for adj in adj_matrices])
-    padded_adj_matrices = np.zeros((len(adj_matrices), max_num_flows, max_num_links), dtype=np.float32)
+    # Pad edge indices to the maximum size in the batch
+    max_num_flows = max([edge_index.shape[1] for edge_index in edge_indices]) // 2
+    padded_edge_indices = []
     
-    for i, adj in enumerate(adj_matrices):
-        padded_adj_matrices[i, :adj.shape[0], :adj.shape[1]] = adj
-    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, torch.tensor(padded_adj_matrices)
+    for i, edge_index in enumerate(edge_indices):
+        num_flows = edge_index.max().item() - max_num_flows + 1
+        link_node_offset = max_num_flows - num_flows
+        new_edge_index = edge_index.clone()
+        new_edge_index[0] += link_node_offset
+        new_edge_index[1] += link_node_offset
+        padded_edge_indices.append(new_edge_index)
+    
+    padded_edge_indices = torch.cat(padded_edge_indices, dim=1)
+    
+    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, padded_edge_indices
 
 class DataModulePerFlow(LightningDataModule):
     def __init__(
@@ -680,7 +687,7 @@ class PathFctSldnSegment(Dataset):
             assert (output_data>=1.0).all()
             
             # Compute the adjacency matrix for the bipartite graph
-            adj_matrix = self.compute_adjacency_matrix(fid,n_hosts,fsd_flowsim)
+            edge_index = self.compute_edge_index(fid, n_hosts, fsd_flowsim)
             
             # np.savez(feat_path, input_data=input_data, output_data=output_data)
         else:
@@ -688,7 +695,7 @@ class PathFctSldnSegment(Dataset):
             input_data=feat["input_data"]
             output_data=feat["output_data"]
             
-        return input_data, output_data, spec + topo_type, src_dst_pair_target_str, adj_matrix
+        return input_data, output_data, spec + topo_type, src_dst_pair_target_str, edge_index
     
     def get_positional_encoding(self, seq_len, d_model):
         pe = np.zeros((seq_len, d_model))
@@ -698,10 +705,18 @@ class PathFctSldnSegment(Dataset):
         pe[:, 1::2] = np.cos(position * div_term[:d_model//2])
         return pe
 
-    def compute_adjacency_matrix(self, fid, n_hosts, fsd_flowsim):
-        num_flows = len(fid)
-        num_links = 1  # Only one link in this case
-        adj_matrix = np.zeros((num_flows, num_links), dtype=np.float32)
-        for flow_idx in range(len(fid)):
-            adj_matrix[flow_idx, fsd_flowsim[flow_idx,0]:fsd_flowsim[flow_idx,1]] = 1
-        return adj_matrix
+    def compute_edge_index(self, fid, n_hosts, fsd_flowsim):
+        edge_index = []
+        
+        for i in range(len(fid)):
+            src = fsd_flowsim[i, 0]
+            dst = fsd_flowsim[i, 1]
+            flow_node_idx = n_hosts + i
+            
+            edge_index.append([flow_node_idx, src])
+            edge_index.append([src, flow_node_idx])
+            edge_index.append([flow_node_idx, dst])
+            edge_index.append([dst, flow_node_idx])
+        
+        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+        return edge_index

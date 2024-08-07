@@ -170,6 +170,7 @@ if args.mode == "train":
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
             enable_positional_encoding=model_config.get("enable_positional_encoding", False),
+            enable_gcn=model_config.get("enable_gcn", False),
             loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
         )
     elif model_name == "transformer":
@@ -269,6 +270,7 @@ else:
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
             enable_positional_encoding=model_config.get("enable_positional_encoding", False),
+            enable_gcn=model_config.get("enable_gcn", False),
             loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
             save_dir=tb_logger.log_dir,
         )

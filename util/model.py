@@ -10,6 +10,8 @@ import struct
 import os
 
 from .model_llama import Transformer, ModelArgs
+from torch_geometric.nn import GCNConv
+import torch.nn.functional as F
 
 class ExpActivation(nn.Module):
     def __init__(self):
@@ -249,20 +251,7 @@ class FlowSimTransformer(TransformerBase):
             self.weight_decay, self.learning_rate, self.betas
         )
         return optimizer
-# GCN model
-class GCNLayer(nn.Module):
-    def __init__(self, c_in, c_out):
-        super(GCNLayer, self).__init__()
-        self.projection = nn.Linear(c_in, c_out)
 
-    def forward(self, node_feats, adj_matrix):
-        node_feats = self.projection(node_feats)
-        node_feats = torch.bmm(adj_matrix.transpose(-1, -2), node_feats)
-        
-        # Normalize the node features
-        degree_matrix = adj_matrix.sum(dim=-1, keepdim=True).float() + 1e-6
-        node_feats = node_feats / degree_matrix
-        return node_feats
 
 class Attention(nn.Module):
     def __init__(self, hidden_size):
@@ -288,7 +277,18 @@ class Attention(nn.Module):
         context = attn_weights * lstm_out  # [batch_size, seq_len, hidden_size]
         
         return context, attn_weights
-    
+
+# GCN model
+class GCNLayer(nn.Module):
+    def __init__(self, c_in, c_out):
+        super(GCNLayer, self).__init__()
+        self.conv = GCNConv(c_in, c_out)
+
+    def forward(self, node_feats, edge_index):
+        node_feats = self.conv(node_feats, edge_index)
+        node_feats = F.relu(node_feats)
+        return node_feats
+
 # LSTM Model
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, num_layers, dropout,enable_bidirectional=False,enable_positional_encoding=False,enable_attention=False):
@@ -367,17 +367,16 @@ class FlowSimLstm(LightningModule):
         super(FlowSimLstm, self).__init__()
         self.learning_rate = learning_rate
         self.batch_size = batch_size
-        
         self.loss_fn = self._get_loss_fn(loss_fn_type)
+        self.enable_gcn = enable_gcn
+        
         # GCN layers
         if enable_gcn:
             logging.info(f"GCN enabled with {gcn_n_layer} layers and hidden size {gcn_hidden_size}")
-            self.gcn_layer = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
-        
+            self.gcn_layers = nn.ModuleList([GCNLayer(2 if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
             self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
         else:
             self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
-        self.enable_gcn = enable_gcn
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir
@@ -394,17 +393,21 @@ class FlowSimLstm(LightningModule):
         else:
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
         
-    def forward(self, x,lengths,adj_matrix):
+    def forward(self, x,lengths,edge_index):
         if self.enable_gcn:
-            x_gnn=x[:,:,[0,2]]
-            for gcn in self.gcn_layer:
-                x_gnn = gcn(x_gnn, adj_matrix)
-            x=torch.cat((x,x_gnn),dim=-1)
+            num_flow_nodes = x.size(1)
+            num_link_nodes = edge_index.max().item() + 1 - num_flow_nodes
+            link_node_feats = torch.full((x.size(0), num_link_nodes, x.size(2)), 10.0, device=x.device)
+            x_gnn_input = torch.cat([x, link_node_feats], dim=1)
+            for gcn in self.gcn_layers:
+                x_gnn_input = gcn(x_gnn_input, edge_index)
+            x_gnn_output = x_gnn_input[:, :num_flow_nodes, :]
+            x = torch.cat((x, x_gnn_output), dim=-1)
         return self.model_lstm(x, lengths)
     
     def step(self, batch, batch_idx, tag=None):
-        input, output, lengths, spec, src_dst_pair_target_str,adj_matrix = batch
-        estimated, _ = self(input, lengths,adj_matrix)
+        input, output, lengths, spec, src_dst_pair_target_str,edge_index = batch
+        estimated, _ = self(input, lengths,edge_index)
         
         # Generate a mask based on lengths
         attention_mask = (output.squeeze() >= 1.0)
@@ -454,8 +457,11 @@ class FlowSimLstm(LightningModule):
         #     self.model_lstm.parameters(), lr=self.learning_rate
         # )
         # return optimizer
-    
-        optimizer = torch.optim.Adam(self.model_lstm.parameters(), lr=self.learning_rate)
+
+        parameters = list(self.model_lstm.parameters())
+        if self.enable_gcn:
+            parameters += [param for gcn_layer in self.gcn_layers for param in gcn_layer.parameters()]
+        optimizer = torch.optim.Adam(parameters, lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5, min_lr=1e-6)
         return {
             'optimizer': optimizer,

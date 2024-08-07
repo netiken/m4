@@ -6,7 +6,7 @@ dataset:
   n_hosts_list: [3,5,7]
   # n_hosts_list: [21]
   shard: 0
-  shard_list: [0,200,200] # [start, end, num]
+  shard_list: [0,20,20] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
@@ -25,10 +25,11 @@ model:
   gcn_n_layer: 2
   loss_fn_type: "l1"
   hidden_size: 512
-  gcn_hidden_size: 3
+  gcn_hidden_size: 8
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
+  enable_gcn: True
 
 # Training parameters
 training:
