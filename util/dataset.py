@@ -18,8 +18,24 @@ import json
 import logging
 import os
 
-# Custom collate function to handle variable sequence lengths
-def collate_fn_per_flow(batch):
+def collate_fn_link(batch):
+    inputs, outputs, specs, src_dst_pairs = zip(*batch)
+    
+    # Get lengths of each sequence in the batch
+    lengths = np.array([x.shape[0] for x in inputs]).astype(np.int64)
+    
+    # Pad sequences
+    max_len = max(lengths)
+    padded_inputs = np.zeros((len(inputs), max_len, inputs[0].shape[1]), dtype=np.float32)
+    padded_outputs = np.ones((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32) * PLACEHOLDER
+    
+    for i, (input, output) in enumerate(zip(inputs, outputs)):
+        padded_inputs[i, :input.shape[0], :] = input
+        padded_outputs[i, :output.shape[0], :] = output
+    
+    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, None
+
+def collate_fn_path(batch):
     inputs, outputs, specs, src_dst_pairs, edge_indices = zip(*batch)
     
     # Get lengths of each sequence in the batch
@@ -28,20 +44,28 @@ def collate_fn_per_flow(batch):
     # Pad sequences
     max_len = max(lengths)
     padded_inputs = np.zeros((len(inputs), max_len, inputs[0].shape[1]), dtype=np.float32)
-    padded_outputs = np.ones((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)*PLACEHOLDER
+    padded_outputs = np.ones((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32) * PLACEHOLDER
     
     for i, (input, output) in enumerate(zip(inputs, outputs)):
         padded_inputs[i, :input.shape[0], :] = input
         padded_outputs[i, :output.shape[0], :] = output
     
-    # Pad edge indices to the maximum size in the batch
-    max_num_flows = max([edge_index.shape[1] for edge_index in edge_indices]) // 2
-    padded_edge_indices = []
+    # Determine the maximum number of nodes
+    max_num_nodes = max([edge_index.max() + 1 for edge_index in edge_indices])
     
-    for i, edge_index in enumerate(edge_indices):
-        num_flows = edge_index.max().item() - max_num_flows + 1
-        link_node_offset = max_num_flows - num_flows
-        new_edge_index = edge_index.clone()
+    # Process edge indices
+    padded_edge_indices = []
+    print(f"edge_indices: {np.array(edge_indices).shape}")
+    for edge_index in edge_indices:
+        edge_index = np.array(edge_index)
+        if edge_index.ndim != 2 or edge_index.shape[0] != 2:
+            raise ValueError(f"Edge index must be 2D with shape (2, num_edges), but got shape {edge_index.shape}")
+        
+        num_flows = edge_index.max() - max_num_nodes + 1
+        link_node_offset = torch.tensor(max_num_nodes - num_flows, dtype=torch.long)
+        edge_index = torch.tensor(edge_index, dtype=torch.long)  # Convert to torch tensor
+        
+        new_edge_index = edge_index.clone()  # Clone the tensor
         new_edge_index[0] += link_node_offset
         new_edge_index[1] += link_node_offset
         padded_edge_indices.append(new_edge_index)
@@ -49,6 +73,7 @@ def collate_fn_per_flow(batch):
     padded_edge_indices = torch.cat(padded_edge_indices, dim=1)
     
     return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, padded_edge_indices
+
 
 class DataModulePerFlow(LightningDataModule):
     def __init__(
@@ -346,7 +371,7 @@ class DataModulePerFlow(LightningDataModule):
             num_workers=self.num_workers,
             shuffle=True,
             pin_memory=True,
-            collate_fn=collate_fn_per_flow,
+            collate_fn=collate_fn_path if self.enable_path else collate_fn_link,
         )
 
     def val_dataloader(self):
@@ -360,7 +385,7 @@ class DataModulePerFlow(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
-            collate_fn=collate_fn_per_flow,
+            collate_fn=collate_fn_path if self.enable_path else collate_fn_link,
         )
 
     # Create test dataloader
@@ -376,7 +401,7 @@ class DataModulePerFlow(LightningDataModule):
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
-            collate_fn=collate_fn_per_flow,
+            collate_fn=collate_fn_path if self.enable_path else collate_fn_link,
         )
 
     def __random_split_list(self, lst, percentage):
@@ -574,9 +599,6 @@ class LinkFctSldnSegment(Dataset):
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
             assert (output_data >= 1.0).all()
             
-            # Compute the adjacency matrix for the bipartite graph
-            adj_matrix = self.compute_adjacency_matrix(fid)
-            
             # Optionally save features for future epochs
             # np.savez(feat_path, input_data=input_data, output_data=output_data, adj_matrix=adj_matrix)
         else:
@@ -584,7 +606,7 @@ class LinkFctSldnSegment(Dataset):
             input_data = feat["input_data"]
             output_data = feat["output_data"]
 
-        return input_data, output_data, spec + topo_type, src_dst_pair_target_str, adj_matrix
+        return input_data, output_data, spec + topo_type, src_dst_pair_target_str
 
     def get_positional_encoding(self, seq_len, d_model):
         pe = np.zeros((seq_len, d_model))
@@ -594,13 +616,6 @@ class LinkFctSldnSegment(Dataset):
         pe[:, 1::2] = np.cos(position * div_term[:d_model//2])
         return pe
 
-    def compute_adjacency_matrix(self, fid):
-        num_flows = len(fid)
-        num_links = 1  # Only one link in this case
-        adj_matrix = np.zeros((num_flows, num_links), dtype=np.float32)
-        adj_matrix[:, 0] = 1  # Connect each flow to the single link
-        return adj_matrix
-    
 class PathFctSldnSegment(Dataset):
     def __init__(
         self,
@@ -694,7 +709,6 @@ class PathFctSldnSegment(Dataset):
             feat=np.load(feat_path)
             input_data=feat["input_data"]
             output_data=feat["output_data"]
-            
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str, edge_index
     
     def get_positional_encoding(self, seq_len, d_model):
@@ -711,12 +725,11 @@ class PathFctSldnSegment(Dataset):
         for i in range(len(fid)):
             src = fsd_flowsim[i, 0]
             dst = fsd_flowsim[i, 1]
-            flow_node_idx = n_hosts + i
+            flow_node_idx = n_hosts + i - 1
             
-            edge_index.append([flow_node_idx, src])
-            edge_index.append([src, flow_node_idx])
-            edge_index.append([flow_node_idx, dst])
-            edge_index.append([dst, flow_node_idx])
+            for link_idx in range(src, dst):
+                edge_index.append([link_idx, flow_node_idx])
+                edge_index.append([flow_node_idx, link_idx])
         
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
+        edge_index = np.array(edge_index).T
         return edge_index
