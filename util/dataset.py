@@ -50,20 +50,23 @@ def collate_fn_path(batch):
         padded_inputs[i, :input.shape[0], :] = input
         padded_outputs[i, :output.shape[0], :] = output
     
-    # Determine the maximum number of edges
-    max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
-    
-    # Pad edge indices
-    padded_edge_indices = []
-    edge_indices_len = []
-    for edge_index in edge_indices:
-        padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
-        padded_edge_index[:, :edge_index.shape[1]] = edge_index
-        padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
-        edge_indices_len.append(edge_index.shape[1])
-    
-    padded_edge_indices = torch.stack(padded_edge_indices)
-    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, padded_edge_indices, np.array(edge_indices_len)
+    if edge_indices is None:
+        return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, None, None
+    else:
+        # Determine the maximum number of edges
+        max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
+        
+        # Pad edge indices
+        padded_edge_indices = []
+        edge_indices_len = []
+        for edge_index in edge_indices:
+            padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
+            padded_edge_index[:, :edge_index.shape[1]] = edge_index
+            padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
+            edge_indices_len.append(edge_index.shape[1])
+        
+        padded_edge_indices = torch.stack(padded_edge_indices)
+        return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, padded_edge_indices, np.array(edge_indices_len)
 
 
 class DataModulePerFlow(LightningDataModule):
@@ -84,6 +87,7 @@ class DataModulePerFlow(LightningDataModule):
         mode="train",
         enable_segmentation=False,
         enable_positional_encoding=False,
+        enable_gnn=False,
         segments_per_seq=200,
         sampling_method="uniform", # uniform, weighted, balanced
         enable_path=False,
@@ -111,6 +115,7 @@ class DataModulePerFlow(LightningDataModule):
         self.sampling_method=sampling_method
         self.enable_path=enable_path
         self.enable_positional_encoding=enable_positional_encoding
+        self.enable_gnn=enable_gnn
         logging.info(
             f"call DataModulePerFlow: dir_input={dir_input}, dir_output={dir_output}, lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}"
         )
@@ -139,6 +144,7 @@ class DataModulePerFlow(LightningDataModule):
                                 if enable_segmentation:
                                     busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
                                     
+                                    busy_periods=[busy_periods[i] for i in range(len(busy_periods)) if len(busy_periods[i])<5000]
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                     len_per_period = [len(period) for period in busy_periods]
                                     
@@ -219,12 +225,14 @@ class DataModulePerFlow(LightningDataModule):
             self.train = self.__create_dataset(
                 self.train_list,
                 self.dir_input,
-                self.enable_positional_encoding
+                self.enable_positional_encoding,
+                self.enable_gnn
             )
             self.val = self.__create_dataset(
                 self.val_list,
                 self.dir_input,
-                self.enable_positional_encoding
+                self.enable_positional_encoding,
+                self.enable_gnn
             )
 
             self.__dump_data_list(self.dir_output)
@@ -267,9 +275,10 @@ class DataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    shard_list=np.arange(0, 200)
+                    shard_list=np.arange(0, 100)
                     n_flows_list=[2000]
-                    n_hosts_list=[21]
+                    # n_hosts_list=[21]
+                    n_hosts_list=[3,5,7]
                     sample_list=[0]
                     if self.enable_segmentation:
                         len_per_period_all=[]
@@ -291,13 +300,16 @@ class DataModulePerFlow(LightningDataModule):
                                         if self.enable_segmentation:
                                             busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
 
+                                            busy_periods=[busy_periods[i] for i in range(len(busy_periods)) if len(busy_periods[i])<5000]
                                             # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             len_per_period = [len(period) for period in busy_periods]
                                             
                                             if np.sum(len_per_period)>0:
                                                 data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][0]))) for segment_id in range(len(busy_periods))]
-                                                len_per_period_all.extend(len_per_period)
-                                                data_list_test.extend(data_list_per_period)
+                                                sample_indices = np.random.choice(len(len_per_period), self.segments_per_seq*10, replace=True)
+                                        
+                                                len_per_period_all.extend([len_per_period[i] for i in sample_indices])
+                                                data_list_test.extend([data_list_per_period[i] for i in sample_indices])
                                             assert len(len_per_period_all)==len(data_list_test)
                                         else:
                                             data_list_test.append(
@@ -341,7 +353,8 @@ class DataModulePerFlow(LightningDataModule):
             self.test = self.__create_dataset(
                 data_list_test,
                 self.dir_input,
-                self.enable_positional_encoding
+                self.enable_positional_encoding,
+                self.enable_gnn
             )
             logging.info(f"#tracks: test-{len(data_list_test)}")
 
@@ -404,13 +417,14 @@ class DataModulePerFlow(LightningDataModule):
 
         return train_part, test_part
 
-    def __create_dataset(self, data_list, dir_input,enable_positional_encoding):
+    def __create_dataset(self, data_list, dir_input,enable_positional_encoding,enable_gnn):
         if self.enable_segmentation:
             if self.enable_path:
                 return PathFctSldnSegment(
                     data_list,
                     dir_input,
                     enable_positional_encoding,
+                    enable_gnn
                 )
             else:
                 return LinkFctSldnSegment(
@@ -612,13 +626,15 @@ class PathFctSldnSegment(Dataset):
         self,
         data_list,
         dir_input,
-        enable_positional_encoding
+        enable_positional_encoding,
+        enable_gnn
     ):
         self.data_list = data_list
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
         self.lr = 10.0
         self.enable_positional_encoding = enable_positional_encoding
+        self.enable_gnn=enable_gnn
         logging.info(
             f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}"
         )
@@ -638,7 +654,7 @@ class PathFctSldnSegment(Dataset):
             n_hosts = int(spec.split("_")[2][6:])
             
             busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
-            fid=np.array(busy_periods[segment_id])
+            fid=np.array(busy_periods[segment_id]).astype(np.int32)
             fid=np.sort(fid)
             # fid=np.arange(busy_period[0], busy_period[1]+1)
             # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
@@ -695,11 +711,12 @@ class PathFctSldnSegment(Dataset):
             # Compute the adjacency matrix for the bipartite graph
             edge_index = self.compute_edge_index(fid, n_hosts, fsd_flowsim)
             
-            # np.savez(feat_path, input_data=input_data, output_data=output_data)
+            # np.savez(feat_path, input_data=input_data, output_data=output_data,edge_index=edge_index)
         else:
             feat=np.load(feat_path)
             input_data=feat["input_data"]
             output_data=feat["output_data"]
+            edge_index=feat["edge_index"]
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str, edge_index
     
     def get_positional_encoding(self, seq_len, d_model):

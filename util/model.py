@@ -360,7 +360,7 @@ class FlowSimLstm(LightningModule):
         input_size=2,
         enable_bidirectional=False,
         enable_positional_encoding=False,
-        enable_gcn=False,
+        enable_gnn=False,
         loss_average="perflow", # perflow, perperiod
         save_dir=None,
     ):
@@ -368,10 +368,10 @@ class FlowSimLstm(LightningModule):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.loss_fn = self._get_loss_fn(loss_fn_type)
-        self.enable_gcn = enable_gcn
+        self.enable_gnn = enable_gnn
         self.gcn_hidden_size=gcn_hidden_size
         # GCN layers
-        if enable_gcn:
+        if enable_gnn:
             logging.info(f"GCN enabled with {gcn_n_layer} layers and hidden size {gcn_hidden_size}")
             self.gcn_layers = nn.ModuleList([GCNLayer(input_size if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
             self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
@@ -394,7 +394,7 @@ class FlowSimLstm(LightningModule):
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
         
     def forward(self, x, lengths, edge_index, edge_index_len):
-        if self.enable_gcn:
+        if self.enable_gnn:
             batch_size = x.size(0)
             feature_dim = x.size(2)
             
@@ -473,7 +473,7 @@ class FlowSimLstm(LightningModule):
         # return optimizer
 
         parameters = list(self.model_lstm.parameters())
-        if self.enable_gcn:
+        if self.enable_gnn:
             parameters += [param for gcn_layer in self.gcn_layers for param in gcn_layer.parameters()]
         optimizer = torch.optim.Adam(parameters, lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.2, patience=5, min_lr=1e-6)
