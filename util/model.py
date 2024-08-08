@@ -373,8 +373,8 @@ class FlowSimLstm(LightningModule):
         # GCN layers
         if enable_gnn:
             logging.info(f"GCN enabled with {gcn_n_layer} layers and hidden size {gcn_hidden_size}")
-            self.gcn_layers = nn.ModuleList([GCNLayer(input_size if i == 0 else gcn_hidden_size, gcn_hidden_size) for i in range(gcn_n_layer)])
-            self.model_lstm = LSTMModel(input_size+gcn_hidden_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
+            self.gcn_layers = nn.ModuleList([GCNLayer(input_size if i == 0 else gcn_hidden_size, gcn_hidden_size if i!=gcn_n_layer-1 else input_size) for i in range(gcn_n_layer)])
+            self.model_lstm = LSTMModel(input_size*2, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
         else:
             self.model_lstm = LSTMModel(input_size, hidden_size, output_size, n_layer, dropout=dropout,enable_bidirectional=enable_bidirectional,enable_positional_encoding=enable_positional_encoding)
         self.enable_dist = enable_dist

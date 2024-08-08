@@ -147,7 +147,7 @@ class DataModulePerFlow(LightningDataModule):
                                     busy_periods=[]
                                     for i in range(len(busy_periods_ori)):
                                         busy_period=busy_periods_ori[i]
-                                        if len(busy_period)<5000 and all(isinstance(x, int) for x in busy_period):
+                                        if len(busy_period)<20000:
                                             busy_periods.append(busy_period)
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                     len_per_period = [len(period) for period in busy_periods]
@@ -155,7 +155,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if np.sum(len_per_period)>0:
                                         data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][0]))) for segment_id in range(len(busy_periods))]
                                         
-                                        sample_indices = np.random.choice(len(len_per_period), segments_per_seq*10, replace=True)
+                                        sample_indices = np.random.choice(len(len_per_period), segments_per_seq*3, replace=True)
                                         
                                         len_per_period_all.extend([len_per_period[i] for i in sample_indices])
                                         data_list.extend([data_list_per_period[i] for i in sample_indices])
@@ -307,14 +307,14 @@ class DataModulePerFlow(LightningDataModule):
                                             busy_periods=[]
                                             for i in range(len(busy_periods_ori)):
                                                 busy_period=busy_periods_ori[i]
-                                                if len(busy_period)<5000 and all(isinstance(x, int) for x in busy_period):
+                                                if len(busy_period)<20000:
                                                     busy_periods.append(busy_period)
                                             # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             len_per_period = [len(period) for period in busy_periods]
                                             
                                             if np.sum(len_per_period)>0:
                                                 data_list_per_period=[(spec, (0, n_hosts - 1), topo_type_cur+file_suffix, int(segment_id), (int(busy_periods[segment_id][0]), int(busy_periods[segment_id][0]))) for segment_id in range(len(busy_periods))]
-                                                sample_indices = np.random.choice(len(len_per_period), self.segments_per_seq*10, replace=True)
+                                                sample_indices = np.random.choice(len(len_per_period), self.segments_per_seq*3, replace=True)
                                         
                                                 len_per_period_all.extend([len_per_period[i] for i in sample_indices])
                                                 data_list_test.extend([data_list_per_period[i] for i in sample_indices])
