@@ -398,7 +398,7 @@ class FlowSimLstm(LightningModule):
             batch_size = x.size(0)
             feature_dim = x.size(2)
             
-            batch_gnn_output = torch.zeros((batch_size, x.size(1), self.gcn_hidden_size), device=x.device)
+            batch_gnn_output = torch.zeros((batch_size, x.size(1), x.size(2)), device=x.device)
             for i in range(batch_size):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, :edge_index_len[i]]
