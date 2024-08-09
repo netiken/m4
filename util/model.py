@@ -421,6 +421,7 @@ class FlowSimLstm(LightningModule):
     
     def step(self, batch, batch_idx, tag=None):
         input, output, lengths, spec, src_dst_pair_target_str,edge_index,edge_index_len = batch
+        
         estimated, _ = self(input, lengths,edge_index,edge_index_len)
         
         # Generate a mask based on lengths

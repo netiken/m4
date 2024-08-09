@@ -33,7 +33,7 @@ def collate_fn_link(batch):
         padded_inputs[i, :input.shape[0], :] = input
         padded_outputs[i, :output.shape[0], :] = output
     
-    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, None,None
+    return torch.tensor(padded_inputs), torch.tensor(padded_outputs), lengths, specs, src_dst_pairs, None, None
 
 def collate_fn_path(batch):
     inputs, outputs, specs, src_dst_pairs, edge_indices = zip(*batch)
@@ -87,6 +87,7 @@ class DataModulePerFlow(LightningDataModule):
         mode="train",
         enable_segmentation=False,
         enable_positional_encoding=False,
+        flow_size_threshold=100000,
         enable_gnn=False,
         segments_per_seq=200,
         sampling_method="uniform", # uniform, weighted, balanced
@@ -115,6 +116,7 @@ class DataModulePerFlow(LightningDataModule):
         self.sampling_method=sampling_method
         self.enable_path=enable_path
         self.enable_positional_encoding=enable_positional_encoding
+        self.flow_size_threshold=flow_size_threshold
         self.enable_gnn=enable_gnn
         logging.info(
             f"call DataModulePerFlow: dir_input={dir_input}, dir_output={dir_output}, lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}"
@@ -142,13 +144,8 @@ class DataModulePerFlow(LightningDataModule):
                             fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
                             if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
                                 if enable_segmentation:
-                                    busy_periods_ori=np.load(f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
+                                    busy_periods=np.load(f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy", allow_pickle=True)
                                     
-                                    busy_periods=[]
-                                    for i in range(len(busy_periods_ori)):
-                                        busy_period=busy_periods_ori[i]
-                                        if len(busy_period)<500:
-                                            busy_periods.append(busy_period)
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                     len_per_period = [len(period) for period in busy_periods]
                                     
@@ -230,12 +227,14 @@ class DataModulePerFlow(LightningDataModule):
                 self.train_list,
                 self.dir_input,
                 self.enable_positional_encoding,
+                self.flow_size_threshold,
                 self.enable_gnn
             )
             self.val = self.__create_dataset(
                 self.val_list,
                 self.dir_input,
                 self.enable_positional_encoding,
+                self.flow_size_threshold,
                 self.enable_gnn
             )
 
@@ -279,10 +278,15 @@ class DataModulePerFlow(LightningDataModule):
             else:
                 if self.test_on_empirical:
                     data_list_test = []
-                    shard_list=np.arange(0, 100)
+                    
+                    if self.enable_path:
+                        shard_list=np.arange(0, 100)
+                        n_hosts_list=[3,5,7]
+                    else:
+                        shard_list=np.arange(0, 200)
+                        n_hosts_list=[21]
+                    
                     n_flows_list=[2000]
-                    # n_hosts_list=[21]
-                    n_hosts_list=[3,5,7]
                     sample_list=[0]
                     if self.enable_segmentation:
                         len_per_period_all=[]
@@ -302,13 +306,8 @@ class DataModulePerFlow(LightningDataModule):
                                     fid = np.load(f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy")
                                     if len(fid)==len(set(fid)) and np.all(fid[:-1] <= fid[1:]) and len(fid)%n_flows==0:
                                         if self.enable_segmentation:
-                                            busy_periods_ori=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
+                                            busy_periods=np.load(f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}.npy", allow_pickle=True)
 
-                                            busy_periods=[]
-                                            for i in range(len(busy_periods_ori)):
-                                                busy_period=busy_periods_ori[i]
-                                                if len(busy_period)<500:
-                                                    busy_periods.append(busy_period)
                                             # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             len_per_period = [len(period) for period in busy_periods]
                                             
@@ -362,6 +361,7 @@ class DataModulePerFlow(LightningDataModule):
                 data_list_test,
                 self.dir_input,
                 self.enable_positional_encoding,
+                self.flow_size_threshold,
                 self.enable_gnn
             )
             logging.info(f"#tracks: test-{len(data_list_test)}")
@@ -425,13 +425,14 @@ class DataModulePerFlow(LightningDataModule):
 
         return train_part, test_part
 
-    def __create_dataset(self, data_list, dir_input,enable_positional_encoding,enable_gnn):
+    def __create_dataset(self, data_list, dir_input,enable_positional_encoding,flow_size_threshold, enable_gnn):
         if self.enable_segmentation:
             if self.enable_path:
                 return PathFctSldnSegment(
                     data_list,
                     dir_input,
                     enable_positional_encoding,
+                    flow_size_threshold,
                     enable_gnn
                 )
             else:
@@ -439,6 +440,7 @@ class DataModulePerFlow(LightningDataModule):
                     data_list,
                     dir_input,
                     enable_positional_encoding,
+                    flow_size_threshold,
                 )
         else:
             if self.output_type=="queueLen":
@@ -553,14 +555,15 @@ class LinkFctSldn(Dataset):
         return input_data, output_data, spec + topo_type, src_dst_pair_target_str
 
 class LinkFctSldnSegment(Dataset):
-    def __init__(self, data_list, dir_input,enable_positional_encoding):
+    def __init__(self, data_list, dir_input,enable_positional_encoding, flow_size_threshold):
         self.data_list = data_list
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
         self.lr = 10.0
         self.enable_positional_encoding = enable_positional_encoding
+        self.flow_size_threshold = flow_size_threshold
         logging.info(
-            f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}"
+            f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}"
         )
 
     def __len__(self):
@@ -574,44 +577,52 @@ class LinkFctSldnSegment(Dataset):
         feat_path = f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
         
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
-            busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
-            fid=np.array(busy_periods[segment_id])
-            # fid = np.arange(busy_period[0], busy_period[1] + 1)
-            sizes_flowsim = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
-            fats_flowsim = np.load(f"{dir_input_tmp}/fat.npy")[fid]
-            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
-
-            n_links_passed = np.ones_like(fcts_flowsim) * 2
-            base_delay = get_base_delay_link(sizes_flowsim, n_links_passed, self.lr)
-            i_fcts_flowsim = (sizes_flowsim + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE) * BYTE_TO_BIT / self.lr + base_delay
-            fcts_flowsim += base_delay
+            busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}_t{self.flow_size_threshold}.npy", allow_pickle=True)
+            busy_periods_time=np.load(f"{dir_input_tmp}/period_time{topo_type}_t{self.flow_size_threshold}.npy")
+            assert len(busy_periods)==len(busy_periods_time)
             
+            fid=np.array(busy_periods[segment_id])
+            period_start_time, period_end_time=busy_periods_time[segment_id]
+            
+            # fid = np.arange(busy_period[0], busy_period[1] + 1)
+            sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
+            fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
+            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
+            
+            n_links_passed = np.ones_like(fcts_flowsim) * 2
+            base_delay = get_base_delay_link(sizes, n_links_passed, self.lr)
+            i_fcts_flowsim = (sizes + np.ceil(sizes / MTU) * HEADER_SIZE) * BYTE_TO_BIT / self.lr + base_delay
+            fcts_flowsim += base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
             
             # Calculate inter-arrival times and adjust the first element
-            fats_ia_flowsim = np.diff(fats_flowsim)
-            fats_ia_flowsim = np.insert(fats_ia_flowsim, 0, 0)
+            fats_ia = np.diff(fats)
+            fats_ia = np.insert(fats_ia, 0, 0)
             
-            sizes_flowsim=np.log1p(sizes_flowsim)
-            fats_ia_flowsim=np.log1p(fats_ia_flowsim)
+            sizes=np.log1p(sizes)
+            fats_ia=np.log1p(fats_ia)
             
             # seq_len=np.full((len(fid), 1), len(fid))
-
-            # Generate positional encoding
-            if self.enable_positional_encoding:
-                positional_encodings = self.get_positional_encoding(len(fid), 3)
-                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim, positional_encodings)).astype(np.float32)
-            else:
-                input_data = np.column_stack((sizes_flowsim, fats_ia_flowsim, sldn_flowsim)).astype(np.float32)
-            # input_data = np.column_stack((input_data, seq_len)).astype(np.float32)
-            
-            # assert (input_data >= 0.0).all()
-            
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
             assert (output_data >= 1.0).all()
             
+            flag_from_last_period=np.array(fats < period_start_time)
+            flag_flow_incomplete=np.array(fats + fcts > period_end_time)
+            assert not flag_flow_incomplete.all()
+            
+            sldn_flowsim[flag_flow_incomplete] = 0
+            output_data[flag_flow_incomplete] = 0
+            # Generate positional encoding
+            if self.enable_positional_encoding:
+                positional_encodings = self.get_positional_encoding(len(fid), 3)
+                input_data = np.column_stack((sizes, fats_ia, sldn_flowsim, flag_from_last_period, positional_encodings)).astype(np.float32)
+            else:
+                input_data = np.column_stack((sizes, fats_ia, sldn_flowsim, flag_from_last_period)).astype(np.float32)
+            # input_data = np.column_stack((input_data, seq_len)).astype(np.float32)
+            
+            # assert (input_data >= 0.0).all()
             # Optionally save features for future epochs
             # np.savez(feat_path, input_data=input_data, output_data=output_data, adj_matrix=adj_matrix)
         else:
@@ -635,6 +646,7 @@ class PathFctSldnSegment(Dataset):
         data_list,
         dir_input,
         enable_positional_encoding,
+        flow_size_threshold,
         enable_gnn
     ):
         self.data_list = data_list
@@ -642,9 +654,10 @@ class PathFctSldnSegment(Dataset):
         self.use_first_epoch_logic = True
         self.lr = 10.0
         self.enable_positional_encoding = enable_positional_encoding
+        self.flow_size_threshold = flow_size_threshold
         self.enable_gnn=enable_gnn
         logging.info(
-            f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}"
+            f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn}"
         )
 
     def __len__(self):
@@ -661,7 +674,7 @@ class PathFctSldnSegment(Dataset):
         if not os.path.exists(feat_path) or self.use_first_epoch_logic:
             n_hosts = int(spec.split("_")[2][6:])
             
-            busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}.npy", allow_pickle=True)
+            busy_periods=np.load(f"{dir_input_tmp}/period{topo_type}_t{self.flow_size_threshold}.npy", allow_pickle=True)
             fid=np.array(busy_periods[segment_id]).astype(np.int32)
             fid=np.sort(fid)
             # fid=np.arange(busy_period[0], busy_period[1]+1)
