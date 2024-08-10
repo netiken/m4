@@ -17,7 +17,7 @@ class FCTStruct(Structure):
 def make_array(ctype, arr):
     return (ctype * len(arr))(*arr)
 
-C_LIB_PATH = "../../clibs/get_fct_mmf.so"
+C_LIB_PATH = "./clibs/get_fct_mmf.so"
 C_LIB = CDLL(C_LIB_PATH)
 C_LIB.get_fct_mmf.argtypes = [
     c_uint,
@@ -38,37 +38,39 @@ C_LIB.free_fctstruct.argtypes = [FCTStruct]
 C_LIB.free_fctstruct.restype = None
 
 class Inference:
-    def __init__(self, config_path, checkpoint_path, model_name, device='cuda'):
-        with open(config_path, 'r') as f:
-            self.config = yaml.load(f, Loader=yaml.FullLoader)
-        
-        self.lr=10
-        self.nhost=21
+    def __init__(self, model_config, training_config,checkpoint_path, lr, device='cuda'):
+        self.model_config = model_config
+        self.training_config = training_config
+        self.lr = lr
         self.device = torch.device(device)
-        self.model_name = model_name
+        self.model_name = model_config["model_name"]
         self.model = self.load_model(checkpoint_path)
         self.model.to(self.device)
         self.model.eval()
 
     def load_model(self, checkpoint_path):
-        model_config = self.config["model"]
-        training_config = self.config["training"]
+        model_config = self.model_config
+        training_config = self.training_config
         
         if self.model_name == "lstm":
             model = FlowSimLstm.load_from_checkpoint(
                 checkpoint_path, 
                 map_location=self.device,
-                n_layer=model_config["n_layer"],
+                 n_layer=model_config["n_layer"],
+                gcn_n_layer=model_config["gcn_n_layer"],
                 loss_fn_type=model_config["loss_fn_type"],
                 learning_rate=training_config["learning_rate"],
                 batch_size=training_config["batch_size"],
                 hidden_size=model_config["hidden_size"],
+                gcn_hidden_size=model_config["gcn_hidden_size"],
                 dropout=model_config["dropout"],
-                enable_val=False,
-                enable_dist=False,
-                input_size=2,
+                enable_val=training_config["enable_val"],
+                enable_dist=training_config["enable_dist"],
+                input_size=model_config["input_size"],
                 output_size=1,
                 enable_bidirectional=model_config.get("enable_bidirectional", False),
+                enable_positional_encoding=model_config.get("enable_positional_encoding", False),
+                enable_gnn=model_config.get("enable_gnn", False),
             )
         elif self.model_name == "transformer":
             model = FlowSimTransformer.load_from_checkpoint(
@@ -97,12 +99,13 @@ class Inference:
         
         return model
 
-    def preprocess(self, data, fsds, flag_from_last_period):
+    def preprocess(self, data, fsds, fcts_flowsim_gt,nhosts, flag_from_last_period):
         sizes, fats = data[:, 0], data[:, 1]
         fats_ia = np.diff(fats)
         fats_ia = np.insert(fats_ia, 0, 0)
         
-        fcts_flowsim=self.run_flow_simulation(sizes, fats, fsds, self.nhost)
+        # fcts_flowsim=self.run_flow_simulation(sizes, fats, fsds, nhosts)
+        fcts_flowsim=fcts_flowsim_gt
         n_links_passed = np.ones_like(fcts_flowsim) * 2
         base_delay = get_base_delay_link(sizes, n_links_passed, self.lr)
         i_fcts_flowsim = get_base_delay_transmission(sizes,self.lr) + base_delay
@@ -117,12 +120,12 @@ class Inference:
     def postprocess(self, output):
         return output.cpu().detach().numpy()
 
-    def infer(self, data, active_fsds,flag_from_last_period):
-        data = self.preprocess(data, active_fsds,flag_from_last_period)
+    def infer(self, data, active_fsds, active_fcts_flowsim_gt,nhosts, flag_from_last_period):
+        data = self.preprocess(data, active_fsds,active_fcts_flowsim_gt,nhosts,flag_from_last_period)
         with torch.no_grad():
             lengths = np.array([len(data)])
             if self.model_name == "lstm":
-                output, _ = self.model(data.unsqueeze(0), lengths)
+                output, _ = self.model(data.unsqueeze(0), lengths, None, None)
             elif self.model_name == "transformer":
                 output, _ = self.model(data.unsqueeze(0), lengths)
             else:
@@ -130,11 +133,11 @@ class Inference:
 
         return self.postprocess(output)
 
-    def run_flow_simulation(size, fat, fsd, nhost=21):
-        n_flows = len(size)
-        # Adjust nhost and flow source/destination if nhost is 21
-        if nhost == 21:
-            nhost = 3
+    def run_flow_simulation(self, size, fat, fsd, nhosts=21):
+        nflows = len(size)
+        # Adjust nhosts and flow source/destination if nhosts is 21
+        if nhosts == 21:
+            nhosts = 3
             fsd[:, 0] = 0
             fsd[:, 1] = 2
         # Prepare data for the C function
@@ -145,10 +148,8 @@ class Inference:
         topo_pt = make_array(c_int, np.array([1, 4]))
 
         # Run the flow simulation
-        res = C_LIB.get_fct_mmf(n_flows, fats_pt, sizes_pt, src_pt, dst_pt, nhost, topo_pt, 2, 8, 2, self.lr)
-        estimated_fcts = np.fromiter(res.estimated_fcts, dtype=np.float64, count=n_flows)
-
-        print("estimated_fcts: %f" % (np.mean(estimated_fcts)))
+        res = C_LIB.get_fct_mmf(nflows, fats_pt, sizes_pt, src_pt, dst_pt, nhosts, topo_pt, 2, 8, 2, self.lr)
+        estimated_fcts = np.fromiter(res.estimated_fcts, dtype=np.float64, count=nflows)
 
         C_LIB.free_fctstruct(res)
         return estimated_fcts
@@ -163,8 +164,9 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10,max_inflight_fl
     fsd=np.load(f"{dir_input_tmp}/fsd.npy")[fid]
     assert np.all(fid[:-1] <= fid[1:])
     
-    fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
-    i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
+    fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
+    i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
+    fcts_flowsim_gt=np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
     # sldn = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
     
     # pkt_head = np.clip(size, a_min=0, a_max=MTU)
@@ -176,9 +178,10 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10,max_inflight_fl
     #     size + np.ceil(size / MTU) * HEADER_SIZE
     # ) * BYTE_TO_BIT / lr + delay_propagation_perflow
 
-    return size, fat, fsd, fcts, i_fcts
+    assert len(size) == len(fcts)
+    return size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt
 
-def interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_flows=5, flow_size_threshold=100000):
+def interactive_inference(inference, size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt, max_inflight_flows=5, nhosts=21, flow_size_threshold=100000):
     if max_inflight_flows==0:
         max_inflight_flows=1000000
     n_flows_total = len(size)
@@ -193,6 +196,8 @@ def interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_
     
     i = 0
     while i < n_flows_total or len(active_flows) > 0:
+        if i%1000==0:
+            print(f"Flow {i} processed")
         # assert i==fid[i]
         flow_arrival_time = float('inf')
         flow_completion_time = float('inf')
@@ -207,7 +212,8 @@ def interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_
             active_flow_ids = np.array([f[2] for f in active_flows])
             active_fsds=np.array([f[3] for f in active_flows])
             flag_from_last_period=np.array([f[4] for f in active_flows])
-            predictions = inference.infer(active_flow_inputs,active_fsds,flag_from_last_period)
+            active_fcts_flowsim_gt=np.array([f[5] for f in active_flows])
+            predictions = inference.infer(active_flow_inputs,active_fsds,active_fcts_flowsim_gt,nhosts,flag_from_last_period)
             sldn_est = predictions[0, :, 0]
             
             sldn_est = np.where(np.isin(np.arange(len(sldn_est)), list(completed_flow_idx_set)), np.inf, sldn_est)
@@ -223,7 +229,7 @@ def interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_
             # Next event is flow arrival
             current_time = flow_arrival_time
             inflight_flows += 1
-            active_flows.append((size[i], flow_arrival_time, i, fsd[i], 0))
+            active_flows.append((size[i], flow_arrival_time, i, fsd[i], 0,fcts_flowsim_gt[i]))
             # print(f"Event: Flow {i} Arrival at {current_time}")
             i += 1
         else:
@@ -239,14 +245,15 @@ def interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_
                 completed_flow_idx_set=set()
                 # print("Busy period reset")
             else:
-                active_flows_tmp = []
-                completed_flow_idx_set=set()
-                for i in range(len(active_flows)):
-                    flow_tmp=active_flows[i]
-                    if flow_tmp[0]>=flow_size_threshold:
-                        flow_tmp[4]=1
-                        active_flows_tmp.append(flow_tmp)
-                active_flows=active_flows_tmp
+                n_small_flows=len([f for f in active_flows if f[0]<flow_size_threshold])
+                if n_small_flows==0:
+                    active_flows_tmp = []
+                    for active_flow_idx in range(len(active_flows)):
+                        flow_tmp=active_flows[active_flow_idx]
+                        if flow_tmp[0]>=flow_size_threshold and i not in completed_flow_idx_set:
+                            active_flows_tmp.append((flow_tmp[0], flow_tmp[1], flow_tmp[2], flow_tmp[3], 1,flow_tmp[5]))
+                    active_flows=active_flows_tmp
+                    completed_flow_idx_set=set()
         # print(f"Current time: {current_time}, Inflight flows: {inflight_flows}, Active flows: {len(active_flows)}")
     data_dict = {}
     # Compare recorded flow completion times with the ground truth
@@ -272,36 +279,44 @@ def interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_
 def main():
     parser = argparse.ArgumentParser(description='Interactive Inference Script')
     parser.add_argument('--config', type=str, required=False, help='Path to the YAML configuration file', default='./config/test_config_lstm.yaml')
-    parser.add_argument('--model', type=str, required=False, choices=['lstm', 'transformer'], help='Model type', default='lstm')
-    parser.add_argument('--input', type=str, required=False, help='Path to the input data directory', default='/data2/lichenni/perflow_link_empirical')
+    parser.add_argument('--input', type=str, required=False, help='Path to the input data directory', default='/data2/lichenni/perflow_link')
     parser.add_argument('--output', type=str, required=False, help='Path to save the output predictions', default='/data2/lichenni/output_perflow')
 
     args = parser.parse_args()
-    args.checkpoint = f"{args.output}/fct_link_50000_shard2000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
     
-    lr = 10
-    inference = Inference(config_path=args.config, checkpoint_path=args.checkpoint, model_name=args.model)
-    # empirical_str='_empirical'
-    empirical_str=''
+    
+    with open(args.config, 'r') as f:
+        config_info = yaml.load(f, Loader=yaml.FullLoader)
+        model_config = config_info["model"]
+        training_config = config_info["training"]
+        data_config = config_info["dataset"]
+    
+    lr = data_config["lr"]
+    flow_size_threshold=data_config["flow_size_threshold"]
+    
+    args.checkpoint = f"{args.output}/fct_link_{flow_size_threshold}_shard2000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
+    inference = Inference(model_config,training_config, checkpoint_path=args.checkpoint, lr=lr)
+    empirical_str='_empirical'
+    # empirical_str=''
     args.input+=empirical_str
     
     # for max_inflight_flows in [0, 4, 6, 15]:
     for max_inflight_flows in [0]:
         fct,sldn=[], []
-        for shard in np.arange(0, 10):
-            for n_flows in [2000]:
-                for n_hosts in [21]:
-                    spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
-                    size, fat, fsd, fcts, i_fcts = load_data(args.input, spec=spec, lr=lr,max_inflight_flows=max_inflight_flows)
+        for shard in np.arange(0, 1):
+            for nflows in [2000]:
+                for nhosts in [21]:
+                    spec = f"shard{shard}_nflows{nflows}_nhosts{nhosts}_lr{lr}Gbps"
+                    size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt = load_data(args.input, spec=spec, lr=lr,max_inflight_flows=max_inflight_flows)
                     
                     # Perform interactive inference
-                    fct_tmp,sldn_tmp=interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_flows=max_inflight_flows)
+                    fct_tmp,sldn_tmp=interactive_inference(inference, size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt, max_inflight_flows=max_inflight_flows,nhosts=nhosts,flow_size_threshold=flow_size_threshold)
                     print(f"Finished inference with workload={shard}. fct shape: {fct_tmp.shape}, sldn shape: {sldn_tmp.shape}")
                     fct.append(fct_tmp)
                     sldn.append(sldn_tmp)
         fct=np.array(fct)
         sldn=np.array(sldn)
         print(f"Finished inference with {max_inflight_flows} inflight flows. fct shape: {fct.shape}, sldn shape: {sldn.shape}")
-        np.savez(f'./res/inference_{max_inflight_flows}{empirical_str}.npz', fct=fct, sldn=sldn)
+        np.savez(f'./res/inference_{max_inflight_flows}_t{flow_size_threshold}{empirical_str}.npz', fct=fct, sldn=sldn)
 if __name__ == '__main__':
     main()
