@@ -1,22 +1,20 @@
 from torch.utils.data import Dataset
-import numpy as np
 from torch.utils.data import DataLoader
 from pytorch_lightning import LightningDataModule
 import torch
-from .consts import (
-    PLACEHOLDER,
-    balance_bins,
-    get_base_delay_link,
-    MTU,
-    HEADER_SIZE,
-    BYTE_TO_BIT,
-    LINK_TO_DELAY_DICT,
-    get_base_delay_pmn
-)
-from .func import decode_dict
+import numpy as np
 import json
 import logging
 import os
+from .consts import (
+    PLACEHOLDER,
+    balance_len_bins,
+    MTU,
+    HEADER_SIZE,
+    BYTE_TO_BIT,
+    get_base_delay_link,
+    get_base_delay_path
+)
 
 def collate_fn_link(batch):
     inputs, outputs, specs, src_dst_pairs = zip(*batch)
@@ -172,7 +170,7 @@ class DataModulePerFlow(LightningDataModule):
                     weights = len_per_period_all
                 elif sampling_method=="balanced":
                     # Bin the lengths
-                    binned_lengths = np.digitize(len_per_period_all, balance_bins)
+                    binned_lengths = np.digitize(len_per_period_all, balance_len_bins)
                     
                     # Create a dictionary to count the number of periods for each length
                     unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
@@ -254,13 +252,7 @@ class DataModulePerFlow(LightningDataModule):
                             if not os.path.exists(f"{dir_input_tmp}/flow_src_dst.npy"):
                                 continue
                             flow_src_dst = np.load(f"{dir_input_tmp}/flow_src_dst.npy")
-                            stats = decode_dict(
-                                np.load(
-                                    f"{dir_input_tmp}/stats.npy",
-                                    allow_pickle=True,
-                                    encoding="bytes",
-                                ).item()
-                            )
+                            stats = np.load(f'{dir_input_tmp}/{spec}/stats.npy', allow_pickle=True)
 
                             n_flows_total = stats["n_flows"]
                             if len(flow_src_dst) == n_flows_total:
@@ -330,7 +322,7 @@ class DataModulePerFlow(LightningDataModule):
                             weights = len_per_period_all > 0
                         elif self.sampling_method=="balanced":
                             # Bin the lengths
-                            binned_lengths = np.digitize(len_per_period_all, balance_bins)
+                            binned_lengths = np.digitize(len_per_period_all, balance_len_bins)
                             
                             # Create a dictionary to count the number of periods for each length
                             unique_lengths, counts = np.unique(binned_lengths, return_counts=True)
@@ -695,10 +687,9 @@ class PathFctSldnSegment(Dataset):
 
             # compute propagation delay
             n_links_passed = abs(fsd_flowsim[:, 0] - fsd_flowsim[:, 1])+flow_idx_nontarget_flowsim+flow_idx_nontarget_internal_flowsim
-            delay_comp=LINK_TO_DELAY_DICT[n_hosts][fsd_flowsim[:,0]]+LINK_TO_DELAY_DICT[n_hosts][fsd_flowsim[:,1]]
-            base_delay = get_base_delay_pmn(
+            base_delay = get_base_delay_path(
                 sizes=sizes_flowsim, n_links_passed=n_links_passed, lr_bottleneck=self.lr,flow_idx_target=flow_idx_target_flowsim,flow_idx_nontarget_internal=flow_idx_nontarget_internal_flowsim
-            )+delay_comp
+            )
 
             # load sldns from flowsim
             fcts_flowsim = (np.load(f"{dir_input_tmp}/fct_flowsim.npy"))[fid]+ base_delay
