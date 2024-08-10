@@ -13,7 +13,7 @@ BDP = 10 * MTU
 HEADER_SIZE = 48
 BYTE_TO_BIT = 8
 
-DELAY_PROPAGATION_BASE = 10000  # 1us
+DELAY_PROPAGATION_BASE = 1000  # 1us
 
 EPS = 1e-12
 
@@ -21,6 +21,9 @@ EPS = 1e-12
 
 balance_len_bins=[2, 4, 6, 8, 10, 15, 20, 30, 40, 50, 75, 100, 200]
 balance_len_bins_label=["(0, 2)", "[2,4)", "[4,6)", "[6,8)", "[8,10)", "[10,15)", "[15,20)", "[20,30)", "[30,40)", "[40,50)", "[50,75)", "[75,100)", "[100,200)", "[200, $\infty$)"]
+
+balance_size_bins=[1000, 5000, 10000, 20000, 50000, 200000, 1000000]
+balance_size_bins_label=["(0, 1MTU)","[1MTU, 5MTU)","[5MTU, 10MTU)","[10MTU, 20MTU)", "[20MTU, 50MTU)", "[50MTU, 200MTU)", "[200MTU, 1000MTU)","[1000MTU, $\infty$)"]
 
 class QueueEvent(Enum):
     ARRIVAL_FIRST_PKT = 1

@@ -16,7 +16,7 @@ dataset:
   segments_per_seq: 20
   sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: False
-  flow_size_threshold: 100000
+  flow_size_threshold: 50000
 
 # Model parameters
 model:
@@ -39,6 +39,6 @@ training:
   n_epochs: 1000
   batch_size: 32
   learning_rate: 0.0001
-  num_workers: 16
+  num_workers: 8
   enable_val: True
   enable_dist: True

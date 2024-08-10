@@ -9,9 +9,7 @@ import os
 from .consts import (
     PLACEHOLDER,
     balance_len_bins,
-    MTU,
-    HEADER_SIZE,
-    BYTE_TO_BIT,
+    get_base_delay_transmission,
     get_base_delay_link,
     get_base_delay_path
 )
@@ -583,7 +581,7 @@ class LinkFctSldnSegment(Dataset):
             
             n_links_passed = np.ones_like(fcts_flowsim) * 2
             base_delay = get_base_delay_link(sizes, n_links_passed, self.lr)
-            i_fcts_flowsim = (sizes + np.ceil(sizes / MTU) * HEADER_SIZE) * BYTE_TO_BIT / self.lr + base_delay
+            i_fcts_flowsim = get_base_delay_transmission(sizes,self.lr) + base_delay
             fcts_flowsim += base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
             
@@ -604,7 +602,7 @@ class LinkFctSldnSegment(Dataset):
             sizes=np.log1p(sizes)
             fats_ia=np.log1p(fats_ia)
             sldn_flowsim[flag_flow_incomplete] = 0
-            output_data[flag_flow_incomplete] = 0
+            output_data[flag_flow_incomplete] = PLACEHOLDER
             # Generate positional encoding
             if self.enable_positional_encoding:
                 positional_encodings = self.get_positional_encoding(len(fid), 3)
@@ -693,9 +691,7 @@ class PathFctSldnSegment(Dataset):
 
             # load sldns from flowsim
             fcts_flowsim = (np.load(f"{dir_input_tmp}/fct_flowsim.npy"))[fid]+ base_delay
-            i_fcts_flowsim = (
-                sizes_flowsim + np.ceil(sizes_flowsim / MTU) * HEADER_SIZE
-            ) * BYTE_TO_BIT / self.lr + base_delay
+            i_fcts_flowsim = get_base_delay_transmission(sizes_flowsim,self.lr) + base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
             sldn_flowsim = np.clip(sldn_flowsim, a_max=None, a_min=1.0)
             
