@@ -599,9 +599,6 @@ class LinkFctSldnSegment(Dataset):
             fats_ia = np.diff(fats)
             fats_ia = np.insert(fats_ia, 0, 0)
             
-            sizes=np.log1p(sizes)
-            fats_ia=np.log1p(fats_ia)
-            
             # seq_len=np.full((len(fid), 1), len(fid))
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
@@ -612,6 +609,8 @@ class LinkFctSldnSegment(Dataset):
             flag_flow_incomplete=np.array(fats + fcts > period_end_time)
             assert not flag_flow_incomplete.all()
             
+            sizes=np.log1p(sizes)
+            fats_ia=np.log1p(fats_ia)
             sldn_flowsim[flag_flow_incomplete] = 0
             output_data[flag_flow_incomplete] = 0
             # Generate positional encoding
