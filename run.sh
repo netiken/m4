@@ -35,3 +35,4 @@ cargo run --release -- --root=./data_test --mixes spec/motivation.mix.json ns3-c
 cargo run --release -- --root=./data_test --mixes spec/test.mix.json mlsys-test
 cargo run --release -- --root=./data_test --mixes spec/test.mix.json ns3-config
 
+time python main_inference_link.py
