@@ -8,10 +8,7 @@ from util.func import (
     fix_seed,
     create_logger,
 )
-from util.model import (
-    FlowSimLstm,
-    FlowSimTransformer
-)
+from util.model import FlowSimLstm, FlowSimTransformer
 from util.callback import OverrideEpochStepCallback
 import logging, os
 import torch
@@ -54,8 +51,8 @@ lr = dataset_config["lr"]
 note_str = f"{args.note}_" if args.note else ""
 program_name = f"{note_str}shard{len(shard_list)}_nflows{len(n_flows_list)}_nhosts{len(n_hosts_list)}_nsamples{len(sample_list)}_lr{lr}Gbps"
 override_epoch_step_callback = OverrideEpochStepCallback()
-dir_output=args.dir_output
-dir_input=args.dir_input
+dir_output = args.dir_output
+dir_input = args.dir_input
 
 if args.mode == "train":
     tb_logger = TensorBoardLogger(dir_output, name=program_name)
@@ -80,12 +77,12 @@ if args.mode == "train":
         logging.info(
             f"gloo: {torch.distributed.is_gloo_available()}, nccl: {torch.distributed.is_nccl_available()}"
         )
-        
+
         ddp_strategy = DDPStrategy(
-            process_group_backend="gloo", 
+            process_group_backend="gloo",
             # find_unused_parameters=True
         )
-        
+
     with open(f"{tb_logger.log_dir}/config.yaml", "w") as f:
         yaml.dump(config, f)
 
@@ -103,7 +100,9 @@ if args.mode == "train":
         topo_type=dataset_config.get("topo_type", ""),
         output_type=dataset_config.get("output_type", "fctSldn"),
         enable_segmentation=dataset_config.get("enable_segmentation", False),
-        enable_positional_encoding=model_config.get("enable_positional_encoding", False),
+        enable_positional_encoding=model_config.get(
+            "enable_positional_encoding", False
+        ),
         flow_size_threshold=dataset_config.get("flow_size_threshold", False),
         enable_gnn=model_config.get("enable_gnn", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
@@ -116,9 +115,11 @@ if args.mode == "train":
         checkpoint_callback = ModelCheckpoint(
             monitor="val_loss_sync" if enable_dist else "val_loss",
             dirpath=f"{tb_logger.log_dir}/checkpoints",
-            filename="model-{epoch:03d}-{step:05d}-{val_loss_sync:.2f}"
-            if enable_dist
-            else "model-{epoch:03d}-{step:05d}-{val_loss:.2f}",
+            filename=(
+                "model-{epoch:03d}-{step:05d}-{val_loss_sync:.2f}"
+                if enable_dist
+                else "model-{epoch:03d}-{step:05d}-{val_loss:.2f}"
+            ),
             save_top_k=5,
             save_last=True,
             # every_n_train_steps=5,
@@ -128,9 +129,11 @@ if args.mode == "train":
         checkpoint_callback = ModelCheckpoint(
             monitor="train_loss_sync" if enable_dist else "train_loss",
             dirpath=f"{tb_logger.log_dir}/checkpoints",
-            filename="model-{epoch:03d}-{step:05d}-{train_loss_sync:.2f}"
-            if enable_dist
-            else "model-{epoch:03d}-{step:05d}-{train_loss:.2f}",
+            filename=(
+                "model-{epoch:03d}-{step:05d}-{train_loss_sync:.2f}"
+                if enable_dist
+                else "model-{epoch:03d}-{step:05d}-{train_loss:.2f}"
+            ),
             save_top_k=5,
             save_last=True,
             # every_n_train_steps=5,
@@ -171,9 +174,15 @@ if args.mode == "train":
             input_size=model_config["input_size"],
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
-            enable_positional_encoding=model_config.get("enable_positional_encoding", False),
+            enable_positional_encoding=model_config.get(
+                "enable_positional_encoding", False
+            ),
             enable_gnn=model_config.get("enable_gnn", False),
-            loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
+            loss_average=(
+                "perperiod"
+                if dataset_config.get("sampling_method", "uniform") == "balanced"
+                else "perflow"
+            ),
         )
     elif model_name == "transformer":
         model = FlowSimTransformer(
@@ -198,9 +207,7 @@ if args.mode == "train":
     trainer.fit(model, datamodule=datamodule, ckpt_path=args.ckpt_path)
 else:
     DEVICE = torch.device(training_config["gpu"][0])
-    dir_train = (
-        f"{dir_output}/{program_name}/version_{args.version_id}"
-    )
+    dir_train = f"{dir_output}/{program_name}/version_{args.version_id}"
     print(f"load model: {dir_train}")
 
     tb_logger = TensorBoardLogger(dir_train, name="test")
@@ -226,7 +233,9 @@ else:
         topo_type=dataset_config.get("topo_type", ""),
         output_type=dataset_config.get("output_type", "fctSldn"),
         enable_segmentation=dataset_config.get("enable_segmentation", False),
-        enable_positional_encoding=model_config.get("enable_positional_encoding", False),
+        enable_positional_encoding=model_config.get(
+            "enable_positional_encoding", False
+        ),
         flow_size_threshold=dataset_config.get("flow_size_threshold", False),
         enable_gnn=model_config.get("enable_gnn", False),
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
@@ -273,9 +282,15 @@ else:
             input_size=model_config["input_size"],
             output_size=1,
             enable_bidirectional=model_config.get("enable_bidirectional", False),
-            enable_positional_encoding=model_config.get("enable_positional_encoding", False),
+            enable_positional_encoding=model_config.get(
+                "enable_positional_encoding", False
+            ),
             enable_gnn=model_config.get("enable_gnn", False),
-            loss_average='perperiod' if dataset_config.get("sampling_method", "uniform") == "balanced" else 'perflow',
+            loss_average=(
+                "perperiod"
+                if dataset_config.get("sampling_method", "uniform") == "balanced"
+                else "perflow"
+            ),
             save_dir=tb_logger.log_dir,
         )
     elif model_name == "transformer":

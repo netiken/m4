@@ -19,18 +19,43 @@ EPS = 1e-12
 
 # SIZE_BUCKET_LIST_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, $\infty$)"]
 
-balance_len_bins=[2, 4, 6, 8, 10, 15, 20, 30, 40, 50, 75, 100, 200]
-balance_len_bins_label=["(0, 2)", "[2,4)", "[4,6)", "[6,8)", "[8,10)", "[10,15)", "[15,20)", "[20,30)", "[30,40)", "[40,50)", "[50,75)", "[75,100)", "[100,200)", "[200, $\infty$)"]
+balance_len_bins = [2, 4, 6, 8, 10, 15, 20, 30, 40, 50, 75, 100, 200]
+balance_len_bins_label = [
+    "(0, 2)",
+    "[2,4)",
+    "[4,6)",
+    "[6,8)",
+    "[8,10)",
+    "[10,15)",
+    "[15,20)",
+    "[20,30)",
+    "[30,40)",
+    "[40,50)",
+    "[50,75)",
+    "[75,100)",
+    "[100,200)",
+    "[200, $\infty$)",
+]
 
-balance_size_bins=[1000, 5000, 10000, 20000, 50000, 200000, 1000000]
-balance_size_bins_label=["(0, 1MTU)","[1MTU, 5MTU)","[5MTU, 10MTU)","[10MTU, 20MTU)", "[20MTU, 50MTU)", "[50MTU, 200MTU)", "[200MTU, 1000MTU)","[1000MTU, $\infty$)"]
+balance_size_bins = [1000, 5000, 10000, 20000, 50000, 200000, 1000000]
+balance_size_bins_label = [
+    "(0, 1MTU)",
+    "[1MTU, 5MTU)",
+    "[5MTU, 10MTU)",
+    "[10MTU, 20MTU)",
+    "[20MTU, 50MTU)",
+    "[50MTU, 200MTU)",
+    "[200MTU, 1000MTU)",
+    "[1000MTU, $\infty$)",
+]
+
 
 class QueueEvent(Enum):
     ARRIVAL_FIRST_PKT = 1
     ARRIVAL_LAST_PKT = 2
     QUEUE_START = 3
     QUEUE_END = 4
-    
+
 
 # SIZE_BUCKET_LIST_LABEL = [
 #     "(0, 0.25MTU)",
@@ -61,16 +86,25 @@ class QueueEvent(Enum):
 #     7: 15 * MTU,
 # }
 
-def get_base_delay(sizes, n_links_passed, lr_bottleneck,flow_idx_target,flow_idx_nontarget_internal):
+
+def get_base_delay(
+    sizes, n_links_passed, lr_bottleneck, flow_idx_target, flow_idx_nontarget_internal
+):
     pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
     delay_propagation = DELAY_PROPAGATION_BASE * n_links_passed
-    pkt_size=(pkt_head + HEADER_SIZE) * BYTE_TO_BIT
-    delay_transmission = np.multiply(pkt_size / lr_bottleneck,flow_idx_target) + pkt_size / (lr_bottleneck*4)*(n_links_passed-2)-np.multiply(pkt_size / lr_bottleneck,flow_idx_nontarget_internal)
+    pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
+    delay_transmission = (
+        np.multiply(pkt_size / lr_bottleneck, flow_idx_target)
+        + pkt_size / (lr_bottleneck * 4) * (n_links_passed - 2)
+        - np.multiply(pkt_size / lr_bottleneck, flow_idx_nontarget_internal)
+    )
 
     return delay_propagation + delay_transmission
 
+
 def get_base_delay_transmission(sizes, lr_bottleneck):
     return (sizes + np.ceil(sizes / MTU) * HEADER_SIZE) * BYTE_TO_BIT / lr_bottleneck
+
 
 # def get_size_bucket_list(mtu, bdp):
 #     return np.array(
@@ -89,18 +123,26 @@ def get_base_delay_transmission(sizes, lr_bottleneck):
 # def get_size_bucket_list_output(mtu, bdp):
 #     return np.array([mtu, bdp, 5 * bdp])
 
-def get_base_delay_path(sizes, n_links_passed, lr_bottleneck,flow_idx_target,flow_idx_nontarget_internal):
+
+def get_base_delay_path(
+    sizes, n_links_passed, lr_bottleneck, flow_idx_target, flow_idx_nontarget_internal
+):
     pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
     delay_propagation = DELAY_PROPAGATION_BASE * n_links_passed
-    pkt_size=(pkt_head + HEADER_SIZE) * BYTE_TO_BIT
-    delay_transmission = np.multiply(pkt_size / lr_bottleneck,flow_idx_target) + pkt_size / (lr_bottleneck*4)*(n_links_passed-2)-np.multiply(pkt_size / lr_bottleneck,flow_idx_nontarget_internal)
+    pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
+    delay_transmission = (
+        np.multiply(pkt_size / lr_bottleneck, flow_idx_target)
+        + pkt_size / (lr_bottleneck * 4) * (n_links_passed - 2)
+        - np.multiply(pkt_size / lr_bottleneck, flow_idx_nontarget_internal)
+    )
 
     return delay_propagation + delay_transmission
+
 
 def get_base_delay_link(sizes, n_links_passed, lr_bottleneck):
     pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
     delay_propagation = DELAY_PROPAGATION_BASE * n_links_passed
-    pkt_size=(pkt_head + HEADER_SIZE) * BYTE_TO_BIT
+    pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
     delay_transmission = pkt_size / lr_bottleneck
 
     return delay_propagation + delay_transmission
