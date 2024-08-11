@@ -99,16 +99,14 @@ class Inference:
         
         return model
 
-    def preprocess(self, data, fsds, fcts_flowsim_gt,nhosts, flag_from_last_period):
-        sizes, fats = data[:, 0], data[:, 1]
+    def preprocess(self, flows_info_active):
+        sizes, fats, fcts_flowsim, flag_from_last_period = map(np.array, zip(*flows_info_active))
         fats_ia = np.diff(fats)
         fats_ia = np.insert(fats_ia, 0, 0)
         
-        # fcts_flowsim=self.run_flow_simulation(sizes, fats, fsds, nhosts)
-        fcts_flowsim=fcts_flowsim_gt
         n_links_passed = np.ones_like(fcts_flowsim) * 2
         base_delay = get_base_delay_link(sizes, n_links_passed, self.lr)
-        i_fcts_flowsim = get_base_delay_transmission(sizes,self.lr) + base_delay
+        i_fcts_flowsim = get_base_delay_transmission(sizes, self.lr) + base_delay
         fcts_flowsim += base_delay
         sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
         
@@ -120,8 +118,8 @@ class Inference:
     def postprocess(self, output):
         return output.cpu().detach().numpy()
 
-    def infer(self, data, active_fsds, active_fcts_flowsim_gt,nhosts, flag_from_last_period):
-        data = self.preprocess(data, active_fsds,active_fcts_flowsim_gt,nhosts,flag_from_last_period)
+    def infer(self, flows_info_active):
+        data = self.preprocess(flows_info_active)
         with torch.no_grad():
             lengths = np.array([len(data)])
             if self.model_name == "lstm":
@@ -133,26 +131,27 @@ class Inference:
 
         return self.postprocess(output)
 
-    def run_flow_simulation(self, size, fat, fsd, nhosts=21):
-        nflows = len(size)
-        # Adjust nhosts and flow source/destination if nhosts is 21
-        if nhosts == 21:
-            nhosts = 3
-            fsd[:, 0] = 0
-            fsd[:, 1] = 2
-        # Prepare data for the C function
-        fats_pt = make_array(c_double, fat)
-        sizes_pt = make_array(c_double, size)
-        src_pt = make_array(c_int, fsd[:, 0])
-        dst_pt = make_array(c_int, fsd[:, 1])
-        topo_pt = make_array(c_int, np.array([1, 4]))
+def run_flow_simulation(flows_info,nhosts=21, lr=10):
+    size, fat, fsd = map(np.array, zip(*flows_info))
+    nflows = len(size)
+    # Adjust nhosts and flow source/destination if nhosts is 21
+    if nhosts == 21:
+        nhosts = 3
+        fsd[:, 0] = 0
+        fsd[:, 1] = 2
+    # Prepare data for the C function
+    fats_pt = make_array(c_double, fat)
+    sizes_pt = make_array(c_double, size)
+    src_pt = make_array(c_int, fsd[:, 0])
+    dst_pt = make_array(c_int, fsd[:, 1])
+    topo_pt = make_array(c_int, np.array([1, 4]))
 
-        # Run the flow simulation
-        res = C_LIB.get_fct_mmf(nflows, fats_pt, sizes_pt, src_pt, dst_pt, nhosts, topo_pt, 2, 8, 2, self.lr)
-        estimated_fcts = np.fromiter(res.estimated_fcts, dtype=np.float64, count=nflows)
+    # Run the flow simulation
+    res = C_LIB.get_fct_mmf(nflows, fats_pt, sizes_pt, src_pt, dst_pt, nhosts, topo_pt, 2, 8, 2, lr)
+    estimated_fcts = np.fromiter(res.estimated_fcts, dtype=np.float64, count=nflows)
 
-        C_LIB.free_fctstruct(res)
-        return estimated_fcts
+    C_LIB.free_fctstruct(res)
+    return estimated_fcts
 
 def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10,max_inflight_flows=0):
     topo_type+=f"_i{max_inflight_flows}"
@@ -166,7 +165,6 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10,max_inflight_fl
     
     fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
     i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
-    fcts_flowsim_gt=np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
     # sldn = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
     
     # pkt_head = np.clip(size, a_min=0, a_max=MTU)
@@ -179,81 +177,92 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10,max_inflight_fl
     # ) * BYTE_TO_BIT / lr + delay_propagation_perflow
 
     assert len(size) == len(fcts)
-    return size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt
+    return size, fat, fsd, fcts, i_fcts
 
-def interactive_inference(inference, size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt, max_inflight_flows=5, nhosts=21, flow_size_threshold=100000):
+def interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_flows=5, nhosts=21, flow_size_threshold=100000,lr=10):
     if max_inflight_flows==0:
         max_inflight_flows=1000000
     n_flows_total = len(size)
-    print(f"Total number of flows: {n_flows_total}")
+    # print(f"Total number of flows: {n_flows_total}")
     # n_flows_total = 1000
-    active_flows = []
-    completed_flow_idx_set=set()
-    inflight_flows = 0
+    
+    # flow_id: [flag_complete_previous_period, flag_from_last_period]
+    flows_period = {}
+    
     flow_completion_times = {}
     flow_fct_sldn = {}
     current_time = 0  # Initialize the current time
+    inflight_flows = 0
     
-    i = 0
-    while i < n_flows_total or len(active_flows) > 0:
-        if i%1000==0:
-            print(f"Flow {i} processed")
-        # assert i==fid[i]
+    flow_id_in_prop = 0
+    while flow_id_in_prop < n_flows_total or len(flows_period) > 0:
+        # if flow_id_in_prop%1000==0:
+            # print(f"Flow {flow_id_in_prop} processed")
         flow_arrival_time = float('inf')
         flow_completion_time = float('inf')
-        sldn_est_min_idx=None
-        if i < n_flows_total:
+        if flow_id_in_prop < n_flows_total:
             if inflight_flows < max_inflight_flows:
-                flow_arrival_time = np.maximum(fat[i],current_time)
-                # print(f"Flow {i} added to queue")
+                flow_arrival_time = np.maximum(fat[flow_id_in_prop],current_time)
+                # print(f"Flow {flow_id_in_prop} added to queue")
 
-        if active_flows:
-            active_flow_inputs = np.array([[f[0], f[1]] for f in active_flows])
-            active_flow_ids = np.array([f[2] for f in active_flows])
-            active_fsds=np.array([f[3] for f in active_flows])
-            flag_from_last_period=np.array([f[4] for f in active_flows])
-            active_fcts_flowsim_gt=np.array([f[5] for f in active_flows])
-            predictions = inference.infer(active_flow_inputs,active_fsds,active_fcts_flowsim_gt,nhosts,flag_from_last_period)
+        if flows_period:
+            
+            flows_info=[[size[flow_id], fat[flow_id], fsd[flow_id]] for flow_id in flows_period]
+            
+            fcts_flowsim=run_flow_simulation(flows_info,nhosts, lr)
+            
+            flows_info_active=[]
+            flow_id_info_active=[]
+            for flow_idx, flow_id in enumerate(flows_period):
+                flow_info=flows_period[flow_id]
+                if not flow_info[0]:
+                    flow_id_info_active.append(flow_id)
+                    flows_info_active.append([size[flow_id], fat[flow_id],fcts_flowsim[flow_idx], flow_info[1]])
+            
+            predictions = inference.infer(flows_info_active)
             sldn_est = predictions[0, :, 0]
             
-            sldn_est = np.where(np.isin(np.arange(len(sldn_est)), list(completed_flow_idx_set)), np.inf, sldn_est)
-            sldn_est_min_idx = np.argmin(sldn_est, axis=0)
+            fct_stamp_est=[]
+            for idx, sldn_tmp in enumerate(sldn_est):
+                flow_id=flow_id_info_active[idx]
+                if flow_id in flow_completion_times:
+                    fct_stamp_est.append(np.inf)
+                else:
+                    fct_stamp_est.append(fat[flow_id]+sldn_tmp * i_fcts[flow_id])
             
-            completed_flow_id = active_flow_ids[sldn_est_min_idx]
-            sldn_min=sldn_est[sldn_est_min_idx]
-            fct_min = sldn_min * i_fcts[completed_flow_id]
-            fat_min = active_flows[sldn_est_min_idx][1]
-            flow_completion_time = fat_min + fct_min
+            min_idx = np.argmin(fct_stamp_est, axis=0)
+            
+            completed_flow_id = flow_id_info_active[min_idx]
+            sldn_min=sldn_est[min_idx]
+            flow_completion_time = fct_stamp_est[min_idx]
+            fat_min = fat[completed_flow_id]
 
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
             current_time = flow_arrival_time
             inflight_flows += 1
-            active_flows.append((size[i], flow_arrival_time, i, fsd[i], 0,fcts_flowsim_gt[i]))
-            # print(f"Event: Flow {i} Arrival at {current_time}")
-            i += 1
+            flows_period[flow_id_in_prop] = [0, 0]
+            # print(f"Event: Flow {flow_id_in_prop} Arrival at {current_time}")
+            flow_id_in_prop += 1
         else:
             # Next event is flow completion
             current_time = flow_completion_time
-            flow_completion_times[completed_flow_id] = fct_min
+            flow_completion_times[completed_flow_id] = flow_completion_time-fat_min
             flow_fct_sldn[completed_flow_id] = sldn_min
-            completed_flow_idx_set.add(sldn_est_min_idx)
             inflight_flows -= 1
             # print(f"Event: Flow {completed_flow_id} Completion at {current_time}")
             if inflight_flows == 0:
-                active_flows = []
-                completed_flow_idx_set=set()
+                flows_period = {}
                 # print("Busy period reset")
             else:
-                n_small_flows=len([f for f in active_flows if f[0]<flow_size_threshold])
+                n_small_flows=len([flow_id for flow_id in flows_period if size[flow_id]<flow_size_threshold and flow_id not in flow_completion_times])
                 if n_small_flows==0:
-                    active_flows_tmp = []
-                    for active_flow_idx in range(len(active_flows)):
-                        flow_tmp=active_flows[active_flow_idx]
-                        if flow_tmp[0]>=flow_size_threshold and i not in completed_flow_idx_set:
-                            active_flows_tmp.append((flow_tmp[0], flow_tmp[1], flow_tmp[2], flow_tmp[3], 1,flow_tmp[5]))
-                    active_flows=active_flows_tmp
-                    completed_flow_idx_set=set()
+                    for flow_id in flows_period:
+                        if not flows_period[flow_id][0]:
+                            flow_info=flows_period[flow_id]
+                            flows_period[flow_id][1] = 1
+                            if flow_id in flow_completion_times:
+                                flows_period[flow_id][0] = 1
         # print(f"Current time: {current_time}, Inflight flows: {inflight_flows}, Active flows: {len(active_flows)}")
     data_dict = {}
     # Compare recorded flow completion times with the ground truth
@@ -303,14 +312,15 @@ def main():
     # for max_inflight_flows in [0, 4, 6, 15]:
     for max_inflight_flows in [0]:
         fct,sldn=[], []
-        for shard in np.arange(0, 1):
+        for shard in np.arange(0, 5):
             for nflows in [2000]:
                 for nhosts in [21]:
                     spec = f"shard{shard}_nflows{nflows}_nhosts{nhosts}_lr{lr}Gbps"
-                    size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt = load_data(args.input, spec=spec, lr=lr,max_inflight_flows=max_inflight_flows)
+                    print(f"Processing workload={spec}")
+                    size, fat, fsd, fcts, i_fcts = load_data(args.input, spec=spec, lr=lr,max_inflight_flows=max_inflight_flows)
                     
                     # Perform interactive inference
-                    fct_tmp,sldn_tmp=interactive_inference(inference, size, fat, fsd, fcts, i_fcts,fcts_flowsim_gt, max_inflight_flows=max_inflight_flows,nhosts=nhosts,flow_size_threshold=flow_size_threshold)
+                    fct_tmp,sldn_tmp=interactive_inference(inference, size, fat, fsd, fcts, i_fcts, max_inflight_flows=max_inflight_flows,nhosts=nhosts,flow_size_threshold=flow_size_threshold,lr=lr)
                     print(f"Finished inference with workload={shard}. fct shape: {fct_tmp.shape}, sldn shape: {sldn_tmp.shape}")
                     fct.append(fct_tmp)
                     sldn.append(sldn_tmp)
