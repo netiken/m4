@@ -191,7 +191,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if self.enable_path:
                                         busy_periods = []
                                         for period in busy_periods_ori:
-                                            if len(period) < 20000:
+                                            if len(period) < 5000:
                                                 busy_periods.append(period)
                                     else:
                                         busy_periods = busy_periods_ori
@@ -881,17 +881,18 @@ class PathFctSldnSegment(Dataset):
             )
             assert len(busy_periods) == len(busy_periods_time)
 
-            fid = np.array(busy_periods[segment_id]).astype(np.int32)
+            fid = np.array(busy_periods[segment_id]).astype(int)
             fid = np.sort(fid)
             period_start_time, period_end_time = busy_periods_time[segment_id]
 
             # fid=np.arange(busy_period[0], busy_period[1]+1)
-            fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
-            fid_idx = np.where(np.isin(fid_ori, fid))[0]
+
             sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
             fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
             fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
+            fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+            fid_idx = np.where(np.isin(fid_ori, fid))[0]
 
             # compute propagation delay
             n_links_passed = abs(fsd[:, 0] - fsd[:, 1]) + 2
