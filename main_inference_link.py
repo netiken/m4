@@ -43,7 +43,7 @@ C_LIB.free_fctstruct.restype = None
 
 class Inference:
     def __init__(
-        self, model_config, training_config, checkpoint_path, lr, device="cuda:3"
+        self, model_config, training_config, checkpoint_path, lr, device="cuda:0"
     ):
         self.model_config = model_config
         self.training_config = training_config
@@ -342,7 +342,7 @@ def main():
         type=str,
         required=False,
         help="Path to the YAML configuration file",
-        default="./config/test_config_lstm.yaml",
+        default="./config/test_config_lstm_link.yaml",
     )
     parser.add_argument(
         "--input",

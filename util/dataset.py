@@ -898,9 +898,9 @@ class PathFctSldnSegment(Dataset):
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
             # Calculate inter-arrival times and adjust the first element
-            fats_ia_flowsim = np.diff(fats)
-            fats_ia_flowsim = np.insert(fats_ia_flowsim, 0, 0)
-            assert (fats_ia_flowsim >= 0).all()
+            fats_ia = np.diff(fats)
+            fats_ia = np.insert(fats_ia, 0, 0)
+            assert (fats_ia >= 0).all()
 
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
