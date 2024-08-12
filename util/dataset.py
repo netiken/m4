@@ -188,10 +188,13 @@ class DataModulePerFlow(LightningDataModule):
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-                                    busy_periods = []
-                                    for period in busy_periods_ori:
-                                        if len(period) < 20000:
-                                            busy_periods.append(period)
+                                    if self.enable_path:
+                                        busy_periods = []
+                                        for period in busy_periods_ori:
+                                            if len(period) < 20000:
+                                                busy_periods.append(period)
+                                    else:
+                                        busy_periods = busy_periods_ori
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                     len_per_period = [
                                         len(period) for period in busy_periods
@@ -433,7 +436,7 @@ class DataModulePerFlow(LightningDataModule):
                                                 ]
                                                 sample_indices = np.random.choice(
                                                     len(len_per_period),
-                                                    self.segments_per_seq * 10,
+                                                    self.segments_per_seq * 100,
                                                     replace=True,
                                                 )
 
