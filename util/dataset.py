@@ -181,14 +181,17 @@ class DataModulePerFlow(LightningDataModule):
                             if (
                                 len(fid) == len(set(fid))
                                 and np.all(fid[:-1] <= fid[1:])
-                                and len(fid) % n_flows == 0
+                                # and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
-                                    busy_periods = np.load(
+                                    busy_periods_ori = np.load(
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-
+                                    busy_periods = []
+                                    for period in busy_periods_ori:
+                                        if len(period) < 20000:
+                                            busy_periods.append(period)
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                     len_per_period = [
                                         len(period) for period in busy_periods
@@ -391,7 +394,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if (
                                         len(fid) == len(set(fid))
                                         and np.all(fid[:-1] <= fid[1:])
-                                        and len(fid) % n_flows == 0
+                                        # and len(fid) % n_flows == 0
                                     ):
                                         if self.enable_segmentation:
                                             busy_periods = np.load(
@@ -875,12 +878,13 @@ class PathFctSldnSegment(Dataset):
             )
             assert len(busy_periods) == len(busy_periods_time)
 
-            fid = np.array(busy_periods[segment_id])
+            fid = np.array(busy_periods[segment_id]).astype(np.int32)
             fid = np.sort(fid)
             period_start_time, period_end_time = busy_periods_time[segment_id]
 
             # fid=np.arange(busy_period[0], busy_period[1]+1)
-            # fid=np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+            fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+            fid_idx = np.where(np.isin(fid_ori, fid))[0]
             sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
             fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
@@ -902,8 +906,8 @@ class PathFctSldnSegment(Dataset):
             fats_ia = np.insert(fats_ia, 0, 0)
             assert (fats_ia >= 0).all()
 
-            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
-            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
+            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_idx]
+            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_idx]
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
             assert (output_data >= 1.0).all()
 
@@ -972,8 +976,8 @@ class PathFctSldnSegment(Dataset):
             edge_index.append([flow_node_idx, dst])
 
             for link_idx in range(src, dst):
-                edge_index.append([n_hosts+link_idx, flow_node_idx])
-                edge_index.append([flow_node_idx, n_hosts+link_idx])
+                edge_index.append([n_hosts + link_idx, flow_node_idx])
+                edge_index.append([flow_node_idx, n_hosts + link_idx])
 
         edge_index = np.array(edge_index).T
         return edge_index
