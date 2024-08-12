@@ -382,7 +382,7 @@ def main():
     # for max_inflight_flows in [0, 4, 6, 15]:
     for max_inflight_flows in [0]:
         fct, sldn = [], []
-        for shard in np.arange(0, 100):
+        for shard in np.arange(0, 50):
             for nflows in [2000]:
                 for nhosts in [21]:
                     spec = f"shard{shard}_nflows{nflows}_nhosts{nhosts}_lr{lr}Gbps"

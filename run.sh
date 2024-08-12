@@ -21,13 +21,13 @@ git add -A . ; git commit -m "format"; git push
 time run ../ckpts/model_llama.bin ../ckpts/model_mlp.bin ../ckpts/data_lr10Gbps_7 -b 10 -e 576 -n 7 -t 1 -f 30 -k 18000 -p 1 -c 0 -x 30 
 
 
-python main_train.py --train_config=./config/train_config_lstm.yaml --mode=train --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --note fct_link_10000
+python main_train.py --train_config=./config/train_config_lstm.yaml --mode=train --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --note fct_link_50000
 
 python main_train.py --train_config=./config/train_config_transformer.yaml --mode=train --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --note fct_transformer_noncausal_b
 
-python main_train.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_link_100000 --version_id 0 --dir_input=/data2/lichenni/path_perflow_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical
+python main_train.py --test_config=./config/test_config_lstm.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_link_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=fct_link_100000
 
-python main_train.py --test_config=./config/test_config_lstm.yaml --mode=test --note=fct_link_100000 --version_id 0 --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --test_on_train
+python main_train.py --test_config=./config/test_config_lstm.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --note=fct_link_100000 --test_on_train
 
 cargo run --release -- --root=./data_test --mixes spec/motivation.mix.json mlsys-test
 cargo run --release -- --root=./data_test --mixes spec/motivation.mix.json ns3-config

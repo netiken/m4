@@ -13,7 +13,7 @@ BDP = 10 * MTU
 HEADER_SIZE = 48
 BYTE_TO_BIT = 8
 
-DELAY_PROPAGATION_BASE = 1000  # 1us
+DELAY_PROPAGATION_BASE = {"link": 1000, "path": 10000}  # 1us
 
 EPS = 1e-12
 
@@ -124,11 +124,11 @@ def get_base_delay_transmission(sizes, lr_bottleneck):
 #     return np.array([mtu, bdp, 5 * bdp])
 
 
-def get_base_delay_path(
+def get_base_delay_pmn(
     sizes, n_links_passed, lr_bottleneck, flow_idx_target, flow_idx_nontarget_internal
 ):
     pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
-    delay_propagation = DELAY_PROPAGATION_BASE * n_links_passed
+    delay_propagation = DELAY_PROPAGATION_BASE["link"] * n_links_passed
     pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
     delay_transmission = (
         np.multiply(pkt_size / lr_bottleneck, flow_idx_target)
@@ -141,8 +141,19 @@ def get_base_delay_path(
 
 def get_base_delay_link(sizes, n_links_passed, lr_bottleneck):
     pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
-    delay_propagation = DELAY_PROPAGATION_BASE * n_links_passed
+    delay_propagation = DELAY_PROPAGATION_BASE["link"] * n_links_passed
     pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
     delay_transmission = pkt_size / lr_bottleneck
+
+    return delay_propagation + delay_transmission
+
+
+def get_base_delay_path(sizes, n_links_passed, lr_bottleneck):
+    pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
+    delay_propagation = DELAY_PROPAGATION_BASE["path"] * n_links_passed
+    pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
+    delay_transmission = pkt_size / lr_bottleneck + +pkt_size / (lr_bottleneck * 4) * (
+        n_links_passed - 2
+    )
 
     return delay_propagation + delay_transmission
