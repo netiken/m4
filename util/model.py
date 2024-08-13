@@ -8,7 +8,9 @@ import struct
 import os
 
 from .model_llama import Transformer, ModelArgs
-from torch_geometric.nn import GCNConv
+
+# from torch_geometric.nn import GCNConv
+from torch_geometric.nn import SAGEConv
 import torch.nn.functional as F
 
 
@@ -295,11 +297,14 @@ class Attention(nn.Module):
         return context, attn_weights
 
 
-# GCN model
-class GCNLayer(nn.Module):
+# GNN model
+
+
+class GNNLayer(nn.Module):
     def __init__(self, c_in, c_out):
-        super(GCNLayer, self).__init__()
-        self.conv = GCNConv(c_in, c_out)
+        super(GNNLayer, self).__init__()
+        self.conv = SAGEConv(c_in, c_out, aggr="mean")  # using mean aggregation
+        # self.conv = GCNConv(c_in, c_out)
 
     def forward(self, node_feats, edge_index):
         node_feats = self.conv(node_feats, edge_index)
@@ -417,7 +422,7 @@ class FlowSimLstm(LightningModule):
             )
             self.gcn_layers = nn.ModuleList(
                 [
-                    GCNLayer(
+                    GNNLayer(
                         2 if i == 0 else gcn_hidden_size,
                         gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
                     )
@@ -448,7 +453,7 @@ class FlowSimLstm(LightningModule):
         self.save_dir = save_dir
         self.loss_average = loss_average
         logging.info(
-            f"model: {n_layer}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}"
+            f"model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}"
         )
 
     def _get_loss_fn(self, loss_fn_type):
@@ -478,7 +483,7 @@ class FlowSimLstm(LightningModule):
                     (num_link_nodes, feature_dim), 0.0, device=x.device
                 )
                 x_gnn_input = torch.cat(
-                    [link_node_feats, x[i, :num_flow_nodes, [0, 2]]], dim=0
+                    [link_node_feats, x[i, :num_flow_nodes, [2, 3]]], dim=0
                 )
 
                 for gcn in self.gcn_layers:

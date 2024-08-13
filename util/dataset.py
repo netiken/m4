@@ -916,22 +916,28 @@ class PathFctSldnSegment(Dataset):
             fats_ia = np.log1p(fats_ia)
             sldn_flowsim[flag_flow_incomplete] = 0
             output_data[flag_flow_incomplete] = PLACEHOLDER
-
             # Generate positional encoding
             if self.enable_positional_encoding:
-                positional_encodings = self.get_positional_encoding(len(fid), 3)
+                positional_encodings = self.get_positional_encoding(len(fid), 4)
                 input_data = np.column_stack(
                     (
-                        sizes,
-                        fats_ia,
                         sldn_flowsim,
+                        fats_ia,
+                        sizes,
+                        n_links_passed,
                         flag_from_last_period,
                         positional_encodings,
                     )
                 ).astype(np.float32)
             else:
                 input_data = np.column_stack(
-                    (sizes, fats_ia, sldn_flowsim, flag_from_last_period)
+                    (
+                        sldn_flowsim,
+                        fats_ia,
+                        sizes,
+                        n_links_passed,
+                        flag_from_last_period,
+                    )
                 ).astype(np.float32)
 
             # Compute the adjacency matrix for the bipartite graph

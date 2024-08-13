@@ -13,7 +13,7 @@ BDP = 10 * MTU
 HEADER_SIZE = 48
 BYTE_TO_BIT = 8
 
-DELAY_PROPAGATION_BASE = {"link": 1000, "path": 10000}  # 1us
+DELAY_PROPAGATION_BASE = {"link": 1000, "path": 1000}  # 1us
 
 EPS = 1e-12
 
