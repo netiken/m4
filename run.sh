@@ -23,9 +23,7 @@ time run ../ckpts/model_llama.bin ../ckpts/model_mlp.bin ../ckpts/data_lr10Gbps_
 # train
 python main_train.py --train_config=./config/train_config_lstm_link.yaml --mode=train --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --note fct_link_50000
 
-python main_train.py --train_config=./config/train_config_lstm_path.yaml --mode=train --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note fct_path_200000
-
-python main_train.py --train_config=./config/train_config_transformer.yaml --mode=train --dir_input=/data2/lichenni/path_perflow_1k --dir_output=/data2/lichenni/output_perflow --note fct_transformer_noncausal_b
+python main_train.py --train_config=./config/train_config_lstm_path.yaml --mode=train --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note fct_path_200000_gnn
 
 # test
 python main_train.py --test_config=./config/test_config_lstm_link.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_link_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=fct_link_200000
