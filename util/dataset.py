@@ -66,41 +66,28 @@ def collate_fn_path(batch):
         padded_inputs[i, : input.shape[0], :] = input
         padded_outputs[i, : output.shape[0], :] = output
 
-    if edge_indices is None:
-        return (
-            torch.tensor(padded_inputs),
-            torch.tensor(padded_outputs),
-            lengths,
-            specs,
-            src_dst_pairs,
-            None,
-            None,
-        )
-    else:
-        # Determine the maximum number of edges
-        max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
+    # Determine the maximum number of edges
+    max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
 
-        # Pad edge indices
-        padded_edge_indices = []
-        edge_indices_len = []
-        for edge_index in edge_indices:
-            padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
-            padded_edge_index[:, : edge_index.shape[1]] = edge_index
-            padded_edge_indices.append(
-                torch.tensor(padded_edge_index, dtype=torch.long)
-            )
-            edge_indices_len.append(edge_index.shape[1])
+    # Pad edge indices
+    padded_edge_indices = []
+    edge_indices_len = []
+    for edge_index in edge_indices:
+        padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
+        padded_edge_index[:, : edge_index.shape[1]] = edge_index
+        padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
+        edge_indices_len.append(edge_index.shape[1])
 
-        padded_edge_indices = torch.stack(padded_edge_indices)
-        return (
-            torch.tensor(padded_inputs),
-            torch.tensor(padded_outputs),
-            lengths,
-            specs,
-            src_dst_pairs,
-            padded_edge_indices,
-            np.array(edge_indices_len),
-        )
+    padded_edge_indices = torch.stack(padded_edge_indices)
+    return (
+        torch.tensor(padded_inputs),
+        torch.tensor(padded_outputs),
+        lengths,
+        specs,
+        src_dst_pairs,
+        padded_edge_indices,
+        np.array(edge_indices_len),
+    )
 
 
 class DataModulePerFlow(LightningDataModule):
@@ -436,7 +423,7 @@ class DataModulePerFlow(LightningDataModule):
                                                 ]
                                                 sample_indices = np.random.choice(
                                                     len(len_per_period),
-                                                    self.segments_per_seq * 100,
+                                                    self.segments_per_seq * 10,
                                                     replace=True,
                                                 )
 
@@ -499,10 +486,16 @@ class DataModulePerFlow(LightningDataModule):
                         weights = weights / np.sum(weights)
                         sample_indices = np.random.choice(
                             len(weights),
-                            min(n_samples, len(weights)),
-                            replace=False,
+                            n_samples,
+                            replace=True,
                             p=weights,
                         )
+                        # sample_indices = np.random.choice(
+                        #     len(weights),
+                        #     min(n_samples, len(weights)),
+                        #     replace=False,
+                        #     p=weights,
+                        # )
 
                         data_list_test = [data_list_test[i] for i in sample_indices]
 
