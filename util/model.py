@@ -423,7 +423,7 @@ class FlowSimLstm(LightningModule):
             self.gcn_layers = nn.ModuleList(
                 [
                     GNNLayer(
-                        2 if i == 0 else gcn_hidden_size,
+                        3 if i == 0 else gcn_hidden_size,
                         gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
                     )
                     for i in range(gcn_n_layer)
@@ -468,7 +468,7 @@ class FlowSimLstm(LightningModule):
     def forward(self, x, lengths, edge_index, edge_index_len):
         if self.enable_gnn:
             batch_size = x.size(0)
-            feature_dim = 2
+            feature_dim = 3
 
             batch_gnn_output = torch.zeros(
                 (batch_size, x.size(1), x.size(2)), device=x.device
@@ -483,7 +483,7 @@ class FlowSimLstm(LightningModule):
                     (num_link_nodes, feature_dim), 0.0, device=x.device
                 )
                 x_gnn_input = torch.cat(
-                    [link_node_feats, x[i, :num_flow_nodes, [2, 3]]], dim=0
+                    [link_node_feats, x[i, :num_flow_nodes, [0, 2, 3]]], dim=0
                 )
 
                 for gcn in self.gcn_layers:
