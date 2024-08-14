@@ -28,21 +28,21 @@ class WeightedL1Loss(nn.Module):
         super(WeightedL1Loss, self).__init__()
 
     def forward(self, prediction, target, loss_average="perflow"):
-        # if loss_average == "perflow":
-        elementwise_loss = torch.abs(prediction - target).sum()
-        weighted_loss = elementwise_loss / target.sum()
-        # elif loss_average == "perperiod":
-        #     if prediction.dim() > 1:
-        #         sequencewise_loss = torch.abs(prediction - target).sum(
-        #             dim=1
-        #         ) / target.sum(dim=1).to(prediction.device)
-        #     else:
-        #         sequencewise_loss = torch.abs(
-        #             prediction - target
-        #         ).sum() / target.sum().to(prediction.device)
-        #     weighted_loss = torch.mean(sequencewise_loss)
-        # else:
-        #     raise ValueError(f"Unsupported loss average type: {loss_average}")
+        if loss_average == "perflow":
+            elementwise_loss = torch.abs(prediction - target).sum()
+            weighted_loss = elementwise_loss / target.sum()
+        elif loss_average == "perperiod":
+            if prediction.dim() > 1:
+                sequencewise_loss = torch.abs(prediction - target).sum(
+                    dim=1
+                ) / target.sum(dim=1).to(prediction.device)
+            else:
+                sequencewise_loss = torch.abs(
+                    prediction - target
+                ).sum() / target.sum().to(prediction.device)
+            weighted_loss = torch.mean(sequencewise_loss)
+        else:
+            raise ValueError(f"Unsupported loss average type: {loss_average}")
         return weighted_loss
 
 
@@ -423,7 +423,7 @@ class FlowSimLstm(LightningModule):
             self.gcn_layers = nn.ModuleList(
                 [
                     GNNLayer(
-                        5 if i == 0 else gcn_hidden_size,
+                        4 if i == 0 else gcn_hidden_size,
                         gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
                     )
                     for i in range(gcn_n_layer)
@@ -468,7 +468,7 @@ class FlowSimLstm(LightningModule):
     def forward(self, x, lengths, edge_index, edge_index_len):
         if self.enable_gnn:
             batch_size = x.size(0)
-            feature_dim = 5
+            feature_dim = 4
 
             batch_gnn_output = torch.zeros(
                 (batch_size, x.size(1), x.size(2)), device=x.device
@@ -483,7 +483,7 @@ class FlowSimLstm(LightningModule):
                     (num_link_nodes, feature_dim), 0.0, device=x.device
                 )
                 x_gnn_input = torch.cat(
-                    [link_node_feats, x[i, :num_flow_nodes, :]], dim=0
+                    [link_node_feats, x[i, :num_flow_nodes, [0, 2, 3, 4]]], dim=0
                 )
 
                 for gcn in self.gcn_layers:
