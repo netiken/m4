@@ -171,17 +171,17 @@ class DataModulePerFlow(LightningDataModule):
                                 and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
-                                    busy_periods_ori = np.load(
+                                    busy_periods = np.load(
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-                                    if self.enable_path:
-                                        busy_periods = []
-                                        for period in busy_periods_ori:
-                                            if len(period) < 1000:
-                                                busy_periods.append(period)
-                                    else:
-                                        busy_periods = busy_periods_ori
+                                    # if self.enable_path:
+                                    #     busy_periods = []
+                                    #     for period in busy_periods_ori:
+                                    #         if len(period) < 1000:
+                                    #             busy_periods.append(period)
+                                    # else:
+                                    #     busy_periods = busy_periods_ori
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                     len_per_period = [
                                         len(period) for period in busy_periods
@@ -204,7 +204,7 @@ class DataModulePerFlow(LightningDataModule):
 
                                         sample_indices = np.random.choice(
                                             len(len_per_period),
-                                            segments_per_seq * 10,
+                                            segments_per_seq * 3,
                                             replace=True,
                                         )
 
@@ -355,8 +355,8 @@ class DataModulePerFlow(LightningDataModule):
                     data_list_test = []
 
                     if self.enable_path:
-                        shard_list = np.arange(0, 300)
-                        n_hosts_list = [7]
+                        shard_list = np.arange(0, 100)
+                        n_hosts_list = [5]
                     else:
                         shard_list = np.arange(0, 100)
                         n_hosts_list = [21]
@@ -423,7 +423,7 @@ class DataModulePerFlow(LightningDataModule):
                                                 ]
                                                 sample_indices = np.random.choice(
                                                     len(len_per_period),
-                                                    self.segments_per_seq * 10,
+                                                    self.segments_per_seq * 3,
                                                     replace=True,
                                                 )
 
@@ -484,18 +484,18 @@ class DataModulePerFlow(LightningDataModule):
                                 weights[period_indices] = length_weights / count
 
                         weights = weights / np.sum(weights)
-                        sample_indices = np.random.choice(
-                            len(weights),
-                            n_samples,
-                            replace=True,
-                            p=weights,
-                        )
                         # sample_indices = np.random.choice(
                         #     len(weights),
-                        #     min(n_samples, len(weights)),
-                        #     replace=False,
+                        #     n_samples,
+                        #     replace=True,
                         #     p=weights,
                         # )
+                        sample_indices = np.random.choice(
+                            len(weights),
+                            min(n_samples, len(weights)),
+                            replace=False,
+                            p=weights,
+                        )
 
                         data_list_test = [data_list_test[i] for i in sample_indices]
 
@@ -969,7 +969,7 @@ class PathFctSldnSegment(Dataset):
     def compute_edge_index(self, fid, n_hosts, fsd_flowsim):
         edge_index = []
         n_flows = len(fid)
-        n_links = 2*n_hosts-1
+        n_links = 2 * n_hosts - 1
         for i in range(len(fid)):
             src = fsd_flowsim[i, 0]
             dst = fsd_flowsim[i, 1]
