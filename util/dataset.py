@@ -168,7 +168,7 @@ class DataModulePerFlow(LightningDataModule):
                             if (
                                 len(fid) == len(set(fid))
                                 and np.all(fid[:-1] <= fid[1:])
-                                # and len(fid) % n_flows == 0
+                                and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
                                     busy_periods_ori = np.load(
@@ -178,7 +178,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if self.enable_path:
                                         busy_periods = []
                                         for period in busy_periods_ori:
-                                            if len(period) < 5000:
+                                            if len(period) < 1000:
                                                 busy_periods.append(period)
                                     else:
                                         busy_periods = busy_periods_ori
@@ -355,8 +355,8 @@ class DataModulePerFlow(LightningDataModule):
                     data_list_test = []
 
                     if self.enable_path:
-                        shard_list = np.arange(0, 100)
-                        n_hosts_list = [3, 5, 7]
+                        shard_list = np.arange(0, 300)
+                        n_hosts_list = [7]
                     else:
                         shard_list = np.arange(0, 100)
                         n_hosts_list = [21]
@@ -384,7 +384,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if (
                                         len(fid) == len(set(fid))
                                         and np.all(fid[:-1] <= fid[1:])
-                                        # and len(fid) % n_flows == 0
+                                        and len(fid) % n_flows == 0
                                     ):
                                         if self.enable_segmentation:
                                             busy_periods = np.load(
@@ -884,8 +884,9 @@ class PathFctSldnSegment(Dataset):
             fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
             fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
-            fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
-            fid_idx = np.where(np.isin(fid_ori, fid))[0]
+            # fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+            # fid_idx = np.where(np.isin(fid_ori, fid))[0]
+            fid_idx = fid
 
             # compute propagation delay
             n_links_passed = abs(fsd[:, 0] - fsd[:, 1]) + 2
@@ -967,20 +968,21 @@ class PathFctSldnSegment(Dataset):
 
     def compute_edge_index(self, fid, n_hosts, fsd_flowsim):
         edge_index = []
-        n_links = 2 * n_hosts - 1
+        n_flows = len(fid)
+        n_links = 2*n_hosts-1
         for i in range(len(fid)):
             src = fsd_flowsim[i, 0]
             dst = fsd_flowsim[i, 1]
-            flow_node_idx = n_links + i
+            flow_node_idx = i
             assert src < dst
-            edge_index.append([src, flow_node_idx])
-            edge_index.append([flow_node_idx, src])
-            edge_index.append([dst, flow_node_idx])
-            edge_index.append([flow_node_idx, dst])
+            edge_index.append([n_flows + src, flow_node_idx])
+            edge_index.append([flow_node_idx, n_flows + src])
+            edge_index.append([n_links + n_flows + dst, flow_node_idx])
+            edge_index.append([flow_node_idx, n_links + n_flows + dst])
 
             for link_idx in range(src, dst):
-                edge_index.append([n_hosts + link_idx, flow_node_idx])
-                edge_index.append([flow_node_idx, n_hosts + link_idx])
+                edge_index.append([n_flows + n_hosts + link_idx, flow_node_idx])
+                edge_index.append([flow_node_idx, n_flows + n_hosts + link_idx])
 
         edge_index = np.array(edge_index).T
         return edge_index
