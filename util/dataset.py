@@ -204,7 +204,7 @@ class DataModulePerFlow(LightningDataModule):
 
                                         sample_indices = np.random.choice(
                                             len(len_per_period),
-                                            segments_per_seq * 3,
+                                            segments_per_seq * 10,
                                             replace=True,
                                         )
 
@@ -423,7 +423,7 @@ class DataModulePerFlow(LightningDataModule):
                                                 ]
                                                 sample_indices = np.random.choice(
                                                     len(len_per_period),
-                                                    self.segments_per_seq * 3,
+                                                    self.segments_per_seq * 10,
                                                     replace=True,
                                                 )
 
@@ -603,6 +603,7 @@ class DataModulePerFlow(LightningDataModule):
                     dir_input,
                     enable_positional_encoding,
                     flow_size_threshold,
+                    enable_gnn,
                 )
         else:
             if self.output_type == "queueLen":
@@ -726,7 +727,13 @@ class LinkFctSldn(Dataset):
 
 class LinkFctSldnSegment(Dataset):
     def __init__(
-        self, data_list, dir_input, enable_positional_encoding, flow_size_threshold
+        self,
+        data_list,
+        dir_input,
+        enable_positional_encoding,
+        flow_size_threshold,
+        enable_gnn,
+        enable_abstime=True,
     ):
         self.data_list = data_list
         self.dir_input = dir_input
@@ -734,8 +741,10 @@ class LinkFctSldnSegment(Dataset):
         self.lr = 10.0
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
+        self.enable_gnn = enable_gnn
+        self.enable_abstime = enable_abstime
         logging.info(
-            f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}"
+            f"call LinkFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn},enable_abstime={enable_abstime}"
         )
 
     def __len__(self):
@@ -762,6 +771,7 @@ class LinkFctSldnSegment(Dataset):
 
             fid = np.array(busy_periods[segment_id])
             period_start_time, period_end_time = busy_periods_time[segment_id]
+            assert np.all(fid[:-1] <= fid[1:])
 
             # fid = np.arange(busy_period[0], busy_period[1] + 1)
             sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
@@ -775,8 +785,11 @@ class LinkFctSldnSegment(Dataset):
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
             # Calculate inter-arrival times and adjust the first element
-            fats_ia = np.diff(fats)
-            fats_ia = np.insert(fats_ia, 0, 0)
+            if self.enable_abstime:
+                fats_ia = fats - fats[0]
+            else:
+                fats_ia = np.diff(fats)
+                fats_ia = np.insert(fats_ia, 0, 0)
 
             # seq_len=np.full((len(fid), 1), len(fid))
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
