@@ -494,7 +494,7 @@ class FlowSimLstm(LightningModule):
                     num_link_nodes = max_node_index + 1 - num_flow_nodes
 
                     link_node_feats = torch.full(
-                        (num_link_nodes, feature_dim), 0.0, device=x.device
+                        (num_link_nodes, feature_dim), 10.0, device=x.device
                     )
                     x_gnn_input = torch.cat(
                         [x[i, :num_flow_nodes, [0, 2, 3, 4]], link_node_feats], dim=0
@@ -522,7 +522,7 @@ class FlowSimLstm(LightningModule):
                     num_link_nodes = max_node_index + 1 - num_flow_nodes
                     assert num_link_nodes == 1
                     link_node_feats = torch.full(
-                        (num_link_nodes, feature_dim), 0.0, device=x.device
+                        (num_link_nodes, feature_dim), 10.0, device=x.device
                     )
                     x_gnn_input = torch.cat(
                         [x[i, :num_flow_nodes, :], link_node_feats], dim=0
@@ -546,8 +546,10 @@ class FlowSimLstm(LightningModule):
             edge_index,
             edge_index_len,
         ) = batch
-
-        estimated, _ = self(input, lengths, edge_index, edge_index_len)
+        if (not self.enable_path) and self.enable_gnn:
+            estimated = self(input, lengths, edge_index, edge_index_len)
+        else:
+            estimated, _ = self(input, lengths, edge_index, edge_index_len)
 
         # Generate a mask based on lengths
         attention_mask = output.squeeze() >= 1.0
@@ -617,7 +619,7 @@ class FlowSimLstm(LightningModule):
         #     self.model_lstm.parameters(), lr=self.learning_rate
         # )
         # return optimizer
-        if not self.enable_path and self.enable_gnn:
+        if (not self.enable_path) and self.enable_gnn:
             parameters = []
         else:
             parameters = list(self.model_lstm.parameters())

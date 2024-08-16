@@ -15,6 +15,7 @@ dataset:
   segments_per_seq: 20
   sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: False
+  enable_abstime: False
   flow_size_threshold: 200000
 
 # Model parameters
@@ -22,14 +23,14 @@ model:
   model_name: "lstm"
   input_size: 4
   n_layer: 2
-  gcn_n_layer: 4
+  gcn_n_layer: 2
   loss_fn_type: "l1"
   hidden_size: 512
   gcn_hidden_size: 512
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
-  enable_gnn: False
+  enable_gnn: True
 
 # Training parameters
 training:

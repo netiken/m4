@@ -124,6 +124,7 @@ class DataModulePerFlow(LightningDataModule):
         enable_positional_encoding=False,
         flow_size_threshold=100000,
         enable_gnn=False,
+        enable_abstime=False,
         segments_per_seq=200,
         sampling_method="uniform",  # uniform, weighted, balanced
         enable_path=False,
@@ -153,6 +154,7 @@ class DataModulePerFlow(LightningDataModule):
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_gnn = enable_gnn
+        self.enable_abstime = enable_abstime
         logging.info(
             f"call DataModulePerFlow: dir_input={dir_input}, dir_output={dir_output}, lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}"
         )
@@ -322,6 +324,7 @@ class DataModulePerFlow(LightningDataModule):
                 self.enable_positional_encoding,
                 self.flow_size_threshold,
                 self.enable_gnn,
+                self.enable_abstime,
             )
             self.val = self.__create_dataset(
                 self.val_list,
@@ -329,6 +332,7 @@ class DataModulePerFlow(LightningDataModule):
                 self.enable_positional_encoding,
                 self.flow_size_threshold,
                 self.enable_gnn,
+                self.enable_abstime,
             )
 
             self.__dump_data_list(self.dir_output)
@@ -532,6 +536,7 @@ class DataModulePerFlow(LightningDataModule):
                 self.enable_positional_encoding,
                 self.flow_size_threshold,
                 self.enable_gnn,
+                self.enable_abstime,
             )
             logging.info(f"#tracks: test-{len(data_list_test)}")
 
@@ -601,6 +606,7 @@ class DataModulePerFlow(LightningDataModule):
         enable_positional_encoding,
         flow_size_threshold,
         enable_gnn,
+        enable_abstime,
     ):
         if self.enable_segmentation:
             if self.enable_path:
@@ -618,6 +624,7 @@ class DataModulePerFlow(LightningDataModule):
                     enable_positional_encoding,
                     flow_size_threshold,
                     enable_gnn,
+                    enable_abstime,
                 )
         else:
             if self.output_type == "queueLen":
@@ -747,7 +754,7 @@ class LinkFctSldnSegment(Dataset):
         enable_positional_encoding,
         flow_size_threshold,
         enable_gnn,
-        enable_abstime=True,
+        enable_abstime,
     ):
         self.data_list = data_list
         self.dir_input = dir_input
