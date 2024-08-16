@@ -14,7 +14,7 @@ ps aux | head -1; ps aux | grep ^lichenni| sort -rnk 4 | more
 
 tensorboard --logdir /data2/lichenni/output_perflow/ --port 8009 --bind_all
 
-git add -A . ; git commit -m "fix link direction bug"; git push
+git add -A . ; git commit -m "wrap up after weekly meeting"; git push
 
 >/dev/null
 
@@ -30,7 +30,7 @@ python main_train.py --test_config=./config/test_config_lstm_link.yaml --mode=te
 
 python main_train.py --test_config=./config/test_config_lstm_link.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --note=fct_link_200000 --test_on_train
 
-python main_train.py --test_config=./config/test_config_lstm_path.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_path_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=fct_path_1000000_gnn
+python main_train.py --test_config=./config/test_config_lstm_path.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_path_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=fct_path_100000000
 
 python main_train.py --test_config=./config/test_config_lstm_path.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note=fct_path_1000000_gnn --test_on_train
 

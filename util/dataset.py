@@ -355,7 +355,7 @@ class DataModulePerFlow(LightningDataModule):
                     data_list_test = []
 
                     if self.enable_path:
-                        shard_list = np.arange(0, 100)
+                        shard_list = np.arange(0, 200)
                         n_hosts_list = [5]
                     else:
                         shard_list = np.arange(0, 100)
@@ -421,14 +421,10 @@ class DataModulePerFlow(LightningDataModule):
                                                         len(busy_periods)
                                                     )
                                                 ]
-
-                                                # sample_indices = np.random.choice(
-                                                #     len(len_per_period),
-                                                #     self.segments_per_seq * 3,
-                                                #     replace=True,
-                                                # )
-                                                sample_indices = np.arange(
-                                                    len(len_per_period)
+                                                sample_indices = np.random.choice(
+                                                    len(len_per_period),
+                                                    self.segments_per_seq * 3,
+                                                    replace=True,
                                                 )
 
                                                 len_per_period_all.extend(
@@ -919,16 +915,16 @@ class PathFctSldnSegment(Dataset):
 
             sizes = np.log1p(sizes)
             fats_ia = np.log1p(fats_ia)
-            # sldn_flowsim[flag_flow_incomplete] = 0
+            sldn_flowsim[flag_flow_incomplete] = 0
             output_data[flag_flow_incomplete] = PLACEHOLDER
             # Generate positional encoding
             if self.enable_positional_encoding:
                 positional_encodings = self.get_positional_encoding(len(fid), 4)
                 input_data = np.column_stack(
                     (
-                        sizes,
-                        fats_ia,
                         sldn_flowsim,
+                        fats_ia,
+                        sizes,
                         n_links_passed,
                         flag_from_last_period,
                         positional_encodings,
@@ -937,9 +933,9 @@ class PathFctSldnSegment(Dataset):
             else:
                 input_data = np.column_stack(
                     (
-                        sizes,
-                        fats_ia,
                         sldn_flowsim,
+                        fats_ia,
+                        sizes,
                         n_links_passed,
                         flag_from_last_period,
                     )

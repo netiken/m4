@@ -5,7 +5,7 @@ dataset:
   n_flows_list: [2000]
   n_hosts_list: [5]
   shard: 0
-  shard_list: [0,2000,2000] # [start, end, num]
+  shard_list: [0,1000,1000] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
@@ -15,7 +15,7 @@ dataset:
   segments_per_seq: 20
   sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: True
-  flow_size_threshold: 200000
+  flow_size_threshold: 100000000
 
 # Model parameters
 model:
@@ -38,6 +38,6 @@ training:
   n_epochs: 1000
   batch_size: 32
   learning_rate: 0.0001
-  num_workers: 16
+  num_workers: 32
   enable_val: True
   enable_dist: True
