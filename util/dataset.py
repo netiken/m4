@@ -16,7 +16,7 @@ from .consts import (
 
 
 def collate_fn_link(batch):
-    inputs, outputs, specs, src_dst_pairs = zip(*batch)
+    inputs, outputs, specs, src_dst_pairs, edge_indices = zip(*batch)
 
     # Get lengths of each sequence in the batch
     lengths = np.array([x.shape[0] for x in inputs]).astype(np.int64)
@@ -35,14 +35,28 @@ def collate_fn_link(batch):
         padded_inputs[i, : input.shape[0], :] = input
         padded_outputs[i, : output.shape[0], :] = output
 
+    # Determine the maximum number of edges
+    max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
+
+    # Pad edge indices
+    padded_edge_indices = []
+    edge_indices_len = []
+    for edge_index in edge_indices:
+        padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
+        padded_edge_index[:, : edge_index.shape[1]] = edge_index
+        padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
+        edge_indices_len.append(edge_index.shape[1])
+
+    padded_edge_indices = torch.stack(padded_edge_indices)
+
     return (
         torch.tensor(padded_inputs),
         torch.tensor(padded_outputs),
         lengths,
         specs,
         src_dst_pairs,
-        None,
-        None,
+        padded_edge_indices,
+        np.array(edge_indices_len),
     )
 
 
@@ -823,6 +837,9 @@ class LinkFctSldnSegment(Dataset):
                 ).astype(np.float32)
             # input_data = np.column_stack((input_data, seq_len)).astype(np.float32)
 
+            # Compute the adjacency matrix for the bipartite graph
+            edge_index = self.compute_edge_index(fid)
+
             # assert (input_data >= 0.0).all()
             # Optionally save features for future epochs
             # np.savez(feat_path, input_data=input_data, output_data=output_data, adj_matrix=adj_matrix)
@@ -831,7 +848,13 @@ class LinkFctSldnSegment(Dataset):
             input_data = feat["input_data"]
             output_data = feat["output_data"]
 
-        return input_data, output_data, spec + topo_type, src_dst_pair_target_str
+        return (
+            input_data,
+            output_data,
+            spec + topo_type,
+            src_dst_pair_target_str,
+            edge_index,
+        )
 
     def get_positional_encoding(self, seq_len, d_model):
         pe = np.zeros((seq_len, d_model))
@@ -840,6 +863,17 @@ class LinkFctSldnSegment(Dataset):
         pe[:, 0::2] = np.sin(position * div_term[: d_model // 2])
         pe[:, 1::2] = np.cos(position * div_term[: d_model // 2])
         return pe
+
+    def compute_edge_index(self, fid):
+        edge_index = []
+        n_flows = len(fid)
+        for i in range(len(fid)):
+            flow_node_idx = i
+            edge_index.append([n_flows, flow_node_idx])
+            edge_index.append([flow_node_idx, n_flows])
+
+        edge_index = np.array(edge_index).T
+        return edge_index
 
 
 class PathFctSldnSegment(Dataset):

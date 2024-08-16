@@ -178,6 +178,7 @@ if args.mode == "train":
                 "enable_positional_encoding", False
             ),
             enable_gnn=model_config.get("enable_gnn", False),
+            enable_path=dataset_config.get("enable_path", False),
             loss_average=(
                 "perperiod"
                 if dataset_config.get("sampling_method", "uniform") == "balanced"
@@ -286,6 +287,7 @@ else:
                 "enable_positional_encoding", False
             ),
             enable_gnn=model_config.get("enable_gnn", False),
+            enable_path=dataset_config.get("enable_path", False),
             loss_average=(
                 "perperiod"
                 if dataset_config.get("sampling_method", "uniform") == "balanced"
