@@ -370,7 +370,7 @@ def main():
     lr = data_config["lr"]
     flow_size_threshold = data_config["flow_size_threshold"]
 
-    args.checkpoint = f"{args.output}/fct_link_{flow_size_threshold}_shard2000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
+    args.checkpoint = f"{args.output}/link_{flow_size_threshold}_shard2000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
     inference = Inference(
         model_config, training_config, checkpoint_path=args.checkpoint, lr=lr
     )

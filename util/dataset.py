@@ -218,11 +218,12 @@ class DataModulePerFlow(LightningDataModule):
                                             for segment_id in range(len(busy_periods))
                                         ]
 
-                                        sample_indices = np.random.choice(
-                                            len(len_per_period),
-                                            segments_per_seq * 10,
-                                            replace=True,
-                                        )
+                                        # sample_indices = np.random.choice(
+                                        #     len(len_per_period),
+                                        #     segments_per_seq * 5,
+                                        #     replace=True,
+                                        # )
+                                        sample_indices = np.arange(len(len_per_period))
 
                                         len_per_period_all.extend(
                                             [len_per_period[i] for i in sample_indices]
@@ -439,10 +440,13 @@ class DataModulePerFlow(LightningDataModule):
                                                         len(busy_periods)
                                                     )
                                                 ]
-                                                sample_indices = np.random.choice(
-                                                    len(len_per_period),
-                                                    self.segments_per_seq * 10,
-                                                    replace=True,
+                                                # sample_indices = np.random.choice(
+                                                #     len(len_per_period),
+                                                #     self.segments_per_seq * 5,
+                                                #     replace=True,
+                                                # )
+                                                sample_indices = np.arange(
+                                                    len(len_per_period)
                                                 )
 
                                                 len_per_period_all.extend(

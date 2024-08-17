@@ -624,11 +624,8 @@ class FlowSimLstm(LightningModule):
         else:
             parameters = list(self.model_lstm.parameters())
         if self.enable_gnn:
-            parameters += [
-                param
-                for gcn_layer in self.gcn_layers
-                for param in gcn_layer.parameters()
-            ]
+            for gcn_layer in self.gcn_layers:
+                parameters += list(gcn_layer.parameters())
         optimizer = torch.optim.Adam(parameters, lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.2, patience=5, min_lr=1e-6
