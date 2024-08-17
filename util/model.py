@@ -303,23 +303,12 @@ class Attention(nn.Module):
 class GNNLayer(nn.Module):
     def __init__(self, c_in, c_out):
         super(GNNLayer, self).__init__()
-        self.conv = SAGEConv(c_in, c_out, aggr="mean")  # Mean aggregation
-        self.batch_norm = nn.BatchNorm1d(c_out)  # Batch normalization
-        self.residual = (
-            c_in == c_out
-        )  # Only use residual connection if input and output dimensions match
+        self.conv = SAGEConv(c_in, c_out, aggr="mean")  # using mean aggregation
+        # self.conv = GCNConv(c_in, c_out)
 
     def forward(self, node_feats, edge_index):
-        identity = node_feats  # Save the input features for the residual connection
-        node_feats = self.conv(node_feats, edge_index)  # Apply GNN convolution
-        node_feats = self.batch_norm(node_feats)  # Apply batch normalization
-        node_feats = F.leaky_relu(
-            node_feats, negative_slope=0.01
-        )  # Apply Leaky ReLU activation
-
-        if self.residual:
-            node_feats += identity  # Add residual connection if dimensions match
-
+        node_feats = self.conv(node_feats, edge_index)
+        node_feats = F.relu(node_feats)
         return node_feats
 
 

@@ -1041,12 +1041,12 @@ class PathFctSldnSegment(Dataset):
             for link_idx in range(src, dst):
                 edge_index.append([n_flows + n_hosts + link_idx, flow_node_idx])
                 edge_index.append([flow_node_idx, n_flows + n_hosts + link_idx])
-        edge_index.append([n_flows, n_flows + n_hosts])
-        for link_idx in range(1, n_hosts - 1):
-            edge_index.append([n_flows + link_idx, n_flows + n_hosts + link_idx])
-            edge_index.append(
-                [n_flows + n_hosts + link_idx - 1, n_flows + n_links + link_idx]
-            )
-        edge_index.append([n_flows + 2 * n_hosts - 2, n_flows + n_links + n_hosts - 1])
+        # edge_index.append([n_flows, n_flows + n_hosts])
+        # for link_idx in range(1, n_hosts - 1):
+        #     edge_index.append([n_flows + link_idx, n_flows + n_hosts + link_idx])
+        #     edge_index.append(
+        #         [n_flows + n_hosts + link_idx - 1, n_flows + n_links + link_idx]
+        #     )
+        # edge_index.append([n_flows + 2 * n_hosts - 2, n_flows + n_links + n_hosts - 1])
         edge_index = np.array(edge_index).T
         return edge_index
