@@ -12,6 +12,7 @@ from .model_llama import Transformer, ModelArgs
 # from torch_geometric.nn import GCNConv
 from torch_geometric.nn import SAGEConv
 import torch.nn.functional as F
+from .consts import P99_PERCENTILE_LIST
 
 
 class ExpActivation(nn.Module):
@@ -417,6 +418,7 @@ class FlowSimLstm(LightningModule):
         self.enable_gnn = enable_gnn
         self.gcn_hidden_size = gcn_hidden_size
         self.enable_path = enable_path
+        input_size += len(P99_PERCENTILE_LIST)
         # GCN layers
         if enable_gnn:
             logging.info(
@@ -426,7 +428,7 @@ class FlowSimLstm(LightningModule):
                 self.gcn_layers = nn.ModuleList(
                     [
                         GNNLayer(
-                            3 if i == 0 else gcn_hidden_size,
+                            input_size - 1 if i == 0 else gcn_hidden_size,
                             gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
                         )
                         for i in range(gcn_n_layer)
@@ -482,7 +484,7 @@ class FlowSimLstm(LightningModule):
         if self.enable_path:
             if self.enable_gnn:
                 batch_size = x.size(0)
-                feature_dim = 3
+                feature_dim = x.size(2) - 1
 
                 batch_gnn_output = torch.zeros(
                     (batch_size, x.size(1), x.size(2)), device=x.device
@@ -497,7 +499,7 @@ class FlowSimLstm(LightningModule):
                         (num_link_nodes, feature_dim), 10.0, device=x.device
                     )
                     x_gnn_input = torch.cat(
-                        [x[i, :num_flow_nodes, [0, 2, 3]] + 1.0, link_node_feats], dim=0
+                        [x[i, :num_flow_nodes, 1:] + 1.0, link_node_feats], dim=0
                     )
 
                     for gcn in self.gcn_layers:

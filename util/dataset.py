@@ -12,6 +12,8 @@ from .consts import (
     get_base_delay_transmission,
     get_base_delay_link,
     get_base_delay_path,
+    P99_PERCENTILE_LIST,
+    PERCENTILE_METHOD,
 )
 
 
@@ -932,18 +934,18 @@ class PathFctSldnSegment(Dataset):
             )
             assert len(busy_periods) == len(busy_periods_time)
 
-            fid = np.array(busy_periods[segment_id]).astype(int)
-            fid = np.sort(fid)
+            fid_period = np.array(busy_periods[segment_id]).astype(int)
+            fid_period = np.sort(fid_period)
             period_start_time, period_end_time = busy_periods_time[segment_id]
 
-            # fid=np.arange(busy_period[0], busy_period[1]+1)
-
+            # get all previous flows
+            fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
+            fid = fid_ori[fid_ori <= np.max(fid_period)]
             sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
             fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
             fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
-            fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
-            fid_idx = np.where(np.isin(fid_ori, fid))[0]
+            fid_period_idx = np.where(np.isin(fid, fid_period))[0]
             # fid_idx = fid
 
             # compute propagation delay
@@ -957,33 +959,55 @@ class PathFctSldnSegment(Dataset):
             fcts_flowsim += base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
+            flowsim_dist = []
+            for flow_id in fid_period:
+                flow_id_target = np.logical_and(
+                    fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
+                )
+                flowsim_dist.append(
+                    np.percentile(
+                        sldn_flowsim[flow_id_target],
+                        P99_PERCENTILE_LIST,
+                        method=PERCENTILE_METHOD,
+                    )
+                )
+            flowsim_dist = np.array(flowsim_dist)
+
+            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_period_idx]
+            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_period_idx]
+            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
+            assert (output_data >= 1.0).all()
+
+            sizes = sizes[fid_period_idx]
+            fats = fats[fid_period_idx]
+            sldn_flowsim = sldn_flowsim[fid_period_idx]
+            fsd = fsd[fid_period_idx]
+            n_links_passed = n_links_passed[fid_period_idx]
+
             # Calculate inter-arrival times and adjust the first element
             fats_ia = np.diff(fats)
             fats_ia = np.insert(fats_ia, 0, 0)
             assert (fats_ia >= 0).all()
 
-            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_idx]
-            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_idx]
-            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
-            assert (output_data >= 1.0).all()
-
+            sizes = np.log1p(sizes)
+            fats_ia = np.log1p(fats_ia)
             flag_from_last_period = np.array(fats < period_start_time)
             flag_flow_incomplete = np.array(fats + fcts > period_end_time)
             assert not flag_flow_incomplete.all()
 
-            sizes = np.log1p(sizes)
-            fats_ia = np.log1p(fats_ia)
             sldn_flowsim[flag_flow_incomplete] = 0
             output_data[flag_flow_incomplete] = PLACEHOLDER
+
             # Generate positional encoding
             if self.enable_positional_encoding:
                 positional_encodings = self.get_positional_encoding(len(fid), 4)
                 input_data = np.column_stack(
                     (
-                        sldn_flowsim,
                         fats_ia,
                         sizes,
                         n_links_passed,
+                        sldn_flowsim,
+                        flowsim_dist,
                         flag_from_last_period,
                         positional_encodings,
                     )
@@ -991,16 +1015,17 @@ class PathFctSldnSegment(Dataset):
             else:
                 input_data = np.column_stack(
                     (
-                        sldn_flowsim,
                         fats_ia,
                         sizes,
                         n_links_passed,
+                        sldn_flowsim,
+                        flowsim_dist,
                         flag_from_last_period,
                     )
                 ).astype(np.float32)
 
             # Compute the adjacency matrix for the bipartite graph
-            edge_index = self.compute_edge_index(fid, n_hosts, fsd)
+            edge_index = self.compute_edge_index(n_hosts, fsd)
 
             # np.savez(feat_path, input_data=input_data, output_data=output_data,edge_index=edge_index)
         else:
@@ -1024,11 +1049,11 @@ class PathFctSldnSegment(Dataset):
         pe[:, 1::2] = np.cos(position * div_term[: d_model // 2])
         return pe
 
-    def compute_edge_index(self, fid, n_hosts, fsd_flowsim):
+    def compute_edge_index(self, n_hosts, fsd_flowsim):
         edge_index = []
-        n_flows = len(fid)
+        n_flows=len(fsd_flowsim)
         n_links = 2 * n_hosts - 1
-        for i in range(len(fid)):
+        for i in range(n_flows):
             src = fsd_flowsim[i, 0]
             dst = fsd_flowsim[i, 1]
             flow_node_idx = i

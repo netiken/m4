@@ -78,8 +78,8 @@ class QueueEvent(Enum):
 #     7:np.array([0,0,1*DELAY_PROPAGATION_BASE,2*DELAY_PROPAGATION_BASE,1*DELAY_PROPAGATION_BASE,0,0]),
 # }
 
-# P99_PERCENTILE_LIST = np.arange(1, 101, 1)
-# PERCENTILE_METHOD='nearest'
+P99_PERCENTILE_LIST = np.arange(10, 101, 10)
+PERCENTILE_METHOD = "nearest"
 # BDP_DICT = {
 #     3: 5 * MTU,
 #     5: 10 * MTU,
