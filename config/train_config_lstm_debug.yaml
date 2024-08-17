@@ -3,7 +3,7 @@
 # Dataset parameters
 dataset:
   n_flows_list: [2000]
-  n_hosts_list: [21]
+  n_hosts_list: [5]
   shard: 0
   shard_list: [0,20,20] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
@@ -14,14 +14,14 @@ dataset:
   enable_segmentation: True
   segments_per_seq: 20
   sampling_method: "balanced" # weighted, uniform, balanced
-  enable_path: False
+  enable_path: True
   enable_abstime: False
   flow_size_threshold: 200000
 
 # Model parameters
 model:
   model_name: "lstm"
-  input_size: 4
+  input_size: 5
   n_layer: 2
   gcn_n_layer: 2
   loss_fn_type: "l1"
