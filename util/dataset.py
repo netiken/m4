@@ -935,27 +935,24 @@ class PathFctSldnSegment(Dataset):
             assert len(busy_periods) == len(busy_periods_time)
 
             fid_period = np.array(busy_periods[segment_id]).astype(int)
-            # fid_period = np.sort(fid_period)
-            fsd = np.load(f"{dir_input_tmp}/fsd.npy")
-            fid_period = np.array(
-                sorted(fid_period, key=lambda x: (fsd[x, 1] - fsd[x, 0], fsd[x, 0], x))
-            )
+            fid_period = np.sort(fid_period)
+            # fsd = np.load(f"{dir_input_tmp}/fsd.npy")
+            # fid_period = np.array(
+            #     sorted(fid_period, key=lambda x: (fsd[x, 1] - fsd[x, 0], fsd[x, 0], x))
+            # )
 
             period_start_time, period_end_time = busy_periods_time[segment_id]
 
             # get all previous flows
             fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             fid = fid_ori[fid_ori <= np.max(fid_period)]
-            fsd = fsd[fid]
             sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
             fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
+            fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
 
             fid_period_idx = np.array(
-                [
-                    np.where(fid_ori == ele)[0][0] if ele in fid_ori else -1
-                    for ele in fid_period
-                ]
+                [np.where(fid == ele)[0][0] if ele in fid else -1 for ele in fid_period]
             )
             # fid_idx = fid
 
@@ -999,10 +996,11 @@ class PathFctSldnSegment(Dataset):
             n_links_passed = n_links_passed[fid_period_idx]
 
             # Calculate inter-arrival times and adjust the first element
-            # fats_ia = np.diff(fats)
-            # fats_ia = np.insert(fats_ia, 0, 0)
+            fats_ia = np.diff(fats)
+            fats_ia = np.insert(fats_ia, 0, 0)
+            assert (fats_ia >= 0).all()
             # fats_ia[fats_ia < 0] = 0
-            fats_ia = fats - np.min(fats)
+            # fats_ia = fats - np.min(fats)
 
             sizes = np.log1p(sizes)
             fats_ia = np.log1p(fats_ia)
