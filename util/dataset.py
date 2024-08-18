@@ -220,12 +220,12 @@ class DataModulePerFlow(LightningDataModule):
                                             for segment_id in range(len(busy_periods))
                                         ]
 
-                                        sample_indices = np.random.choice(
-                                            len(len_per_period),
-                                            segments_per_seq * 5,
-                                            replace=True,
-                                        )
-                                        # sample_indices = np.arange(len(len_per_period))
+                                        # sample_indices = np.random.choice(
+                                        #     len(len_per_period),
+                                        #     segments_per_seq * 5,
+                                        #     replace=True,
+                                        # )
+                                        sample_indices = np.arange(len(len_per_period))
 
                                         len_per_period_all.extend(
                                             [len_per_period[i] for i in sample_indices]
@@ -938,7 +938,7 @@ class PathFctSldnSegment(Dataset):
             # fid_period = np.sort(fid_period)
             fsd = np.load(f"{dir_input_tmp}/fsd.npy")
             fid_period = np.array(
-                sorted(fid_period, key=lambda x: (fsd[x, 0] - fsd[x, 1], fsd[x, 0], x))
+                sorted(fid_period, key=lambda x: (fsd[x, 1] - fsd[x, 0], fsd[x, 0], x))
             )
 
             period_start_time, period_end_time = busy_periods_time[segment_id]
@@ -971,9 +971,12 @@ class PathFctSldnSegment(Dataset):
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
             flowsim_dist = []
-            for flow_id in fid_period:
+            for flow_id in fid_period_idx:
                 flow_id_target = np.logical_and(
-                    fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
+                    np.logical_and(
+                        fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
+                    ),
+                    fats <= fats[flow_id],
                 )
                 flowsim_dist.append(
                     np.percentile(
@@ -996,9 +999,10 @@ class PathFctSldnSegment(Dataset):
             n_links_passed = n_links_passed[fid_period_idx]
 
             # Calculate inter-arrival times and adjust the first element
-            fats_ia = np.diff(fats)
-            fats_ia = np.insert(fats_ia, 0, 0)
-            fats_ia[fats_ia < 0] = 0
+            # fats_ia = np.diff(fats)
+            # fats_ia = np.insert(fats_ia, 0, 0)
+            # fats_ia[fats_ia < 0] = 0
+            fats_ia = fats - np.min(fats)
 
             sizes = np.log1p(sizes)
             fats_ia = np.log1p(fats_ia)
