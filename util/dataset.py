@@ -12,8 +12,8 @@ from .consts import (
     get_base_delay_transmission,
     get_base_delay_link,
     get_base_delay_path,
-    P99_PERCENTILE_LIST,
-    PERCENTILE_METHOD,
+    # P99_PERCENTILE_LIST,
+    # PERCENTILE_METHOD,
 )
 
 
@@ -959,19 +959,19 @@ class PathFctSldnSegment(Dataset):
             fcts_flowsim += base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
-            flowsim_dist = []
-            for flow_id in fid_period:
-                flow_id_target = np.logical_and(
-                    fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
-                )
-                flowsim_dist.append(
-                    np.percentile(
-                        sldn_flowsim[flow_id_target],
-                        P99_PERCENTILE_LIST,
-                        method=PERCENTILE_METHOD,
-                    )
-                )
-            flowsim_dist = np.array(flowsim_dist)
+            # flowsim_dist = []
+            # for flow_id in fid_period:
+            #     flow_id_target = np.logical_and(
+            #         fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
+            #     )
+            #     flowsim_dist.append(
+            #         np.percentile(
+            #             sldn_flowsim[flow_id_target],
+            #             P99_PERCENTILE_LIST,
+            #             method=PERCENTILE_METHOD,
+            #         )
+            #     )
+            # flowsim_dist = np.array(flowsim_dist)
 
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_period_idx]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_period_idx]
@@ -985,12 +985,12 @@ class PathFctSldnSegment(Dataset):
             n_links_passed = n_links_passed[fid_period_idx]
 
             # Calculate inter-arrival times and adjust the first element
-            fats_ia = np.diff(fats)
-            fats_ia = np.insert(fats_ia, 0, 0)
-            assert (fats_ia >= 0).all()
+            # fats_ia = np.diff(fats)
+            # fats_ia = np.insert(fats_ia, 0, 0)
+            # assert (fats_ia >= 0).all()
 
             sizes = np.log1p(sizes)
-            fats_ia = np.log1p(fats_ia)
+            # fats_ia = np.log1p(fats_ia)
             flag_from_last_period = np.array(fats < period_start_time)
             flag_flow_incomplete = np.array(fats + fcts > period_end_time)
             assert not flag_flow_incomplete.all()
@@ -1003,24 +1003,26 @@ class PathFctSldnSegment(Dataset):
                 positional_encodings = self.get_positional_encoding(len(fid), 4)
                 input_data = np.column_stack(
                     (
-                        fats_ia,
+                        fats,
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        flowsim_dist,
+                        # flowsim_dist,
                         flag_from_last_period,
                         positional_encodings,
+                        fsd,
                     )
                 ).astype(np.float32)
             else:
                 input_data = np.column_stack(
                     (
-                        fats_ia,
+                        fats,
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        flowsim_dist,
+                        # flowsim_dist,
                         flag_from_last_period,
+                        fsd,
                     )
                 ).astype(np.float32)
 

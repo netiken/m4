@@ -12,7 +12,8 @@ from .model_llama import Transformer, ModelArgs
 # from torch_geometric.nn import GCNConv
 from torch_geometric.nn import SAGEConv
 import torch.nn.functional as F
-from .consts import P99_PERCENTILE_LIST
+
+# from .consts import P99_PERCENTILE_LIST
 
 
 class ExpActivation(nn.Module):
@@ -386,7 +387,7 @@ class LSTMModel(nn.Module):
             lstm_out, _ = self.attention(lstm_out)
         # Apply the fully connected layer to each time step
         out = self.fc(lstm_out)
-        return out, (h_t, c_t)
+        return out[:, -1, :], (h_t, c_t)
 
 
 class FlowSimLstm(LightningModule):
@@ -418,7 +419,7 @@ class FlowSimLstm(LightningModule):
         self.enable_gnn = enable_gnn
         self.gcn_hidden_size = gcn_hidden_size
         self.enable_path = enable_path
-        input_size += len(P99_PERCENTILE_LIST)
+        # input_size += len(P99_PERCENTILE_LIST)
         # GCN layers
         if enable_gnn:
             logging.info(
@@ -428,16 +429,16 @@ class FlowSimLstm(LightningModule):
                 self.gcn_layers = nn.ModuleList(
                     [
                         GNNLayer(
-                            input_size - 1 if i == 0 else gcn_hidden_size,
-                            gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
+                            input_size if i == 0 else gcn_hidden_size,
+                            gcn_hidden_size if i != gcn_n_layer - 1 else output_size,
                         )
                         for i in range(gcn_n_layer)
                     ]
                 )
                 self.model_lstm = LSTMModel(
-                    input_size * 2,
+                    input_size,
                     hidden_size,
-                    output_size,
+                    input_size,
                     n_layer,
                     dropout=dropout,
                     enable_bidirectional=enable_bidirectional,
@@ -484,33 +485,47 @@ class FlowSimLstm(LightningModule):
         if self.enable_path:
             if self.enable_gnn:
                 batch_size = x.size(0)
-                feature_dim = x.size(2) - 1
+                feature_dim = x.size(2) - 2
 
-                batch_gnn_output = torch.zeros(
-                    (batch_size, x.size(1), x.size(2)), device=x.device
-                )
+                res = torch.zeros((batch_size, x.size(1), 1), device=x.device)
                 for i in range(batch_size):
-                    num_flow_nodes = lengths[i]
+                    n_flows = lengths[i]
+                    lstm_input = torch.zeros(
+                        (n_flows, n_flows, feature_dim), device=x.device
+                    )
+                    lengths_lstm = []
+                    for j in range(n_flows):
+                        target_idx = [
+                            k
+                            for k in range(j + 1)
+                            if x[i, k, -2] == x[i, j, -2] and x[i, k, -1] == x[i, j, -1]
+                        ]
+
+                        flow_data = x[i, target_idx, :-2]
+                        flow_data[1:, 0] = torch.log1p(
+                            flow_data[1:, 0] - flow_data[:-1, 0]
+                        )
+                        flow_data[0, 0] = 0.0
+                        lstm_input[j, : len(target_idx), :] = flow_data
+                        lengths_lstm.append(len(target_idx))
+                    lstm_input = lstm_input[:, : max(lengths_lstm), :]
+                    gnn_input, _ = self.model_lstm(lstm_input, np.array(lengths_lstm))
+
                     edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
                     max_node_index = edge_index_trimmed.max().item()
-                    num_link_nodes = max_node_index + 1 - num_flow_nodes
+                    num_link_nodes = max_node_index + 1 - n_flows
 
                     link_node_feats = torch.full(
                         (num_link_nodes, feature_dim), 10.0, device=x.device
                     )
-                    x_gnn_input = torch.cat(
-                        [x[i, :num_flow_nodes, 1:] + 1.0, link_node_feats], dim=0
-                    )
+                    x_gnn_input = torch.cat([gnn_input, link_node_feats], dim=0)
 
                     for gcn in self.gcn_layers:
                         x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 
-                    batch_gnn_output[i, :num_flow_nodes, :] = x_gnn_input[
-                        :num_flow_nodes, :
-                    ]
+                    res[i, :n_flows, :] = x_gnn_input[:n_flows, :]
 
-                x = torch.cat((x, batch_gnn_output), dim=-1)
-            res = self.model_lstm(x, lengths)
+            # res = self.model_lstm(x, lengths)
         else:
             if self.enable_gnn:
                 batch_size = x.size(0)
@@ -548,10 +563,10 @@ class FlowSimLstm(LightningModule):
             edge_index,
             edge_index_len,
         ) = batch
-        if (not self.enable_path) and self.enable_gnn:
-            estimated = self(input, lengths, edge_index, edge_index_len)
-        else:
-            estimated, _ = self(input, lengths, edge_index, edge_index_len)
+        # if (not self.enable_path) and self.enable_gnn:
+        estimated = self(input, lengths, edge_index, edge_index_len)
+        # else:
+        #     estimated, _ = self(input, lengths, edge_index, edge_index_len)
 
         # Generate a mask based on lengths
         attention_mask = output.squeeze() >= 1.0
