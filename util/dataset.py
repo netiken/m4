@@ -12,8 +12,8 @@ from .consts import (
     get_base_delay_transmission,
     get_base_delay_link,
     get_base_delay_path,
-    P99_PERCENTILE_LIST,
-    PERCENTILE_METHOD,
+    # P99_PERCENTILE_LIST,
+    # PERCENTILE_METHOD,
 )
 
 
@@ -959,19 +959,19 @@ class PathFctSldnSegment(Dataset):
             fcts_flowsim += base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
-            flowsim_dist = []
-            for flow_id in fid_period:
-                flow_id_target = np.logical_and(
-                    fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
-                )
-                flowsim_dist.append(
-                    np.percentile(
-                        sldn_flowsim[flow_id_target],
-                        P99_PERCENTILE_LIST,
-                        method=PERCENTILE_METHOD,
-                    )
-                )
-            flowsim_dist = np.array(flowsim_dist)
+            # flowsim_dist = []
+            # for flow_id in fid_period:
+            #     flow_id_target = np.logical_and(
+            #         fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
+            #     )
+            #     flowsim_dist.append(
+            #         np.percentile(
+            #             sldn_flowsim[flow_id_target],
+            #             P99_PERCENTILE_LIST,
+            #             method=PERCENTILE_METHOD,
+            #         )
+            #     )
+            # flowsim_dist = np.array(flowsim_dist)
 
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_period_idx]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_period_idx]
@@ -1007,7 +1007,7 @@ class PathFctSldnSegment(Dataset):
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        flowsim_dist,
+                        # flowsim_dist,
                         flag_from_last_period,
                         positional_encodings,
                     )
@@ -1019,7 +1019,7 @@ class PathFctSldnSegment(Dataset):
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        flowsim_dist,
+                        # flowsim_dist,
                         flag_from_last_period,
                     )
                 ).astype(np.float32)
