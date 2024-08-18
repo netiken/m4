@@ -220,12 +220,12 @@ class DataModulePerFlow(LightningDataModule):
                                             for segment_id in range(len(busy_periods))
                                         ]
 
-                                        # sample_indices = np.random.choice(
-                                        #     len(len_per_period),
-                                        #     segments_per_seq * 5,
-                                        #     replace=True,
-                                        # )
-                                        sample_indices = np.arange(len(len_per_period))
+                                        sample_indices = np.random.choice(
+                                            len(len_per_period),
+                                            segments_per_seq * 5,
+                                            replace=True,
+                                        )
+                                        # sample_indices = np.arange(len(len_per_period))
 
                                         len_per_period_all.extend(
                                             [len_per_period[i] for i in sample_indices]
@@ -1051,7 +1051,7 @@ class PathFctSldnSegment(Dataset):
 
     def compute_edge_index(self, n_hosts, fsd_flowsim):
         edge_index = []
-        n_flows=len(fsd_flowsim)
+        n_flows = len(fsd_flowsim)
         n_links = 2 * n_hosts - 1
         for i in range(n_flows):
             src = fsd_flowsim[i, 0]
