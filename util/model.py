@@ -12,8 +12,7 @@ from .model_llama import Transformer, ModelArgs
 # from torch_geometric.nn import GCNConv
 from torch_geometric.nn import SAGEConv
 import torch.nn.functional as F
-
-# from .consts import P99_PERCENTILE_LIST
+from .consts import P99_PERCENTILE_LIST
 
 
 class ExpActivation(nn.Module):
@@ -419,7 +418,7 @@ class FlowSimLstm(LightningModule):
         self.enable_gnn = enable_gnn
         self.gcn_hidden_size = gcn_hidden_size
         self.enable_path = enable_path
-        # input_size += len(P99_PERCENTILE_LIST)
+        input_size += len(P99_PERCENTILE_LIST)
         # GCN layers
         if enable_gnn:
             logging.info(

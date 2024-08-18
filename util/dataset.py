@@ -12,8 +12,8 @@ from .consts import (
     get_base_delay_transmission,
     get_base_delay_link,
     get_base_delay_path,
-    # P99_PERCENTILE_LIST,
-    # PERCENTILE_METHOD,
+    P99_PERCENTILE_LIST,
+    PERCENTILE_METHOD,
 )
 
 
@@ -935,17 +935,28 @@ class PathFctSldnSegment(Dataset):
             assert len(busy_periods) == len(busy_periods_time)
 
             fid_period = np.array(busy_periods[segment_id]).astype(int)
-            fid_period = np.sort(fid_period)
+            # fid_period = np.sort(fid_period)
+            fsd = np.load(f"{dir_input_tmp}/fsd.npy")
+            fid_period = np.array(
+                sorted(fid_period, key=lambda x: (fsd[x, 0] - fsd[x, 1], fsd[x, 0], x))
+            )
+
             period_start_time, period_end_time = busy_periods_time[segment_id]
 
             # get all previous flows
             fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
             fid = fid_ori[fid_ori <= np.max(fid_period)]
+            fsd = fsd[fid]
             sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
             fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
             fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
-            fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
-            fid_period_idx = np.where(np.isin(fid, fid_period))[0]
+
+            fid_period_idx = np.array(
+                [
+                    np.where(fid_ori == ele)[0][0] if ele in fid_ori else -1
+                    for ele in fid_period
+                ]
+            )
             # fid_idx = fid
 
             # compute propagation delay
@@ -959,19 +970,19 @@ class PathFctSldnSegment(Dataset):
             fcts_flowsim += base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
-            # flowsim_dist = []
-            # for flow_id in fid_period:
-            #     flow_id_target = np.logical_and(
-            #         fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
-            #     )
-            #     flowsim_dist.append(
-            #         np.percentile(
-            #             sldn_flowsim[flow_id_target],
-            #             P99_PERCENTILE_LIST,
-            #             method=PERCENTILE_METHOD,
-            #         )
-            #     )
-            # flowsim_dist = np.array(flowsim_dist)
+            flowsim_dist = []
+            for flow_id in fid_period:
+                flow_id_target = np.logical_and(
+                    fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
+                )
+                flowsim_dist.append(
+                    np.percentile(
+                        sldn_flowsim[flow_id_target],
+                        P99_PERCENTILE_LIST,
+                        method=PERCENTILE_METHOD,
+                    )
+                )
+            flowsim_dist = np.array(flowsim_dist)
 
             fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_period_idx]
             i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_period_idx]
@@ -987,7 +998,7 @@ class PathFctSldnSegment(Dataset):
             # Calculate inter-arrival times and adjust the first element
             fats_ia = np.diff(fats)
             fats_ia = np.insert(fats_ia, 0, 0)
-            assert (fats_ia >= 0).all()
+            fats_ia[fats_ia < 0] = 0
 
             sizes = np.log1p(sizes)
             fats_ia = np.log1p(fats_ia)
@@ -1007,7 +1018,7 @@ class PathFctSldnSegment(Dataset):
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        # flowsim_dist,
+                        flowsim_dist,
                         flag_from_last_period,
                         positional_encodings,
                     )
@@ -1019,7 +1030,7 @@ class PathFctSldnSegment(Dataset):
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        # flowsim_dist,
+                        flowsim_dist,
                         flag_from_last_period,
                     )
                 ).astype(np.float32)
