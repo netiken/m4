@@ -12,8 +12,8 @@ from .consts import (
     get_base_delay_transmission,
     get_base_delay_link,
     get_base_delay_path,
-    P99_PERCENTILE_LIST,
-    PERCENTILE_METHOD,
+    # P99_PERCENTILE_LIST,
+    # PERCENTILE_METHOD,
 )
 
 
@@ -220,12 +220,12 @@ class DataModulePerFlow(LightningDataModule):
                                             for segment_id in range(len(busy_periods))
                                         ]
 
-                                        # sample_indices = np.random.choice(
-                                        #     len(len_per_period),
-                                        #     segments_per_seq * 5,
-                                        #     replace=True,
-                                        # )
-                                        sample_indices = np.arange(len(len_per_period))
+                                        sample_indices = np.random.choice(
+                                            len(len_per_period),
+                                            segments_per_seq * 5,
+                                            replace=True,
+                                        )
+                                        # sample_indices = np.arange(len(len_per_period))
 
                                         len_per_period_all.extend(
                                             [len_per_period[i] for i in sample_indices]
@@ -442,14 +442,14 @@ class DataModulePerFlow(LightningDataModule):
                                                         len(busy_periods)
                                                     )
                                                 ]
-                                                # sample_indices = np.random.choice(
-                                                #     len(len_per_period),
-                                                #     self.segments_per_seq * 5,
-                                                #     replace=True,
-                                                # )
-                                                sample_indices = np.arange(
-                                                    len(len_per_period)
+                                                sample_indices = np.random.choice(
+                                                    len(len_per_period),
+                                                    self.segments_per_seq * 5,
+                                                    replace=True,
                                                 )
+                                                # sample_indices = np.arange(
+                                                #     len(len_per_period)
+                                                # )
 
                                                 len_per_period_all.extend(
                                                     [
@@ -936,25 +936,24 @@ class PathFctSldnSegment(Dataset):
 
             fid_period = np.array(busy_periods[segment_id]).astype(int)
             fid_period = np.sort(fid_period)
-            # fsd = np.load(f"{dir_input_tmp}/fsd.npy")
-            # fid_period = np.array(
-            #     sorted(fid_period, key=lambda x: (fsd[x, 1] - fsd[x, 0], fsd[x, 0], x))
-            # )
-
             period_start_time, period_end_time = busy_periods_time[segment_id]
 
             # get all previous flows
             fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
-            fid = fid_ori[fid_ori <= np.max(fid_period)]
-            sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
-            fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
-            fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
-            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
-
             fid_period_idx = np.array(
-                [np.where(fid == ele)[0][0] if ele in fid else -1 for ele in fid_period]
+                [
+                    np.where(fid_ori == ele)[0][0] if ele in fid_ori else -1
+                    for ele in fid_period
+                ]
             )
-            # fid_idx = fid
+
+            sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid_period]
+            fats = np.load(f"{dir_input_tmp}/fat.npy")[fid_period]
+            fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid_period]
+            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid_period]
+
+            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_period_idx]
+            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_period_idx]
 
             # compute propagation delay
             n_links_passed = abs(fsd[:, 0] - fsd[:, 1]) + 2
@@ -967,33 +966,31 @@ class PathFctSldnSegment(Dataset):
             fcts_flowsim += base_delay
             sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
-            flowsim_dist = []
-            for flow_id in fid_period_idx:
-                flow_id_target = np.logical_and(
-                    np.logical_and(
-                        fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
-                    ),
-                    fats <= fats[flow_id],
-                )
-                flowsim_dist.append(
-                    np.percentile(
-                        sldn_flowsim[flow_id_target],
-                        P99_PERCENTILE_LIST,
-                        method=PERCENTILE_METHOD,
-                    )
-                )
-            flowsim_dist = np.array(flowsim_dist)
+            # flowsim_dist = []
+            # for flow_id in fid_period_idx:
+            #     flow_id_target = np.logical_and(
+            #         np.logical_and(
+            #             fsd[:, 0] == fsd[flow_id, 0], fsd[:, 1] == fsd[flow_id, 1]
+            #         ),
+            #         fats <= fats[flow_id],
+            #     )
+            #     flowsim_dist.append(
+            #         np.percentile(
+            #             sldn_flowsim[flow_id_target],
+            #             P99_PERCENTILE_LIST,
+            #             method=PERCENTILE_METHOD,
+            #         )
+            #     )
+            # flowsim_dist = np.array(flowsim_dist)
 
-            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_period_idx]
-            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_period_idx]
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
             assert (output_data >= 1.0).all()
 
-            sizes = sizes[fid_period_idx]
-            fats = fats[fid_period_idx]
-            sldn_flowsim = sldn_flowsim[fid_period_idx]
-            fsd = fsd[fid_period_idx]
-            n_links_passed = n_links_passed[fid_period_idx]
+            # sizes = sizes[fid_period_idx]
+            # fats = fats[fid_period_idx]
+            # sldn_flowsim = sldn_flowsim[fid_period_idx]
+            # fsd = fsd[fid_period_idx]
+            # n_links_passed = n_links_passed[fid_period_idx]
 
             # Calculate inter-arrival times and adjust the first element
             fats_ia = np.diff(fats)
@@ -1013,14 +1010,14 @@ class PathFctSldnSegment(Dataset):
 
             # Generate positional encoding
             if self.enable_positional_encoding:
-                positional_encodings = self.get_positional_encoding(len(fid), 4)
+                positional_encodings = self.get_positional_encoding(len(fid_period), 4)
                 input_data = np.column_stack(
                     (
                         fats_ia,
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        flowsim_dist,
+                        # flowsim_dist,
                         flag_from_last_period,
                         positional_encodings,
                     )
@@ -1032,7 +1029,7 @@ class PathFctSldnSegment(Dataset):
                         sizes,
                         n_links_passed,
                         sldn_flowsim,
-                        flowsim_dist,
+                        # flowsim_dist,
                         flag_from_last_period,
                     )
                 ).astype(np.float32)
