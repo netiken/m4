@@ -30,9 +30,9 @@ python main_train.py --test_config=./config/test_config_lstm_link.yaml --mode=te
 
 python main_train.py --test_config=./config/test_config_lstm_link.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --note=link_200000_abstime --test_on_train
 
-python main_train.py --test_config=./config/test_config_lstm_path.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_path_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=fct_path_100000000
+python main_train.py --test_config=./config/test_config_lstm_path.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_path_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=path_100000000_size
 
-python main_train.py --test_config=./config/test_config_lstm_path.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note=fct_path_1000000_gnn --test_on_train
+python main_train.py --test_config=./config/test_config_lstm_path.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note=path_100000000_size --test_on_train
 
 cargo run --release -- --root=./data_test --mixes spec/motivation.mix.json mlsys-test
 cargo run --release -- --root=./data_test --mixes spec/motivation.mix.json ns3-config

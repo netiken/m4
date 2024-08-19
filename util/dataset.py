@@ -1008,14 +1008,17 @@ class PathFctSldnSegment(Dataset):
             # fats_ia[fats_ia < 0] = 0
             # fats_ia = fats - np.min(fats)
 
-            sizes = np.log1p(sizes)
-            fats_ia = np.log1p(fats_ia)
+            output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
+
+            # sizes = np.log1p(sizes)
+            # fats_ia = np.log1p(fats_ia)
             flag_from_last_period = np.array(fats < period_start_time)
             flag_flow_incomplete = np.array(fats + fcts > period_end_time)
             assert not flag_flow_incomplete.all()
 
             sldn_flowsim[flag_flow_incomplete] = 0
-            output_data[flag_flow_incomplete] = PLACEHOLDER
+
+            # output_data[flag_flow_incomplete] = PLACEHOLDER
 
             # Generate positional encoding
             if self.enable_positional_encoding:
@@ -1042,6 +1045,7 @@ class PathFctSldnSegment(Dataset):
                         flag_from_last_period,
                     )
                 ).astype(np.float32)
+            input_data = np.log1p(input_data)
 
             # Compute the adjacency matrix for the bipartite graph
             edge_index = self.compute_edge_index(n_hosts, fsd)
