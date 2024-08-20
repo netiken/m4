@@ -92,7 +92,7 @@ class QueueEvent(Enum):
 
 P99_PERCENTILE_LIST = np.arange(10, 101, 10)
 PERCENTILE_METHOD = "nearest"
-N_BACKGROUND = 10
+N_BACKGROUND = 11
 # BDP_DICT = {
 #     3: 5 * MTU,
 #     5: 10 * MTU,

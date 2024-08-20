@@ -200,7 +200,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if self.enable_path:
                                         busy_periods = []
                                         for period in busy_periods_ori:
-                                            if len(period) < 2000:
+                                            if len(period) < 5000:
                                                 busy_periods.append(period)
                                     else:
                                         busy_periods = busy_periods_ori
