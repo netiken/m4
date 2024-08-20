@@ -190,17 +190,17 @@ class DataModulePerFlow(LightningDataModule):
                                 and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
-                                    busy_periods_ori = np.load(
+                                    busy_periods = np.load(
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-                                    if self.enable_path:
-                                        busy_periods = []
-                                        for period in busy_periods_ori:
-                                            if len(period) < 2000:
-                                                busy_periods.append(period)
-                                    else:
-                                        busy_periods = busy_periods_ori
+                                    # if self.enable_path:
+                                    #     busy_periods = []
+                                    #     for period in busy_periods_ori:
+                                    #         if len(period) < 5000:
+                                    #             busy_periods.append(period)
+                                    # else:
+                                    #     busy_periods = busy_periods_ori
 
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
 
@@ -1008,17 +1008,17 @@ class PathFctSldnSegment(Dataset):
             # fats_ia[fats_ia < 0] = 0
             # fats_ia = fats - np.min(fats)
 
-            output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
+            # output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
 
-            # sizes = np.log1p(sizes)
-            # fats_ia = np.log1p(fats_ia)
+            sizes = np.log1p(sizes)
+            fats_ia = np.log1p(fats_ia)
             flag_from_last_period = np.array(fats < period_start_time)
             flag_flow_incomplete = np.array(fats + fcts > period_end_time)
             assert not flag_flow_incomplete.all()
 
             sldn_flowsim[flag_flow_incomplete] = 0
-
-            # output_data[flag_flow_incomplete] = PLACEHOLDER
+            flowsim_dist[flag_flow_incomplete] = 0
+            output_data[flag_flow_incomplete] = PLACEHOLDER
 
             # Generate positional encoding
             if self.enable_positional_encoding:
@@ -1045,7 +1045,7 @@ class PathFctSldnSegment(Dataset):
                         flag_from_last_period,
                     )
                 ).astype(np.float32)
-            input_data = np.log1p(input_data)
+            # input_data = np.log1p(input_data)
 
             # Compute the adjacency matrix for the bipartite graph
             edge_index = self.compute_edge_index(n_hosts, fsd)

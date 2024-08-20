@@ -500,7 +500,7 @@ class FlowSimLstm(LightningModule):
                         (num_link_nodes, feature_dim), 10.0, device=x.device
                     )
                     x_gnn_input = torch.cat(
-                        [x[i, :num_flow_nodes, 1:] + 1.0, link_node_feats], dim=0
+                        [x[i, :num_flow_nodes, 1:], link_node_feats], dim=0
                     )
 
                     for gcn in self.gcn_layers:
