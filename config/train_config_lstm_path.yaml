@@ -12,10 +12,10 @@ dataset:
   topo_type: "_topo-pl-x_"
   output_type: "fctSldn" # fctSldn, queueLen
   enable_segmentation: True
-  segments_per_seq: 50
+  segments_per_seq: 40
   sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: True
-  flow_size_threshold: 100000000
+  flow_size_threshold: 1000000
 
 # Model parameters
 model:
@@ -25,7 +25,7 @@ model:
   gcn_n_layer: 2
   loss_fn_type: "l1"
   hidden_size: 256
-  gcn_hidden_size: 512
+  gcn_hidden_size: 8
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
@@ -33,8 +33,8 @@ model:
 
 # Training parameters
 training:
-  # gpu: [0,0,1,1,2,2,3,3]
-  gpu: [0,1,2,3]
+  gpu: [0,0,1,1]
+  # gpu: [0,1,2,3]
   n_epochs: 1000
   batch_size: 32
   learning_rate: 0.0001

@@ -190,17 +190,17 @@ class DataModulePerFlow(LightningDataModule):
                                 and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
-                                    busy_periods = np.load(
+                                    busy_periods_ori = np.load(
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-                                    # if self.enable_path:
-                                    #     busy_periods = []
-                                    #     for period in busy_periods_ori:
-                                    #         if len(period) < 5000:
-                                    #             busy_periods.append(period)
-                                    # else:
-                                    #     busy_periods = busy_periods_ori
+                                    if self.enable_path:
+                                        busy_periods = []
+                                        for period in busy_periods_ori:
+                                            if len(period) < 5000:
+                                                busy_periods.append(period)
+                                    else:
+                                        busy_periods = busy_periods_ori
 
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
 
@@ -988,7 +988,7 @@ class PathFctSldnSegment(Dataset):
                 )
                 sldn_flowsim_tmp = sldn_flowsim[flow_id_target]
                 n_tmp = min(len(sldn_flowsim_tmp), N_BACKGROUND)
-                flowsim_dist[flow_idx, :n_tmp] = sldn_flowsim_tmp[-n_tmp:]
+                flowsim_dist[flow_idx, :n_tmp] = np.flip(sldn_flowsim_tmp[-n_tmp:])
 
             sizes = sizes[fid_period_idx]
             fats = fats[fid_period_idx]
@@ -1002,8 +1002,11 @@ class PathFctSldnSegment(Dataset):
             assert (output_data >= 1.0).all()
 
             # Calculate inter-arrival times and adjust the first element
-            fats_ia = np.diff(fats)
-            fats_ia = np.insert(fats_ia, 0, 0)
+            if self.enable_gnn:
+                fats_ia = fats - np.min(fats)
+            else:
+                fats_ia = np.diff(fats)
+                fats_ia = np.insert(fats_ia, 0, 0)
             assert (fats_ia >= 0).all()
             # fats_ia[fats_ia < 0] = 0
             # fats_ia = fats - np.min(fats)
@@ -1097,4 +1100,7 @@ class PathFctSldnSegment(Dataset):
         #     )
         # edge_index.append([n_flows + 2 * n_hosts - 2, n_flows + n_links + n_hosts - 1])
         edge_index = np.array(edge_index).T
+        # Sort edge_index by destination node (second row)
+        sorted_indices = np.argsort(edge_index[1, :])
+        edge_index = edge_index[:, sorted_indices]
         return edge_index
