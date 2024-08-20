@@ -324,88 +324,104 @@ class Attention(nn.Module):
         return context, attn_weights
 
 
-class GRUConv(MessagePassing):
-    def __init__(self, c_in, c_out):
-        super(GRUConv, self).__init__(
-            aggr="add"
-        )  # Use 'add' aggregation as placeholder
-        self.gru = nn.GRU(input_size=c_in, hidden_size=c_out, batch_first=True)
-        self.fc = nn.Linear(c_out, c_out)
+# class GRUConv(MessagePassing):
+#     def __init__(self, c_in, c_out):
+#         super(GRUConv, self).__init__(aggr="add")
+#         self.gru = nn.GRU(input_size=c_in, hidden_size=c_out, batch_first=True)
+#         self.fc = nn.Linear(c_out, c_out)
 
-    def forward(self, x, edge_index):
-        # x: Node features (num_nodes, c_in)
-        # edge_index: Graph connectivity (2, num_edges)
-        return self.propagate(edge_index, x=x)
+#     def forward(self, x, edge_index):
+#         return self.propagate(edge_index, x=x)
 
-    def message(self, x_j, index, ptr, size_i):
-        return x_j
+#     def message(self, x_j):
+#         return x_j
 
-    def aggregate(self, inputs, index):
-        # Step 1: Group the inputs by their target node index
-        unique_nodes, inverse_indices = torch.unique(
-            index, sorted=True, return_inverse=True
-        )
-        num_nodes = unique_nodes.size(0)
+#     def aggregate(self, inputs, index):
+#         # Group inputs by target node index
+#         unique_nodes, inverse_indices = torch.unique(
+#             index, sorted=True, return_inverse=True
+#         )
+#         num_nodes = unique_nodes.size(0)
 
-        # Step 2: Pack the inputs into sequences for GRU
-        max_neighbors = scatter(torch.ones_like(index), index, dim=0, reduce="max")
-        padded_seq = torch.zeros(
-            (num_nodes, max_neighbors.max(), inputs.size(-1)), device=inputs.device
-        )
+#         # Determine number of neighbors for each node
+#         counts = scatter(torch.ones_like(index), index, dim=0, reduce="sum").long()
 
-        counts = scatter(torch.ones_like(index), index, dim=0, reduce="sum")
-        padded_seq[
-            inverse_indices, torch.arange(inputs.size(0), device=inputs.device), :
-        ] = inputs
-        packed_seq = nn.utils.rnn.pack_padded_sequence(
-            padded_seq, counts.cpu(), batch_first=True, enforce_sorted=False
-        )
+#         # Filter out nodes with no neighbors
+#         valid_node_mask = counts > 0
+#         if not valid_node_mask.any():
+#             # Handle the case where all nodes have no neighbors
+#             return torch.zeros((num_nodes, inputs.size(-1)), device=inputs.device)
 
-        # Step 3: Apply GRU
-        packed_out, _ = self.gru(packed_seq)
-        out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
+#         valid_counts = counts[valid_node_mask]
+#         valid_nodes = unique_nodes[valid_node_mask]
 
-        # Step 4: Aggregate the output from the GRU
-        aggr_out = out[torch.arange(num_nodes, device=inputs.device), counts - 1]
+#         max_neighbors = valid_counts.max().item()
+#         padded_seq = torch.zeros(
+#             (valid_nodes.size(0), max_neighbors, inputs.size(-1)), device=inputs.device
+#         )
 
-        return aggr_out
+#         current_pos = torch.zeros(
+#             valid_nodes.size(0), dtype=torch.long, device=inputs.device
+#         )
+#         for i in range(inputs.size(0)):
+#             node_idx = inverse_indices[i]
+#             if valid_node_mask[node_idx]:
+#                 position = current_pos[valid_node_mask[node_idx]]
+#                 padded_seq[valid_node_mask[node_idx], position, :] = inputs[i]
+#                 current_pos[valid_node_mask[node_idx]] += 1
 
-    def update(self, aggr_out):
-        # Apply a fully connected layer (optional) and return
-        return self.fc(aggr_out)
+#         # Pack the sequences for GRU
+#         packed_seq = nn.utils.rnn.pack_padded_sequence(
+#             padded_seq, valid_counts.cpu(), batch_first=True, enforce_sorted=False
+#         )
+
+#         # Apply GRU
+#         packed_out, _ = self.gru(packed_seq)
+#         out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
+
+#         # Use the last hidden state for each valid node
+#         aggr_out = torch.zeros((num_nodes, out.size(-1)), device=inputs.device)
+#         aggr_out[valid_node_mask] = out[
+#             torch.arange(valid_nodes.size(0), device=inputs.device), valid_counts - 1
+#         ]
+
+#         return aggr_out
+
+#     def update(self, aggr_out):
+#         return self.fc(aggr_out)
 
 
 # GNN model
-class GNNLayer(nn.Module):
-    def __init__(self, c_in, c_out):
-        super(GNNLayer, self).__init__()
-        # self.conv = SAGEConv(c_in, c_out, aggr="max")  # using mean aggregation
-        # self.conv = GCNConv(c_in, c_out)
-        self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
-
-    def forward(self, node_feats, edge_index):
-        node_feats = self.conv(node_feats, edge_index)
-        node_feats = F.relu(node_feats)
-        return node_feats
-
-
 # class GNNLayer(nn.Module):
-#     def __init__(self, c_in, c_out, heads=4, concat=True, dropout=0.2):
+#     def __init__(self, c_in, c_out):
 #         super(GNNLayer, self).__init__()
-#         # Initialize the GATConv layer
-#         self.gat_conv = GATConv(
-#             c_in,
-#             c_out // heads if concat else c_out,
-#             heads=heads,
-#             concat=concat,
-#             dropout=dropout,
-#         )
+#         # self.conv = SAGEConv(c_in, c_out, aggr="max")  # using mean aggregation
+#         # self.conv = GCNConv(c_in, c_out)
+#         self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
 
 #     def forward(self, node_feats, edge_index):
-#         # Apply GAT convolution
-#         node_feats = self.gat_conv(node_feats, edge_index)
+#         node_feats = self.conv(node_feats, edge_index)
 #         node_feats = F.relu(node_feats)
 #         return node_feats
+
+
+class GNNLayer(nn.Module):
+    def __init__(self, c_in, c_out, heads=4, concat=True, dropout=0.2):
+        super(GNNLayer, self).__init__()
+        # Initialize the GATConv layer
+        self.gat_conv = GATConv(
+            c_in,
+            c_out // heads if concat else c_out,
+            heads=heads,
+            concat=concat,
+            dropout=dropout,
+        )
+
+    def forward(self, node_feats, edge_index):
+        # Apply GAT convolution
+        node_feats = self.gat_conv(node_feats, edge_index)
+        node_feats = F.relu(node_feats)
+        return node_feats
 
 
 # LSTM Model
@@ -519,35 +535,35 @@ class FlowSimLstm(LightningModule):
             logging.info(
                 f"GCN enabled with {gcn_n_layer} layers, hidden size {gcn_hidden_size}, enable_path: {enable_path}"
             )
-            if enable_path:
-                self.gcn_layers = nn.ModuleList(
-                    [
-                        GNNLayer(
-                            input_size if i == 0 else gcn_hidden_size,
-                            gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
-                        )
-                        for i in range(gcn_n_layer)
-                    ]
-                )
-                self.model_lstm = LSTMModel(
-                    input_size,
-                    hidden_size,
-                    output_size,
-                    n_layer,
-                    dropout=dropout,
-                    enable_bidirectional=enable_bidirectional,
-                    enable_positional_encoding=enable_positional_encoding,
-                )
-            else:
-                self.gcn_layers = nn.ModuleList(
-                    [
-                        GNNLayer(
-                            input_size if i == 0 else gcn_hidden_size,
-                            gcn_hidden_size if i != gcn_n_layer - 1 else output_size,
-                        )
-                        for i in range(gcn_n_layer)
-                    ]
-                )
+            # if enable_path:
+            #     self.gcn_layers = nn.ModuleList(
+            #         [
+            #             GNNLayer(
+            #                 input_size if i == 0 else gcn_hidden_size,
+            #                 gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
+            #             )
+            #             for i in range(gcn_n_layer)
+            #         ]
+            #     )
+            #     self.model_lstm = LSTMModel(
+            #         input_size,
+            #         hidden_size,
+            #         output_size,
+            #         n_layer,
+            #         dropout=dropout,
+            #         enable_bidirectional=enable_bidirectional,
+            #         enable_positional_encoding=enable_positional_encoding,
+            #     )
+            # else:
+            self.gcn_layers = nn.ModuleList(
+                [
+                    GNNLayer(
+                        input_size if i == 0 else gcn_hidden_size,
+                        gcn_hidden_size if i != gcn_n_layer - 1 else output_size,
+                    )
+                    for i in range(gcn_n_layer)
+                ]
+            )
         else:
             self.model_lstm = LSTMModel(
                 input_size,
@@ -578,40 +594,11 @@ class FlowSimLstm(LightningModule):
     def forward(self, x, lengths, edge_index, edge_index_len):
         if self.enable_path:
             if self.enable_gnn:
-                #     batch_size = x.size(0)
-                #     feature_dim = x.size(2)
-
-                #     batch_gnn_output = torch.zeros(
-                #         (batch_size, x.size(1), 1), device=x.device
-                #     )
-                #     for i in range(batch_size):
-                #         num_flow_nodes = lengths[i]
-                #         edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
-                #         max_node_index = edge_index_trimmed.max().item()
-                #         num_link_nodes = max_node_index + 1 - num_flow_nodes
-
-                #         link_node_feats = torch.full(
-                #             (num_link_nodes, feature_dim), 10.0, device=x.device
-                #         )
-                #         x_gnn_input = torch.cat(
-                #             [x[i, :num_flow_nodes], link_node_feats], dim=0
-                #         )
-
-                #         for gcn in self.gcn_layers:
-                #             x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
-
-                #         batch_gnn_output[i, :num_flow_nodes, :] = x_gnn_input[
-                #             :num_flow_nodes, :
-                #         ]
-
-                #     res = batch_gnn_output
-                # else:
-                #     res = self.model_lstm(x, lengths)
                 batch_size = x.size(0)
                 feature_dim = x.size(2)
 
                 batch_gnn_output = torch.zeros(
-                    (batch_size, x.size(1), x.size(2)), device=x.device
+                    (batch_size, x.size(1), 1), device=x.device
                 )
                 for i in range(batch_size):
                     num_flow_nodes = lengths[i]
@@ -622,8 +609,20 @@ class FlowSimLstm(LightningModule):
                     link_node_feats = torch.full(
                         (num_link_nodes, feature_dim), 10.0, device=x.device
                     )
+                    # link_node_feats_host = torch.full(
+                    #     ((num_link_nodes + 1) // 3, feature_dim), 10.0, device=x.device
+                    # )
+                    # link_node_feats_switch = torch.full(
+                    #     ((num_link_nodes + 1) // 3 - 1, feature_dim),
+                    #     40.0,
+                    #     device=x.device,
+                    # )
                     x_gnn_input = torch.cat(
-                        [x[i, :num_flow_nodes], link_node_feats], dim=0
+                        [
+                            x[i, :num_flow_nodes],
+                            link_node_feats,
+                        ],
+                        dim=0,
                     )
 
                     for gcn in self.gcn_layers:
@@ -632,10 +631,38 @@ class FlowSimLstm(LightningModule):
                     batch_gnn_output[i, :num_flow_nodes, :] = x_gnn_input[
                         :num_flow_nodes, :
                     ]
+                res = batch_gnn_output
+            else:
+                res = self.model_lstm(x, lengths)
+            #     batch_size = x.size(0)
+            #     feature_dim = x.size(2)
 
-                # x = torch.cat((x, batch_gnn_output), dim=-1)
-                x = batch_gnn_output
-            res = self.model_lstm(x, lengths)
+            #     batch_gnn_output = torch.zeros(
+            #         (batch_size, x.size(1), x.size(2)), device=x.device
+            #     )
+            #     for i in range(batch_size):
+            #         num_flow_nodes = lengths[i]
+            #         edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
+            #         max_node_index = edge_index_trimmed.max().item()
+            #         num_link_nodes = max_node_index + 1 - num_flow_nodes
+
+            #         link_node_feats = torch.full(
+            #             (num_link_nodes, feature_dim), 10.0, device=x.device
+            #         )
+            #         x_gnn_input = torch.cat(
+            #             [x[i, :num_flow_nodes], link_node_feats], dim=0
+            #         )
+
+            #         for gcn in self.gcn_layers:
+            #             x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
+
+            #         batch_gnn_output[i, :num_flow_nodes, :] = x_gnn_input[
+            #             :num_flow_nodes, :
+            #         ]
+
+            #     # x = torch.cat((x, batch_gnn_output), dim=-1)
+            #     x = batch_gnn_output
+            # res = self.model_lstm(x, lengths)
         else:
             if self.enable_gnn:
                 batch_size = x.size(0)
@@ -673,8 +700,8 @@ class FlowSimLstm(LightningModule):
             edge_index,
             edge_index_len,
         ) = batch
-        if (not self.enable_path) and self.enable_gnn:
-            # if self.enable_gnn:
+        # if (not self.enable_path) and self.enable_gnn:
+        if self.enable_gnn:
             estimated = self(input, lengths, edge_index, edge_index_len)
         else:
             estimated, _ = self(input, lengths, edge_index, edge_index_len)
@@ -747,14 +774,13 @@ class FlowSimLstm(LightningModule):
         #     self.model_lstm.parameters(), lr=self.learning_rate
         # )
         # return optimizer
-        if (not self.enable_path) and self.enable_gnn:
-            # if self.enable_gnn:
-            parameters = []
-        else:
-            parameters = list(self.model_lstm.parameters())
+        # if (not self.enable_path) and self.enable_gnn:
         if self.enable_gnn:
+            parameters = []
             for gcn_layer in self.gcn_layers:
                 parameters += list(gcn_layer.parameters())
+        else:
+            parameters = list(self.model_lstm.parameters())
         optimizer = torch.optim.Adam(parameters, lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.2, patience=5, min_lr=1e-6
