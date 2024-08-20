@@ -177,8 +177,11 @@ class DataModulePerFlow(LightningDataModule):
                             # flow_id_list=qfeat[:,0]
                             # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
 
-                            # statss = np.load(f'{dir_input}/{spec}/stats.npy', allow_pickle=True)
-                            # if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
+                            # statss = np.load(
+                            #     f"{dir_input}/{spec}/stats.npy", allow_pickle=True
+                            # )
+                            # if float(statss.item().get("size_sigma_candidate")) < 15000:
+                            #     continue
 
                             file_suffix = f"s{sample}_i0"
                             fid = np.load(
@@ -197,7 +200,7 @@ class DataModulePerFlow(LightningDataModule):
                                     if self.enable_path:
                                         busy_periods = []
                                         for period in busy_periods_ori:
-                                            if len(period) < 5000:
+                                            if len(period) < 2000:
                                                 busy_periods.append(period)
                                     else:
                                         busy_periods = busy_periods_ori

@@ -12,6 +12,8 @@ from .model_llama import Transformer, ModelArgs
 # from torch_geometric.nn import GCNConv
 from torch_geometric.nn import SAGEConv
 import torch.nn.functional as F
+from torch_geometric.nn import MessagePassing
+from torch_geometric.utils import scatter
 
 from .consts import N_BACKGROUND
 
@@ -30,21 +32,44 @@ class WeightedL1Loss(nn.Module):
         super(WeightedL1Loss, self).__init__()
 
     def forward(self, prediction, target, loss_average="perflow"):
-        if loss_average == "perflow":
-            elementwise_loss = torch.abs(prediction - target).sum()
-            weighted_loss = elementwise_loss / target.sum()
-        elif loss_average == "perperiod":
-            if prediction.dim() > 1:
-                sequencewise_loss = torch.abs(prediction - target).sum(
-                    dim=1
-                ) / target.sum(dim=1).to(prediction.device)
-            else:
-                sequencewise_loss = torch.abs(
-                    prediction - target
-                ).sum() / target.sum().to(prediction.device)
-            weighted_loss = torch.mean(sequencewise_loss)
-        else:
-            raise ValueError(f"Unsupported loss average type: {loss_average}")
+        # if loss_average == "perflow":
+        elementwise_loss = torch.abs(prediction - target).sum()
+        weighted_loss = elementwise_loss / target.sum()
+        # elif loss_average == "perperiod":
+        #     if prediction.dim() > 1:
+        #         sequencewise_loss = torch.abs(prediction - target).sum(
+        #             dim=1
+        #         ) / target.sum(dim=1).to(prediction.device)
+        #     else:
+        #         sequencewise_loss = torch.abs(
+        #             prediction - target
+        #         ).sum() / target.sum().to(prediction.device)
+        #     weighted_loss = torch.mean(sequencewise_loss)
+        # else:
+        #     raise ValueError(f"Unsupported loss average type: {loss_average}")
+        return weighted_loss
+
+
+class WeightedMSELoss(nn.Module):
+    def __init__(self):
+        super(WeightedMSELoss, self).__init__()
+
+    def forward(self, prediction, target, loss_average="perflow"):
+        # if loss_average == "perflow":
+        elementwise_loss = ((prediction - target) ** 2).sum()
+        weighted_loss = elementwise_loss / target.sum()
+        # elif loss_average == "perperiod":
+        #     if prediction.dim() > 1:
+        #         sequencewise_loss = ((prediction - target) ** 2).sum(
+        #             dim=1
+        #         ) / target.sum(dim=1).to(prediction.device)
+        #     else:
+        #         sequencewise_loss = (
+        #             (prediction - target) ** 2
+        #         ).sum() / target.sum().to(prediction.device)
+        #     weighted_loss = torch.mean(sequencewise_loss)
+        # else:
+        #     raise ValueError(f"Unsupported loss average type: {loss_average}")
         return weighted_loss
 
 
@@ -299,14 +324,66 @@ class Attention(nn.Module):
         return context, attn_weights
 
 
+class GRUConv(MessagePassing):
+    def __init__(self, c_in, c_out):
+        super(GRUConv, self).__init__(
+            aggr="add"
+        )  # Use 'add' aggregation as placeholder
+        self.gru = nn.GRU(input_size=c_in, hidden_size=c_out, batch_first=True)
+        self.fc = nn.Linear(c_out, c_out)
+
+    def forward(self, x, edge_index):
+        # x: Node features (num_nodes, c_in)
+        # edge_index: Graph connectivity (2, num_edges)
+        return self.propagate(edge_index, x=x)
+
+    def message(self, x_j, index, ptr, size_i):
+        return x_j
+
+    def aggregate(self, inputs, index):
+        # Step 1: Group the inputs by their target node index
+        unique_nodes, inverse_indices = torch.unique(
+            index, sorted=True, return_inverse=True
+        )
+        num_nodes = unique_nodes.size(0)
+
+        # Step 2: Pack the inputs into sequences for GRU
+        max_neighbors = scatter(torch.ones_like(index), index, dim=0, reduce="max")
+        padded_seq = torch.zeros(
+            (num_nodes, max_neighbors.max(), inputs.size(-1)), device=inputs.device
+        )
+
+        counts = scatter(torch.ones_like(index), index, dim=0, reduce="sum")
+        padded_seq[
+            inverse_indices, torch.arange(inputs.size(0), device=inputs.device), :
+        ] = inputs
+        packed_seq = nn.utils.rnn.pack_padded_sequence(
+            padded_seq, counts.cpu(), batch_first=True, enforce_sorted=False
+        )
+
+        # Step 3: Apply GRU
+        packed_out, _ = self.gru(packed_seq)
+        out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
+
+        # Step 4: Aggregate the output from the GRU
+        aggr_out = out[torch.arange(num_nodes, device=inputs.device), counts - 1]
+
+        return aggr_out
+
+    def update(self, aggr_out):
+        # Apply a fully connected layer (optional) and return
+        return self.fc(aggr_out)
+
+
 # GNN model
 
 
 class GNNLayer(nn.Module):
     def __init__(self, c_in, c_out):
         super(GNNLayer, self).__init__()
-        self.conv = SAGEConv(c_in, c_out, aggr="lstm")  # using mean aggregation
+        # self.conv = SAGEConv(c_in, c_out, aggr="max")  # using mean aggregation
         # self.conv = GCNConv(c_in, c_out)
+        self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
 
     def forward(self, node_feats, edge_index):
         node_feats = self.conv(node_feats, edge_index)
@@ -477,7 +554,7 @@ class FlowSimLstm(LightningModule):
             # return nn.L1Loss()
             return WeightedL1Loss()
         elif loss_fn_type == "mse":
-            return nn.MSELoss()
+            return WeightedMSELoss()
         else:
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
 
