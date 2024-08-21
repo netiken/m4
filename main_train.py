@@ -179,6 +179,7 @@ if args.mode == "train":
                 "enable_positional_encoding", False
             ),
             enable_gnn=model_config.get("enable_gnn", False),
+            enable_lstm=model_config.get("enable_lstm", False),
             enable_path=dataset_config.get("enable_path", False),
             loss_average=(
                 "perperiod"
@@ -289,6 +290,7 @@ else:
                 "enable_positional_encoding", False
             ),
             enable_gnn=model_config.get("enable_gnn", False),
+            enable_lstm=model_config.get("enable_lstm", False),
             enable_path=dataset_config.get("enable_path", False),
             loss_average=(
                 "perperiod"
