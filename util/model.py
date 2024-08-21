@@ -718,6 +718,7 @@ class FlowSimLstm(LightningModule):
         loss = self.loss_fn(est, gt, self.loss_average)
 
         self._log_loss(loss, tag)
+        estimated[:, ~attention_mask, :]=input[:, ~attention_mask, 4]
         self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)
 
         return loss

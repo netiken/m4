@@ -193,17 +193,17 @@ class DataModulePerFlow(LightningDataModule):
                                 and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
-                                    busy_periods_ori = np.load(
+                                    busy_periods = np.load(
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-                                    if self.enable_path:
-                                        busy_periods = []
-                                        for period in busy_periods_ori:
-                                            if len(period) < 5000:
-                                                busy_periods.append(period)
-                                    else:
-                                        busy_periods = busy_periods_ori
+                                    # if self.enable_path:
+                                    #     busy_periods = []
+                                    #     for period in busy_periods_ori:
+                                    #         if len(period) < 5000:
+                                    #             busy_periods.append(period)
+                                    # else:
+                                    #     busy_periods = busy_periods_ori
 
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
 
@@ -414,17 +414,17 @@ class DataModulePerFlow(LightningDataModule):
                                         and len(fid) % n_flows == 0
                                     ):
                                         if self.enable_segmentation:
-                                            busy_periods_ori = np.load(
+                                            busy_periods = np.load(
                                                 f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
                                                 allow_pickle=True,
                                             )
-                                            if self.enable_path:
-                                                busy_periods = []
-                                                for period in busy_periods_ori:
-                                                    if len(period) < 5000:
-                                                        busy_periods.append(period)
-                                            else:
-                                                busy_periods = busy_periods_ori
+                                            # if self.enable_path:
+                                            #     busy_periods = []
+                                            #     for period in busy_periods_ori:
+                                            #         if len(period) < 5000:
+                                            #             busy_periods.append(period)
+                                            # else:
+                                            #     busy_periods = busy_periods_ori
 
                                             # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             len_per_period = [
@@ -1021,18 +1021,18 @@ class PathFctSldnSegment(Dataset):
             # fats_ia[fats_ia < 0] = 0
             # fats_ia = fats - np.min(fats)
 
-            # output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
-
             sizes = np.log1p(sizes)
             fats_ia = np.log1p(fats_ia)
             flag_from_last_period = np.array(fats < period_start_time)
             flag_flow_incomplete = np.array(fats + fcts > period_end_time)
             assert not flag_flow_incomplete.all()
 
-            sldn_flowsim[flag_flow_incomplete] = 0
-            flowsim_dist[flag_flow_incomplete] = 0
-            output_data[flag_flow_incomplete] = PLACEHOLDER
+            # sldn_flowsim[flag_flow_incomplete] = 0
+            # flowsim_dist[flag_flow_incomplete] = 0
+            # output_data[flag_flow_incomplete] = PLACEHOLDER
+            output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
 
+            n_flows = np.log1p(np.full((len(fid_period), 1), len(fid_period)))
             # Generate positional encoding
             if self.enable_positional_encoding:
                 positional_encodings = self.get_positional_encoding(len(fid_period), 4)
@@ -1041,6 +1041,7 @@ class PathFctSldnSegment(Dataset):
                         fats_ia,
                         sizes,
                         n_links_passed,
+                        n_flows,
                         sldn_flowsim,
                         flowsim_dist,
                         flag_from_last_period,
@@ -1053,6 +1054,7 @@ class PathFctSldnSegment(Dataset):
                         fats_ia,
                         sizes,
                         n_links_passed,
+                        n_flows,
                         sldn_flowsim,
                         flowsim_dist,
                         flag_from_last_period,
