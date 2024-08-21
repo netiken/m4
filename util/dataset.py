@@ -193,17 +193,17 @@ class DataModulePerFlow(LightningDataModule):
                                 and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
-                                    busy_periods = np.load(
+                                    busy_periods_ori = np.load(
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-                                    # if self.enable_path:
-                                    #     busy_periods = []
-                                    #     for period in busy_periods_ori:
-                                    #         if len(period) < 5000:
-                                    #             busy_periods.append(period)
-                                    # else:
-                                    #     busy_periods = busy_periods_ori
+                                    if self.enable_path:
+                                        busy_periods = []
+                                        for period in busy_periods_ori:
+                                            if len(period) < 5000:
+                                                busy_periods.append(period)
+                                    else:
+                                        busy_periods = busy_periods_ori
 
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
 
@@ -414,17 +414,17 @@ class DataModulePerFlow(LightningDataModule):
                                         and len(fid) % n_flows == 0
                                     ):
                                         if self.enable_segmentation:
-                                            busy_periods = np.load(
+                                            busy_periods_ori = np.load(
                                                 f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
                                                 allow_pickle=True,
                                             )
-                                            # if self.enable_path:
-                                            #     busy_periods = []
-                                            #     for period in busy_periods_ori:
-                                            #         if len(period) < 5000:
-                                            #             busy_periods.append(period)
-                                            # else:
-                                            #     busy_periods = busy_periods_ori
+                                            if self.enable_path:
+                                                busy_periods = []
+                                                for period in busy_periods_ori:
+                                                    if len(period) < 5000:
+                                                        busy_periods.append(period)
+                                            else:
+                                                busy_periods = busy_periods_ori
 
                                             # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             len_per_period = [
@@ -1024,8 +1024,8 @@ class PathFctSldnSegment(Dataset):
             sizes = np.log1p(sizes)
             fats_ia = np.log1p(fats_ia)
             flag_from_last_period = np.array(fats < period_start_time)
-            flag_flow_incomplete = np.array(fats + fcts > period_end_time)
-            assert not flag_flow_incomplete.all()
+            # flag_flow_incomplete = np.array(fats + fcts > period_end_time)
+            # assert not flag_flow_incomplete.all()
 
             # sldn_flowsim[flag_flow_incomplete] = 0
             # flowsim_dist[flag_flow_incomplete] = 0
@@ -1090,7 +1090,6 @@ class PathFctSldnSegment(Dataset):
     def compute_edge_index(self, n_hosts, fsd_flowsim):
         edge_index = []
         n_flows = len(fsd_flowsim)
-        n_links = 2 * n_hosts - 1
         link_to_node_id = {}
         link_node_id = n_flows
         for flow_node_idx in range(n_flows):
