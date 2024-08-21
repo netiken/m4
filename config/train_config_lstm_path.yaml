@@ -15,7 +15,7 @@ dataset:
   segments_per_seq: 50
   sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: True
-  flow_size_threshold: 100000000
+  flow_size_threshold: 1000000
 
 # Model parameters
 model:
@@ -25,7 +25,7 @@ model:
   gcn_n_layer: 3
   loss_fn_type: "l1"
   hidden_size: 256
-  gcn_hidden_size: 512
+  gcn_hidden_size: 256
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
