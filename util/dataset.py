@@ -414,10 +414,17 @@ class DataModulePerFlow(LightningDataModule):
                                         and len(fid) % n_flows == 0
                                     ):
                                         if self.enable_segmentation:
-                                            busy_periods = np.load(
+                                            busy_periods_ori = np.load(
                                                 f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
                                                 allow_pickle=True,
                                             )
+                                            if self.enable_path:
+                                                busy_periods = []
+                                                for period in busy_periods_ori:
+                                                    if len(period) < 5000:
+                                                        busy_periods.append(period)
+                                            else:
+                                                busy_periods = busy_periods_ori
 
                                             # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             len_per_period = [
@@ -1082,19 +1089,46 @@ class PathFctSldnSegment(Dataset):
         edge_index = []
         n_flows = len(fsd_flowsim)
         n_links = 2 * n_hosts - 1
-        for i in range(n_flows):
-            src = fsd_flowsim[i, 0]
-            dst = fsd_flowsim[i, 1]
-            flow_node_idx = i
+        link_to_node_id = {}
+        link_node_id = n_flows
+        for flow_node_idx in range(n_flows):
+            src = fsd_flowsim[flow_node_idx, 0]
+            dst = fsd_flowsim[flow_node_idx, 1]
             assert src < dst
-            edge_index.append([n_flows + src, flow_node_idx])
-            edge_index.append([flow_node_idx, n_flows + src])
-            edge_index.append([n_flows + n_links + dst, flow_node_idx])
-            edge_index.append([flow_node_idx, n_flows + n_links + dst])
+
+            link_pair = (src, src + n_hosts)
+            if link_pair in link_to_node_id:
+                link_node_id_tmp = link_to_node_id[link_pair]
+            else:
+                link_node_id_tmp = link_node_id
+                link_to_node_id[link_pair] = link_node_id_tmp
+                link_node_id += 1
+
+            edge_index.append([link_node_id_tmp, flow_node_idx])
+            edge_index.append([flow_node_idx, link_node_id_tmp])
+
+            link_pair = (dst + n_hosts, dst)
+            if link_pair in link_to_node_id:
+                link_node_id_tmp = link_to_node_id[link_pair]
+            else:
+                link_node_id_tmp = link_node_id
+                link_to_node_id[link_pair] = link_node_id_tmp
+                link_node_id += 1
+
+            edge_index.append([link_node_id_tmp, flow_node_idx])
+            edge_index.append([flow_node_idx, link_node_id_tmp])
 
             for link_idx in range(src, dst):
-                edge_index.append([n_flows + n_hosts + link_idx, flow_node_idx])
-                edge_index.append([flow_node_idx, n_flows + n_hosts + link_idx])
+                link_pair = (n_hosts + link_idx, n_hosts + link_idx + 1)
+                if link_pair in link_to_node_id:
+                    link_node_id_tmp = link_to_node_id[link_pair]
+                else:
+                    link_node_id_tmp = link_node_id
+                    link_to_node_id[link_pair] = link_node_id_tmp
+                    link_node_id += 1
+
+                edge_index.append([link_node_id_tmp, flow_node_idx])
+                edge_index.append([flow_node_idx, link_node_id_tmp])
         # edge_index.append([n_flows, n_flows + n_hosts])
         # for link_idx in range(1, n_hosts - 1):
         #     edge_index.append([n_flows + link_idx, n_flows + n_hosts + link_idx])

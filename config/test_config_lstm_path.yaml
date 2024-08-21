@@ -5,27 +5,27 @@ dataset:
   n_flows_list: [2000]
   n_hosts_list: [5]
   shard: 0
-  shard_list: [0,2000,2000] # [start, end, num]
+  shard_list: [0,1000,1000] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
   topo_type: "_topo-pl-x_"
   output_type: "fctSldn" # fctSldn, queueLen
   enable_segmentation: True
-  segments_per_seq: 40
+  segments_per_seq: 20
   sampling_method: "uniform" # weighted, uniform, balanced
   enable_path: True
-  flow_size_threshold: 100000000
+  flow_size_threshold: 1000000
 
 # Model parameters
 model:
   model_name: "lstm"
   input_size: 5
   n_layer: 2
-  gcn_n_layer: 2
+  gcn_n_layer: 3
   loss_fn_type: "l1"
   hidden_size: 256
-  gcn_hidden_size: 8
+  gcn_hidden_size: 512
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
@@ -33,7 +33,7 @@ model:
 
 # Training parameters
 training:
-  gpu: [1]
+  gpu: [0]
   n_epochs: 5
   batch_size: 1
   learning_rate: 0.0001
