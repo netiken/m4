@@ -393,36 +393,51 @@ class Attention(nn.Module):
 
 # GNN model
 # class GNNLayer(nn.Module):
-#     def __init__(self, c_in, c_out):
+#     def __init__(self, c_in, c_out, dropout=0.5):
 #         super(GNNLayer, self).__init__()
-#         # self.conv = SAGEConv(c_in, c_out, aggr="max")  # using mean aggregation
+#         self.conv = SAGEConv(c_in, c_out, aggr="mean")  # using mean aggregation
 #         # self.conv = GCNConv(c_in, c_out)
-#         self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
+#         # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
+#         self.dropout = nn.Dropout(p=dropout)
 
 #     def forward(self, node_feats, edge_index):
 #         node_feats = self.conv(node_feats, edge_index)
 #         node_feats = F.relu(node_feats)
+#         node_feats = self.dropout(node_feats)
 #         return node_feats
 
 
 class GNNLayer(nn.Module):
-    def __init__(self, c_in, c_out, heads=4, concat=True, dropout=0.2):
+    def __init__(
+        self, c_in, c_out, heads=4, concat=True, dropout=0.2, enable_lstm=False
+    ):
         super(GNNLayer, self).__init__()
         # Initialize the GATConv layer
-        self.gat_conv = GATConv(
-            c_in,
-            c_in // heads if concat else c_out,
-            heads=heads,
-            concat=concat,
-            dropout=dropout,
-        )
-        self.fc = nn.Linear(c_in, c_out)
+        self.enable_lstm = enable_lstm
+        if enable_lstm:
+            self.gat_conv = GATConv(
+                c_in,
+                c_out // heads if concat else c_out,
+                heads=heads,
+                concat=concat,
+                dropout=dropout,
+            )
+        else:
+            self.gat_conv = GATConv(
+                c_in,
+                c_in // heads if concat else c_in,
+                heads=heads,
+                concat=concat,
+                dropout=dropout,
+            )
+            self.fc = nn.Linear(c_in, c_out)
 
     def forward(self, node_feats, edge_index):
         # Apply GAT convolution
         node_feats = self.gat_conv(node_feats, edge_index)
         node_feats = F.relu(node_feats)
-        node_feats = self.fc(node_feats)
+        if not self.enable_lstm:
+            node_feats = self.fc(node_feats)
         return node_feats
 
 
@@ -542,6 +557,8 @@ class FlowSimLstm(LightningModule):
                     GNNLayer(
                         input_size if i == 0 else gcn_hidden_size,
                         gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
+                        dropout=dropout,
+                        enable_lstm=enable_lstm,
                     )
                     for i in range(gcn_n_layer)
                 ]
@@ -562,6 +579,8 @@ class FlowSimLstm(LightningModule):
                     GNNLayer(
                         input_size if i == 0 else gcn_hidden_size,
                         (gcn_hidden_size if i != gcn_n_layer - 1 else output_size),
+                        dropout=dropout,
+                        enable_lstm=enable_lstm,
                     )
                     for i in range(gcn_n_layer)
                 ]
@@ -611,7 +630,7 @@ class FlowSimLstm(LightningModule):
                 num_link_nodes = max_node_index + 1 - num_flow_nodes
 
                 link_node_feats = torch.full(
-                    (num_link_nodes, feature_dim), 10.0, device=x.device
+                    (num_link_nodes, feature_dim), 1.0, device=x.device
                 )
                 x_gnn_input = torch.cat([x[i, :num_flow_nodes], link_node_feats], dim=0)
 
@@ -636,7 +655,7 @@ class FlowSimLstm(LightningModule):
                 num_link_nodes = max_node_index + 1 - num_flow_nodes
 
                 link_node_feats = torch.full(
-                    (num_link_nodes, feature_dim), 10.0, device=x.device
+                    (num_link_nodes, feature_dim), 1.0, device=x.device
                 )
                 # link_node_feats_host = torch.full(
                 #     ((num_link_nodes + 1) // 3, feature_dim), 10.0, device=x.device
@@ -688,7 +707,10 @@ class FlowSimLstm(LightningModule):
         loss = self.loss_fn(est, gt, self.loss_average)
 
         self._log_loss(loss, tag)
-        estimated[:, :, 0][~attention_mask] = input[:, :, 4][~attention_mask]
+        # if estimated.size(0) == 1:
+        #     estimated[0, :, 0][~attention_mask] = input[0, :, 4][~attention_mask]
+        # else:
+        #     estimated[:, :, 0][~attention_mask] = input[:, :, 4][~attention_mask]
         self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)
 
         return loss

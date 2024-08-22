@@ -384,11 +384,12 @@ class DataModulePerFlow(LightningDataModule):
                     if self.enable_path:
                         shard_list = np.arange(0, 200)
                         n_hosts_list = [5]
+                        n_flows_list = [10000]
                     else:
                         shard_list = np.arange(0, 100)
                         n_hosts_list = [21]
+                        n_flows_list = [2000]
 
-                    n_flows_list = [2000]
                     sample_list = [0]
                     if self.enable_segmentation:
                         len_per_period_all = []
@@ -997,7 +998,7 @@ class PathFctSldnSegment(Dataset):
                     fats + fcts < fats[flow_id] + fcts[flow_id],
                 )
                 sldn_flowsim_tmp = sldn_flowsim[flow_id_target]
-                n_tmp = min(len(sldn_flowsim_tmp), N_BACKGROUND)
+                n_tmp = min(len(sldn_flowsim_tmp), N_BACKGROUND, len(fid_period))
                 flowsim_dist[flow_idx, :n_tmp] = np.flip(sldn_flowsim_tmp[-n_tmp:])
 
             sizes = sizes[fid_period_idx]
@@ -1010,6 +1011,7 @@ class PathFctSldnSegment(Dataset):
 
             output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
             assert (output_data >= 1.0).all()
+            # output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
 
             # Calculate inter-arrival times and adjust the first element
             if self.enable_gnn:
@@ -1030,7 +1032,6 @@ class PathFctSldnSegment(Dataset):
             # sldn_flowsim[flag_flow_incomplete] = 0
             # flowsim_dist[flag_flow_incomplete] = 0
             # output_data[flag_flow_incomplete] = PLACEHOLDER
-            output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
 
             n_flows = np.log1p(np.full((len(fid_period), 1), len(fid_period)))
             # Generate positional encoding
