@@ -5,7 +5,7 @@ dataset:
   n_flows_list: [10000]
   n_hosts_list: [5]
   shard: 0
-  shard_list: [0,200,200] # [start, end, num]
+  shard_list: [0,20,20] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
@@ -21,16 +21,17 @@ dataset:
 # Model parameters
 model:
   model_name: "lstm"
-  input_size: 6
+  input_size: 5
   n_layer: 2
   gcn_n_layer: 3
   loss_fn_type: "l1"
   hidden_size: 256
   gcn_hidden_size: 256
-  dropout: 0.0
+  dropout: 0.2
   enable_bidirectional: True
   enable_positional_encoding: False
   enable_gnn: True
+  enable_lstm: True
 
 # Training parameters
 training:

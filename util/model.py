@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import scatter
 
-from .consts import N_BACKGROUND
+# from .consts import N_BACKGROUND
 
 
 class ExpActivation(nn.Module):
@@ -484,22 +484,33 @@ class LSTMModel(nn.Module):
         ).to(device)
         return h_t, c_t
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths, lengths_per_path, n_paths_per_batch):
         batch_size = x.size(0)
-        h_t, c_t = self.init_hidden(batch_size, x.device)
+        n_feats = x.size(2)
+        n_longest_seq = np.max(lengths_per_path)
+        n_batches_total = np.sum(n_paths_per_batch)
 
-        # outputs = []
-        # for t in range(seq_len):
-        #     out, (h_t, c_t) = self.lstm(x[:, t:t+1, :], (h_t, c_t))
-        #     out = self.fc(out[:, -1, :])
-        #     outputs.append(out)
-        # outputs = torch.stack(outputs, dim=1)
-        # Process the entire sequence at once
-        # lstm_out, (h_t, c_t) = self.lstm(x, (h_t, c_t))
+        x_adj = torch.zeros((n_batches_total, n_longest_seq, n_feats), device=x.device)
 
+        n_batches = 0
+        for i in range(batch_size):
+            n_seq_accumulated = 0
+            for j in range(n_paths_per_batch[i]):
+                seq_len = lengths_per_path[i][j]
+                x_adj[n_batches, : lengths_per_path[i][j]] = x[
+                    i, n_seq_accumulated : n_seq_accumulated + seq_len
+                ]
+                n_seq_accumulated += seq_len
+                n_batches += 1
+
+        lengths_per_path_new = np.concatenate(
+            [lengths_per_path[i, : n_paths_per_batch[i]] for i in range(batch_size)]
+        )
+
+        h_t, c_t = self.init_hidden(n_batches_total, x_adj.device)
         # Pack the padded batch of sequences for LSTM
         packed_input = nn.utils.rnn.pack_padded_sequence(
-            x, lengths, batch_first=True, enforce_sorted=False
+            x_adj, lengths_per_path_new, batch_first=True, enforce_sorted=False
         )
         packed_output, (h_t, c_t) = self.lstm(packed_input, (h_t, c_t))
 
@@ -514,7 +525,21 @@ class LSTMModel(nn.Module):
             lstm_out, _ = self.attention(lstm_out)
         # Apply the fully connected layer to each time step
         out = self.fc(lstm_out)
-        return out, (h_t, c_t)
+
+        # Initialize the final output tensor with the same shape as x
+        out_final = torch.zeros((x.size(0), x.size(1), out.size(2)), device=out.device)
+        n_batches = 0
+        for i in range(batch_size):
+            n_seq_accumulated = 0
+            for j in range(n_paths_per_batch[i]):
+                seq_len = lengths_per_path[i][j]
+                out_final[i, n_seq_accumulated : n_seq_accumulated + seq_len] = out[
+                    n_batches, :seq_len
+                ]
+                n_seq_accumulated += seq_len
+                n_batches += 1
+
+        return out_final, (h_t, c_t)
 
 
 class FlowSimLstm(LightningModule):
@@ -548,15 +573,15 @@ class FlowSimLstm(LightningModule):
         self.enable_lstm = enable_lstm
         self.gcn_hidden_size = gcn_hidden_size
         self.enable_path = enable_path
-        input_size += N_BACKGROUND
+        # input_size += N_BACKGROUND
         # GCN layers
         if enable_lstm and enable_gnn:
             logging.info(f"GNN and LSTM enabled")
             self.gcn_layers = nn.ModuleList(
                 [
                     GNNLayer(
-                        input_size if i == 0 else gcn_hidden_size,
-                        gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
+                        input_size - 1 if i == 0 else gcn_hidden_size,
+                        gcn_hidden_size if i != gcn_n_layer - 1 else input_size - 1,
                         dropout=dropout,
                         enable_lstm=enable_lstm,
                     )
@@ -564,7 +589,7 @@ class FlowSimLstm(LightningModule):
                 ]
             )
             self.model_lstm = LSTMModel(
-                input_size * 2,
+                input_size * 2 - 1,
                 hidden_size,
                 output_size,
                 n_layer,
@@ -577,7 +602,7 @@ class FlowSimLstm(LightningModule):
             self.gcn_layers = nn.ModuleList(
                 [
                     GNNLayer(
-                        input_size if i == 0 else gcn_hidden_size,
+                        input_size - 1 if i == 0 else gcn_hidden_size,
                         (gcn_hidden_size if i != gcn_n_layer - 1 else output_size),
                         dropout=dropout,
                         enable_lstm=enable_lstm,
@@ -615,13 +640,21 @@ class FlowSimLstm(LightningModule):
         else:
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
 
-    def forward(self, x, lengths, edge_index, edge_index_len):
+    def forward(
+        self,
+        x,
+        lengths,
+        edge_index,
+        edge_index_len,
+        lengths_per_path,
+        n_paths_per_batch,
+    ):
         if self.enable_gnn and self.enable_lstm:
             batch_size = x.size(0)
-            feature_dim = x.size(2)
+            feature_dim = x.size(2) - 1
 
             batch_gnn_output = torch.zeros(
-                (batch_size, x.size(1), x.size(2)), device=x.device
+                (batch_size, x.size(1), feature_dim), device=x.device
             )
             for i in range(batch_size):
                 num_flow_nodes = lengths[i]
@@ -632,7 +665,9 @@ class FlowSimLstm(LightningModule):
                 link_node_feats = torch.full(
                     (num_link_nodes, feature_dim), 1.0, device=x.device
                 )
-                x_gnn_input = torch.cat([x[i, :num_flow_nodes], link_node_feats], dim=0)
+                x_gnn_input = torch.cat(
+                    [x[i, :num_flow_nodes, :-1], link_node_feats], dim=0
+                )
 
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
@@ -642,10 +677,10 @@ class FlowSimLstm(LightningModule):
                 ]
 
             x = torch.cat((x, batch_gnn_output), dim=-1)
-            res, _ = self.model_lstm(x, lengths)
+            res, _ = self.model_lstm(x, lengths, lengths_per_path, n_paths_per_batch)
         elif self.enable_gnn:
             batch_size = x.size(0)
-            feature_dim = x.size(2)
+            feature_dim = x.size(2) - 1
 
             res = torch.zeros((batch_size, x.size(1), 1), device=x.device)
             for i in range(batch_size):
@@ -667,7 +702,7 @@ class FlowSimLstm(LightningModule):
                 # )
                 x_gnn_input = torch.cat(
                     [
-                        x[i, :num_flow_nodes],
+                        x[i, :num_flow_nodes, :-1],
                         link_node_feats,
                     ],
                     dim=0,
@@ -678,7 +713,7 @@ class FlowSimLstm(LightningModule):
 
                 res[i, :num_flow_nodes, :] = x_gnn_input[:num_flow_nodes, :]
         elif self.enable_lstm:
-            res, _ = self.model_lstm(x, lengths)
+            res, _ = self.model_lstm(x, lengths, lengths_per_path, n_paths_per_batch)
         else:
             assert False, "Either GNN or LSTM must be enabled"
         return res
@@ -692,9 +727,18 @@ class FlowSimLstm(LightningModule):
             src_dst_pair_target_str,
             edge_index,
             edge_index_len,
+            lengths_per_path,
+            n_paths_per_batch,
         ) = batch
 
-        estimated = self(input, lengths, edge_index, edge_index_len)
+        estimated = self(
+            input,
+            lengths,
+            edge_index,
+            edge_index_len,
+            lengths_per_path,
+            n_paths_per_batch,
+        )
 
         # Generate a mask based on lengths
         attention_mask = output.squeeze() >= 1.0

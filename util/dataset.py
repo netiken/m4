@@ -16,6 +16,7 @@ from .consts import (
     # PERCENTILE_METHOD,
     N_BACKGROUND,
 )
+from collections import defaultdict
 
 
 def collate_fn_link(batch):
@@ -64,6 +65,59 @@ def collate_fn_link(batch):
 
 
 def collate_fn_path(batch):
+    inputs, outputs, specs, src_dst_pairs, edge_indices, n_inputs_per_path = zip(*batch)
+
+    # Get lengths of each sequence in the batch
+    lengths = np.array([x.shape[0] for x in inputs]).astype(np.int64)
+    max_len = max(lengths)
+    padded_inputs = np.zeros(
+        (len(inputs), max_len, inputs[0].shape[1]), dtype=np.float32
+    )
+    padded_outputs = (
+        np.ones((len(outputs), max_len, outputs[0].shape[1]), dtype=np.float32)
+        * PLACEHOLDER
+    )
+
+    for i, (input, output) in enumerate(zip(inputs, outputs)):
+        padded_inputs[i, : input.shape[0], :] = input
+        padded_outputs[i, : output.shape[0], :] = output
+
+    # Determine the maximum number of edges
+    max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
+    padded_edge_indices = []
+    edge_indices_len = []
+    for edge_index in edge_indices:
+        padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
+        padded_edge_index[:, : edge_index.shape[1]] = edge_index
+        padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
+        edge_indices_len.append(edge_index.shape[1])
+
+    padded_edge_indices = torch.stack(padded_edge_indices)
+
+    # pad n_inputs_per_path
+    n_paths_per_batch = np.array([len(x) for x in n_inputs_per_path]).astype(np.int64)
+    max_len_per_path = max(n_paths_per_batch)
+    padded_inputs_per_path = np.zeros(
+        (len(n_inputs_per_path), max_len_per_path),
+        dtype=np.int64,
+    )
+    for i, input_per_path in enumerate(n_inputs_per_path):
+        padded_inputs_per_path[i, : input_per_path.shape[0]] = input_per_path
+
+    return (
+        torch.tensor(padded_inputs),
+        torch.tensor(padded_outputs),
+        lengths,
+        specs,
+        src_dst_pairs,
+        padded_edge_indices,
+        np.array(edge_indices_len),
+        padded_inputs_per_path,
+        n_paths_per_batch,
+    )
+
+
+def collate_fn_path_tmp(batch):
     inputs, outputs, specs, src_dst_pairs, edge_indices = zip(*batch)
 
     # Get lengths of each sequence in the batch
@@ -915,6 +969,210 @@ class LinkFctSldnSegment(Dataset):
 
 
 class PathFctSldnSegment(Dataset):
+    def __init__(
+        self,
+        data_list,
+        dir_input,
+        enable_positional_encoding,
+        flow_size_threshold,
+        enable_gnn,
+    ):
+        self.data_list = data_list
+        self.dir_input = dir_input
+        self.use_first_epoch_logic = True
+        self.lr = 10.0
+        self.enable_positional_encoding = enable_positional_encoding
+        self.flow_size_threshold = flow_size_threshold
+        self.enable_gnn = enable_gnn
+        logging.info(
+            f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn}"
+        )
+
+    def __len__(self):
+        return len(self.data_list)
+
+    def __getitem__(self, idx):
+        spec, src_dst_pair_target, topo_type, segment_id, _ = self.data_list[idx]
+        src_dst_pair_target_str = (
+            "_".join([str(x) for x in src_dst_pair_target]) + f"_seg{segment_id}"
+        )
+
+        # load data
+        dir_input_tmp = f"{self.dir_input}/{spec}"
+        feat_path = f"{dir_input_tmp}/feat{topo_type}_seg{segment_id}.npz"
+
+        if not os.path.exists(feat_path) or self.use_first_epoch_logic:
+            n_hosts = int(spec.split("_")[2][6:])
+
+            busy_periods = np.load(
+                f"{dir_input_tmp}/period{topo_type}_t{self.flow_size_threshold}.npy",
+                allow_pickle=True,
+            )
+            busy_periods_time = np.load(
+                f"{dir_input_tmp}/period_time{topo_type}_t{self.flow_size_threshold}.npy"
+            )
+            assert len(busy_periods) == len(busy_periods_time)
+
+            fid_period = np.array(busy_periods[segment_id]).astype(int)
+            fsd_ori = np.load(f"{dir_input_tmp}/fsd.npy")
+
+            # Sort and count the occurrences in one pass
+            dict_tmp = defaultdict(list)
+            for i in fid_period:
+                key = (fsd_ori[i][0] - fsd_ori[i][1], fsd_ori[i][0])
+                dict_tmp[key].append(i)
+            sorted_keys = sorted(dict_tmp.keys())
+            fid_period = np.concatenate([dict_tmp[key] for key in sorted_keys])
+            n_inputs_per_path = np.array([len(dict_tmp[key]) for key in sorted_keys])
+
+            period_start_time, _ = busy_periods_time[segment_id]
+
+            # get all previous flows
+            sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid_period]
+            fats = np.load(f"{dir_input_tmp}/fat.npy")[fid_period]
+            fsd = fsd_ori[fid_period]
+            fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid_period]
+            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid_period]
+            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid_period]
+
+            # compute propagation delay
+            n_links_passed = abs(fsd[:, 0] - fsd[:, 1]) + 2
+            base_delay = get_base_delay_path(
+                sizes=sizes,
+                n_links_passed=n_links_passed,
+                lr_bottleneck=self.lr,
+            )
+            i_fcts_flowsim = get_base_delay_transmission(sizes, self.lr) + base_delay
+            fcts_flowsim += base_delay
+            sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
+
+            output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
+            assert (output_data >= 1.0).all()
+            # output_data[sizes > self.flow_size_threshold] = PLACEHOLDER
+
+            # Calculate inter-arrival times and adjust the first element
+            fats_ia = fats - np.min(fats)
+            assert (fats_ia >= 0).all()
+
+            sizes = np.log1p(sizes)
+            fats_ia = np.log1p(fats_ia)
+            flag_from_last_period = np.array(fats < period_start_time)
+            # flag_flow_incomplete = np.array(fats + fcts > period_end_time)
+            # assert not flag_flow_incomplete.all()
+
+            # sldn_flowsim[flag_flow_incomplete] = 0
+            # flowsim_dist[flag_flow_incomplete] = 0
+            # output_data[flag_flow_incomplete] = PLACEHOLDER
+
+            # Generate positional encoding
+            if self.enable_positional_encoding:
+                positional_encodings = self.get_positional_encoding(len(fid_period), 4)
+                input_data = np.column_stack(
+                    (
+                        fats_ia,
+                        sizes,
+                        sldn_flowsim,
+                        n_links_passed,
+                        flag_from_last_period,
+                        positional_encodings,
+                    )
+                ).astype(np.float32)
+            else:
+                input_data = np.column_stack(
+                    (
+                        fats_ia,
+                        sizes,
+                        sldn_flowsim,
+                        n_links_passed,
+                        flag_from_last_period,
+                    )
+                ).astype(np.float32)
+            # input_data = np.log1p(input_data)
+
+            # Compute the adjacency matrix for the bipartite graph
+            edge_index = self.compute_edge_index(n_hosts, fsd)
+
+            # np.savez(feat_path, input_data=input_data, output_data=output_data,edge_index=edge_index)
+        else:
+            feat = np.load(feat_path)
+            input_data = feat["input_data"]
+            output_data = feat["output_data"]
+            edge_index = feat["edge_index"]
+        return (
+            input_data,
+            output_data,
+            spec + topo_type,
+            src_dst_pair_target_str,
+            edge_index,
+            n_inputs_per_path,
+        )
+
+    def get_positional_encoding(self, seq_len, d_model):
+        pe = np.zeros((seq_len, d_model))
+        position = np.arange(0, seq_len).reshape(-1, 1)
+        div_term = np.exp(np.arange(0, d_model, 2) * -(np.log(10000.0) / d_model))
+        pe[:, 0::2] = np.sin(position * div_term[: d_model // 2])
+        pe[:, 1::2] = np.cos(position * div_term[: d_model // 2])
+        return pe
+
+    def compute_edge_index(self, n_hosts, fsd_flowsim):
+        edge_index = []
+        n_flows = len(fsd_flowsim)
+        link_to_node_id = {}
+        link_node_id = n_flows
+        for flow_node_idx in range(n_flows):
+            src = fsd_flowsim[flow_node_idx, 0]
+            dst = fsd_flowsim[flow_node_idx, 1]
+            assert src < dst
+
+            link_pair = (src, src + n_hosts)
+            if link_pair in link_to_node_id:
+                link_node_id_tmp = link_to_node_id[link_pair]
+            else:
+                link_node_id_tmp = link_node_id
+                link_to_node_id[link_pair] = link_node_id_tmp
+                link_node_id += 1
+
+            edge_index.append([link_node_id_tmp, flow_node_idx])
+            edge_index.append([flow_node_idx, link_node_id_tmp])
+
+            link_pair = (dst + n_hosts, dst)
+            if link_pair in link_to_node_id:
+                link_node_id_tmp = link_to_node_id[link_pair]
+            else:
+                link_node_id_tmp = link_node_id
+                link_to_node_id[link_pair] = link_node_id_tmp
+                link_node_id += 1
+
+            edge_index.append([link_node_id_tmp, flow_node_idx])
+            edge_index.append([flow_node_idx, link_node_id_tmp])
+
+            for link_idx in range(src, dst):
+                link_pair = (n_hosts + link_idx, n_hosts + link_idx + 1)
+                if link_pair in link_to_node_id:
+                    link_node_id_tmp = link_to_node_id[link_pair]
+                else:
+                    link_node_id_tmp = link_node_id
+                    link_to_node_id[link_pair] = link_node_id_tmp
+                    link_node_id += 1
+
+                edge_index.append([link_node_id_tmp, flow_node_idx])
+                edge_index.append([flow_node_idx, link_node_id_tmp])
+        # edge_index.append([n_flows, n_flows + n_hosts])
+        # for link_idx in range(1, n_hosts - 1):
+        #     edge_index.append([n_flows + link_idx, n_flows + n_hosts + link_idx])
+        #     edge_index.append(
+        #         [n_flows + n_hosts + link_idx - 1, n_flows + n_links + link_idx]
+        #     )
+        # edge_index.append([n_flows + 2 * n_hosts - 2, n_flows + n_links + n_hosts - 1])
+        edge_index = np.array(edge_index).T
+        # Sort edge_index by destination node (second row)
+        sorted_indices = np.argsort(edge_index[1, :])
+        edge_index = edge_index[:, sorted_indices]
+        return edge_index
+
+
+class PathFctSldnSegmentTmp(Dataset):
     def __init__(
         self,
         data_list,
