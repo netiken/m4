@@ -193,23 +193,28 @@ class DataModulePerFlow(LightningDataModule):
                                 and len(fid) % n_flows == 0
                             ):
                                 if enable_segmentation:
-                                    busy_periods_ori = np.load(
+                                    busy_periods = np.load(
                                         f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
                                         allow_pickle=True,
                                     )
-                                    if self.enable_path:
-                                        busy_periods = []
-                                        for period in busy_periods_ori:
-                                            if len(period) < 5000:
-                                                busy_periods.append(period)
-                                    else:
-                                        busy_periods = busy_periods_ori
+                                    # if self.enable_path:
+                                    #     busy_periods = []
+                                    #     for period in busy_periods_ori:
+                                    #         if len(period) < 5000:
+                                    #             busy_periods.append(period)
+                                    # else:
+                                    #     busy_periods = busy_periods_ori
 
                                     # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
 
                                     len_per_period = [
                                         len(period) for period in busy_periods
                                     ]
+                                    if (
+                                        np.mean(len_per_period) > 100
+                                        or np.max(len_per_period) > 10000
+                                    ):
+                                        continue
 
                                     if np.sum(len_per_period) > 0:
                                         data_list_per_period = [
@@ -415,22 +420,28 @@ class DataModulePerFlow(LightningDataModule):
                                         and len(fid) % n_flows == 0
                                     ):
                                         if self.enable_segmentation:
-                                            busy_periods_ori = np.load(
+                                            busy_periods = np.load(
                                                 f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
                                                 allow_pickle=True,
                                             )
-                                            if self.enable_path:
-                                                busy_periods = []
-                                                for period in busy_periods_ori:
-                                                    if len(period) < 5000:
-                                                        busy_periods.append(period)
-                                            else:
-                                                busy_periods = busy_periods_ori
+                                            # if self.enable_path:
+                                            #     busy_periods = []
+                                            #     for period in busy_periods_ori:
+                                            #         if len(period) < 5000:
+                                            #             busy_periods.append(period)
+                                            # else:
+                                            #     busy_periods = busy_periods_ori
 
                                             # len_per_period = [int(period[1])-int(period[0])+1 for period in busy_periods]
                                             len_per_period = [
                                                 len(period) for period in busy_periods
                                             ]
+
+                                            if (
+                                                np.mean(len_per_period) > 100
+                                                or np.max(len_per_period) > 10000
+                                            ):
+                                                continue
 
                                             if np.sum(len_per_period) > 0:
                                                 data_list_per_period = [
