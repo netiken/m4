@@ -15,7 +15,7 @@ dataset:
   segments_per_seq: 40
   sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: True
-  flow_size_threshold: 100000000
+  flow_size_threshold: 1000000
 
 # Model parameters
 model:
@@ -29,8 +29,8 @@ model:
   dropout: 0.2
   enable_bidirectional: True
   enable_positional_encoding: False
-  enable_gnn: False
-  enable_lstm: True
+  enable_gnn: True
+  enable_lstm: False
 
 # Training parameters
 training:

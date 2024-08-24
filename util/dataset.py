@@ -85,7 +85,7 @@ def collate_fn_path(batch):
         padded_outputs[i, : output.shape[0], :] = output
 
     # Determine the maximum number of edges
-    if edge_indices:
+    if edge_indices[0] is not None:
         max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
         padded_edge_indices = []
         edge_indices_len = []
