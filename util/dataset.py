@@ -85,19 +85,24 @@ def collate_fn_path(batch):
         padded_outputs[i, : output.shape[0], :] = output
 
     # Determine the maximum number of edges
-    max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
-    padded_edge_indices = []
-    edge_indices_len = []
-    for edge_index in edge_indices:
-        padded_edge_index = np.full(
-            (edge_index.shape[0], max_num_edges), 0, dtype=edge_index.dtype
-        )
-        padded_edge_index[:, : edge_index.shape[1]] = edge_index
-        padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
-        edge_indices_len.append(edge_index.shape[1])
-
-    padded_edge_indices = torch.stack(padded_edge_indices)
-
+    if edge_indices:
+        max_num_edges = max(edge_index.shape[1] for edge_index in edge_indices)
+        padded_edge_indices = []
+        edge_indices_len = []
+        for edge_index in edge_indices:
+            padded_edge_index = np.full(
+                (edge_index.shape[0], max_num_edges), 0, dtype=edge_index.dtype
+            )
+            padded_edge_index[:, : edge_index.shape[1]] = edge_index
+            padded_edge_indices.append(
+                torch.tensor(padded_edge_index, dtype=torch.long)
+            )
+            edge_indices_len.append(edge_index.shape[1])
+        edge_indices_len = np.array(edge_indices_len)
+        padded_edge_indices = torch.stack(padded_edge_indices)
+    else:
+        padded_edge_indices = None
+        edge_indices_len = None
     # pad n_inputs_per_path
     n_paths_per_batch = np.array([len(x) for x in n_inputs_per_path]).astype(np.int64)
     max_len_per_path = max(n_paths_per_batch)
@@ -115,7 +120,7 @@ def collate_fn_path(batch):
         specs,
         src_dst_pairs,
         padded_edge_indices,
-        np.array(edge_indices_len),
+        edge_indices_len,
         padded_inputs_per_path,
         n_paths_per_batch,
     )
@@ -1094,10 +1099,12 @@ class PathFctSldnSegment(Dataset):
             # input_data = np.log1p(input_data)
 
             # Compute the adjacency matrix for the bipartite graph
-            edge_index = self.compute_edge_index(
-                n_hosts, fid_period, fsd, fats, fats + fcts
-            )
-
+            if self.enable_gnn:
+                edge_index = self.compute_edge_index(
+                    n_hosts, fid_period, fsd, fats, fats + fcts
+                )
+            else:
+                edge_index = None
             # np.savez(feat_path, input_data=input_data, output_data=output_data,edge_index=edge_index)
         else:
             feat = np.load(feat_path)
@@ -1123,7 +1130,7 @@ class PathFctSldnSegment(Dataset):
 
     def compute_edge_index(self, n_hosts, fid, fsd_flowsim, fats, fcts):
         n_flows = len(fsd_flowsim)
-        edge_index = []
+        edge_index = [[0, 0, 1]]
 
         fid_idx = np.argsort(fid)
         fsd_flowsim = fsd_flowsim[fid_idx]

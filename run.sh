@@ -23,7 +23,7 @@ time run ../ckpts/model_llama.bin ../ckpts/model_mlp.bin ../ckpts/data_lr10Gbps_
 # train
 python main_train.py --train_config=./config/train_config_lstm_link.yaml --mode=train --dir_input=/data2/lichenni/perflow_link --dir_output=/data2/lichenni/output_perflow --note link_200000_abstime_gnn
 
-CUDA_VISIBLE_DEVICES=0,1 python main_train.py --train_config=./config/train_config_lstm_path.yaml --mode=train --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note path_100000000_gnnlstm_v1
+CUDA_VISIBLE_DEVICES=0,1 python main_train.py --train_config=./config/train_config_lstm_path.yaml --mode=train --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note path_100000000_gnnlstm
 
 CUDA_VISIBLE_DEVICES=0,1 python main_train.py --train_config=./config/train_config_lstm_path.yaml --mode=train --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note path_1000000_gat
 
