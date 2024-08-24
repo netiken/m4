@@ -10,10 +10,8 @@ import os
 from .model_llama import Transformer, ModelArgs
 
 # from torch_geometric.nn import GCNConv
-from torch_geometric.nn import SAGEConv, GATConv
+from torch_geometric.nn import SAGEConv, GATv2Conv, GraphConv
 import torch.nn.functional as F
-from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import scatter
 
 # from .consts import N_BACKGROUND
 
@@ -392,53 +390,54 @@ class Attention(nn.Module):
 
 
 # GNN model
-# class GNNLayer(nn.Module):
-#     def __init__(self, c_in, c_out, dropout=0.5):
-#         super(GNNLayer, self).__init__()
-#         self.conv = SAGEConv(c_in, c_out, aggr="mean")  # using mean aggregation
-#         # self.conv = GCNConv(c_in, c_out)
-#         # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
-#         self.dropout = nn.Dropout(p=dropout)
-
-#     def forward(self, node_feats, edge_index):
-#         node_feats = self.conv(node_feats, edge_index)
-#         node_feats = F.relu(node_feats)
-#         node_feats = self.dropout(node_feats)
-#         return node_feats
-
-
 class GNNLayer(nn.Module):
-    def __init__(
-        self, c_in, c_out, heads=4, concat=True, dropout=0.2, enable_lstm=False
-    ):
+    def __init__(self, c_in, c_out, dropout=0.2, enable_lstm=False):
         super(GNNLayer, self).__init__()
-        # Initialize the GATConv layer
-        self.enable_lstm = enable_lstm
-        if enable_lstm:
-            self.gat_conv = GATConv(
-                c_in,
-                c_out // heads if concat else c_out,
-                heads=heads,
-                concat=concat,
-                dropout=dropout,
-            )
-        else:
-            self.gat_conv = GATConv(
-                c_in,
-                c_in // heads if concat else c_in,
-                heads=heads,
-                concat=concat,
-                dropout=dropout,
-            )
-            self.fc = nn.Linear(c_in, c_out)
+        self.conv = GraphConv(c_in, c_out, aggr="mean")
+        # self.conv = SAGEConv(c_in, c_out, aggr="mean")  # using mean aggregation
+        # self.conv = GCNConv(c_in, c_out)
+        # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, node_feats, edge_index):
-        # Apply GAT convolution
-        node_feats = self.gat_conv(node_feats, edge_index)
+        node_feats = self.conv(node_feats, edge_index[:2], edge_weight=edge_index[2])
         node_feats = F.relu(node_feats)
-        if not self.enable_lstm:
-            node_feats = self.fc(node_feats)
+        node_feats = self.dropout(node_feats)
         return node_feats
+
+
+# class GNNLayer(nn.Module):
+#     def __init__(
+#         self, c_in, c_out, heads=4, concat=True, dropout=0.2, enable_lstm=False
+#     ):
+#         super(GNNLayer, self).__init__()
+#         # Initialize the GATConv layer
+#         self.enable_lstm = enable_lstm
+#         if enable_lstm:
+#             self.gat_conv = GATv2Conv(
+#                 c_in,
+#                 c_out // heads if concat else c_out,
+#                 heads=heads,
+#                 concat=concat,
+#                 dropout=dropout,
+#             )
+#         else:
+#             self.gat_conv = GATv2Conv(
+#                 c_in,
+#                 c_in // heads if concat else c_in,
+#                 heads=heads,
+#                 concat=concat,
+#                 dropout=dropout,
+#             )
+#             self.fc = nn.Linear(c_in, c_out)
+
+#     def forward(self, node_feats, edge_index):
+#         # Apply GAT convolution
+#         node_feats = self.gat_conv(node_feats, edge_index[:2])
+#         node_feats = F.relu(node_feats)
+#         if not self.enable_lstm:
+#             node_feats = self.fc(node_feats)
+#         return node_feats
 
 
 # LSTM Model
@@ -659,16 +658,8 @@ class FlowSimLstm(LightningModule):
             for i in range(batch_size):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
-                max_node_index = edge_index_trimmed.max().item()
-                num_link_nodes = max_node_index + 1 - num_flow_nodes
 
-                link_node_feats = torch.full(
-                    (num_link_nodes, feature_dim), 1.0, device=x.device
-                )
-                x_gnn_input = torch.cat(
-                    [x[i, :num_flow_nodes, :-1], link_node_feats], dim=0
-                )
-
+                x_gnn_input = x[i, :num_flow_nodes, :-1]
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 
@@ -686,27 +677,7 @@ class FlowSimLstm(LightningModule):
             for i in range(batch_size):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
-                max_node_index = edge_index_trimmed.max().item()
-                num_link_nodes = max_node_index + 1 - num_flow_nodes
-
-                link_node_feats = torch.full(
-                    (num_link_nodes, feature_dim), 1.0, device=x.device
-                )
-                # link_node_feats_host = torch.full(
-                #     ((num_link_nodes + 1) // 3, feature_dim), 10.0, device=x.device
-                # )
-                # link_node_feats_switch = torch.full(
-                #     ((num_link_nodes + 1) // 3 - 1, feature_dim),
-                #     40.0,
-                #     device=x.device,
-                # )
-                x_gnn_input = torch.cat(
-                    [
-                        x[i, :num_flow_nodes, :-1],
-                        link_node_feats,
-                    ],
-                    dim=0,
-                )
+                x_gnn_input = x[i, :num_flow_nodes, :-1]
 
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)

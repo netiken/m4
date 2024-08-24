@@ -46,7 +46,9 @@ def collate_fn_link(batch):
     padded_edge_indices = []
     edge_indices_len = []
     for edge_index in edge_indices:
-        padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
+        padded_edge_index = np.full(
+            (edge_index.shape[0], max_num_edges), 0, dtype=edge_index.dtype
+        )
         padded_edge_index[:, : edge_index.shape[1]] = edge_index
         padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
         edge_indices_len.append(edge_index.shape[1])
@@ -87,7 +89,9 @@ def collate_fn_path(batch):
     padded_edge_indices = []
     edge_indices_len = []
     for edge_index in edge_indices:
-        padded_edge_index = np.full((2, max_num_edges), 0, dtype=edge_index.dtype)
+        padded_edge_index = np.full(
+            (edge_index.shape[0], max_num_edges), 0, dtype=edge_index.dtype
+        )
         padded_edge_index[:, : edge_index.shape[1]] = edge_index
         padded_edge_indices.append(torch.tensor(padded_edge_index, dtype=torch.long))
         edge_indices_len.append(edge_index.shape[1])
@@ -1136,8 +1140,8 @@ class PathFctSldnSegment(Dataset):
 
         for flow_node_idx in range(1, n_flows):
             first_interacting_flows = set()
-            src, dst = fsd_flowsim[flow_node_idx, 0], fsd_flowsim[flow_node_idx, 1]
-            link_sets_head = src_dst_to_links[(src, dst)]
+            pair_target = (fsd_flowsim[flow_node_idx, 0], fsd_flowsim[flow_node_idx, 1])
+            link_sets_head = src_dst_to_links[pair_target]
             fat_head = fats[flow_node_idx]
 
             other_flow_idx = flow_node_idx - 1
@@ -1146,20 +1150,17 @@ class PathFctSldnSegment(Dataset):
                 and len(first_interacting_flows) < len(src_dst_to_links) - 1
             ):
 
-                other_src, other_dst = (
+                pair_other = (
                     fsd_flowsim[other_flow_idx, 0],
                     fsd_flowsim[other_flow_idx, 1],
                 )
 
                 # Check if other flow shares links with current flow
-                if (other_src, other_dst) == (src, dst) or (
-                    other_src,
-                    other_dst,
-                ) in first_interacting_flows:
+                if pair_other == pair_target or pair_other in first_interacting_flows:
                     other_flow_idx -= 1
                     continue
 
-                link_sets_tail = src_dst_to_links[(other_src, other_dst)]
+                link_sets_tail = src_dst_to_links[pair_other]
                 overlapping_links = len(link_sets_head.intersection(link_sets_tail))
 
                 # Only consider flows that interact within the timespan
@@ -1171,7 +1172,7 @@ class PathFctSldnSegment(Dataset):
                             overlapping_links,
                         ]
                     )
-                    first_interacting_flows.add((other_src, other_dst))
+                    first_interacting_flows.add(pair_other)
                 other_flow_idx -= 1
         edge_index = np.array(edge_index).T
 
