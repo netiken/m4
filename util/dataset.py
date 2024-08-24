@@ -275,7 +275,7 @@ class DataModulePerFlow(LightningDataModule):
                                         len(period) for period in busy_periods
                                     ]
                                     if (
-                                        np.mean(len_per_period) > 100
+                                        np.mean(len_per_period) > 80
                                         or np.max(len_per_period) > 10000
                                     ):
                                         continue
@@ -501,11 +501,11 @@ class DataModulePerFlow(LightningDataModule):
                                                 len(period) for period in busy_periods
                                             ]
 
-                                            if (
-                                                np.mean(len_per_period) > 100
-                                                or np.max(len_per_period) > 10000
-                                            ):
-                                                continue
+                                            # if (
+                                            #     np.mean(len_per_period) > 100
+                                            #     or np.max(len_per_period) > 10000
+                                            # ):
+                                            #     continue
 
                                             if np.sum(len_per_period) > 0:
                                                 data_list_per_period = [
@@ -1064,10 +1064,10 @@ class PathFctSldnSegment(Dataset):
             fats_ia = fats - np.min(fats)
             assert (fats_ia >= 0).all()
 
-            # sizes = np.log1p(sizes)
-            # fats_ia = np.log1p(fats_ia)
-            sizes = z_score_normalization(sizes)
-            fats_ia = z_score_normalization(fats_ia)
+            sizes = np.log1p(sizes)
+            fats_ia = np.log1p(fats_ia)
+            # sizes = z_score_normalization(sizes)
+            # fats_ia = z_score_normalization(fats_ia)
 
             flag_from_last_period = np.array(fats < period_start_time)
             # flag_flow_incomplete = np.array(fats + fcts > period_end_time)
@@ -1167,7 +1167,7 @@ class PathFctSldnSegment(Dataset):
                 )
 
                 # Check if other flow shares links with current flow
-                if pair_other == pair_target or pair_other in first_interacting_flows:
+                if pair_other in first_interacting_flows:
                     other_flow_idx -= 1
                     continue
 

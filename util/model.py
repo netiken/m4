@@ -30,21 +30,21 @@ class WeightedL1Loss(nn.Module):
         super(WeightedL1Loss, self).__init__()
 
     def forward(self, prediction, target, loss_average="perflow"):
-        # if loss_average == "perflow":
-        elementwise_loss = torch.abs(prediction - target).sum()
-        weighted_loss = elementwise_loss / target.sum()
-        # elif loss_average == "perperiod":
-        #     if prediction.dim() > 1:
-        #         sequencewise_loss = torch.abs(prediction - target).sum(
-        #             dim=1
-        #         ) / target.sum(dim=1).to(prediction.device)
-        #     else:
-        #         sequencewise_loss = torch.abs(
-        #             prediction - target
-        #         ).sum() / target.sum().to(prediction.device)
-        #     weighted_loss = torch.mean(sequencewise_loss)
-        # else:
-        #     raise ValueError(f"Unsupported loss average type: {loss_average}")
+        if loss_average == "perflow":
+            elementwise_loss = torch.abs(prediction - target).sum()
+            weighted_loss = elementwise_loss / target.sum()
+        elif loss_average == "perperiod":
+            if prediction.dim() > 1:
+                sequencewise_loss = torch.abs(prediction - target).sum(
+                    dim=1
+                ) / target.sum(dim=1).to(prediction.device)
+            else:
+                sequencewise_loss = torch.abs(
+                    prediction - target
+                ).sum() / target.sum().to(prediction.device)
+            weighted_loss = torch.mean(sequencewise_loss)
+        else:
+            raise ValueError(f"Unsupported loss average type: {loss_average}")
         return weighted_loss
 
 
@@ -585,7 +585,7 @@ class FlowSimLstm(LightningModule):
                     #     enable_lstm=enable_lstm,
                     # )
                     GNNLayer(
-                        2 if i == 0 else gcn_hidden_size,
+                        input_size if i == 0 else gcn_hidden_size,
                         gcn_hidden_size,
                         dropout=dropout,
                         enable_lstm=enable_lstm,
@@ -594,7 +594,7 @@ class FlowSimLstm(LightningModule):
                 ]
             )
             self.model_lstm = LSTMModel(
-                3 + gcn_hidden_size,
+                input_size + gcn_hidden_size,
                 hidden_size,
                 output_size,
                 n_layer,
@@ -607,7 +607,7 @@ class FlowSimLstm(LightningModule):
             self.gcn_layers = nn.ModuleList(
                 [
                     GNNLayer(
-                        input_size - 1 if i == 0 else gcn_hidden_size,
+                        input_size if i == 0 else gcn_hidden_size,
                         (gcn_hidden_size if i != gcn_n_layer - 1 else output_size),
                         dropout=dropout,
                         enable_lstm=enable_lstm,
@@ -665,7 +665,7 @@ class FlowSimLstm(LightningModule):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
 
-                x_gnn_input = x[i, :num_flow_nodes, 3:]
+                x_gnn_input = x[i, :num_flow_nodes, :]
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 
@@ -673,7 +673,7 @@ class FlowSimLstm(LightningModule):
                     :num_flow_nodes, :
                 ]
 
-            x = torch.cat((x[:, :, :3], batch_gnn_output), dim=-1)
+            x = torch.cat((x, batch_gnn_output), dim=-1)
             res, _ = self.model_lstm(x, lengths, lengths_per_path, n_paths_per_batch)
         elif self.enable_gnn:
             batch_size = x.size(0)
@@ -683,7 +683,7 @@ class FlowSimLstm(LightningModule):
             for i in range(batch_size):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
-                x_gnn_input = x[i, :num_flow_nodes, :-1]
+                x_gnn_input = x[i, :num_flow_nodes, :]
 
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
@@ -725,7 +725,7 @@ class FlowSimLstm(LightningModule):
         est = est.masked_fill(~attention_mask, 0.0)
         gt = gt.masked_fill(~attention_mask, 0.0)
         # Calculate the loss
-        loss = self.loss_fn(est, gt, self.loss_average)
+        loss = self.loss_fn(est, gt, self.loss_average) * 5.0
 
         self._log_loss(loss, tag)
         # if estimated.size(0) == 1:
