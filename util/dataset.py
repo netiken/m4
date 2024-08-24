@@ -1068,7 +1068,6 @@ class PathFctSldnSegment(Dataset):
             # fats_ia = np.log1p(fats_ia)
             sizes = z_score_normalization(sizes)
             fats_ia = z_score_normalization(fats_ia)
-            sldn_flowsim = z_score_normalization(sldn_flowsim)
 
             flag_from_last_period = np.array(fats < period_start_time)
             # flag_flow_incomplete = np.array(fats + fcts > period_end_time)
@@ -1083,22 +1082,22 @@ class PathFctSldnSegment(Dataset):
                 positional_encodings = self.get_positional_encoding(len(fid_period), 4)
                 input_data = np.column_stack(
                     (
-                        fats_ia,
-                        sizes,
                         sldn_flowsim,
                         n_links_passed,
                         flag_from_last_period,
+                        fats_ia,
+                        sizes,
                         positional_encodings,
                     )
                 ).astype(np.float32)
             else:
                 input_data = np.column_stack(
                     (
-                        fats_ia,
-                        sizes,
                         sldn_flowsim,
                         n_links_passed,
                         flag_from_last_period,
+                        fats_ia,
+                        sizes,
                     )
                 ).astype(np.float32)
             # input_data = np.log1p(input_data)
@@ -1181,6 +1180,13 @@ class PathFctSldnSegment(Dataset):
                         [
                             fid_idx[other_flow_idx],
                             fid_idx[flow_node_idx],
+                            overlapping_links,
+                        ]
+                    )
+                    edge_index.append(
+                        [
+                            fid_idx[flow_node_idx],
+                            fid_idx[other_flow_idx],
                             overlapping_links,
                         ]
                     )

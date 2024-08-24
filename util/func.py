@@ -19,9 +19,9 @@ def z_score_normalization(data):
         std (float): The standard deviation of the input data.
     """
     mean = data.mean()
-    std = data.std()
+    std = data.std() + 1
     normalized_data = (data - mean) / std
-    return normalized_data, mean, std
+    return normalized_data
 
 
 def fix_seed(seed):
