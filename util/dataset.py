@@ -1090,7 +1090,9 @@ class PathFctSldnSegment(Dataset):
             # input_data = np.log1p(input_data)
 
             # Compute the adjacency matrix for the bipartite graph
-            edge_index = self.compute_edge_index(n_hosts, fsd)
+            edge_index = self.compute_edge_index(
+                n_hosts, fid_period, fsd, fats, fats + fcts
+            )
 
             # np.savez(feat_path, input_data=input_data, output_data=output_data,edge_index=edge_index)
         else:
@@ -1115,60 +1117,68 @@ class PathFctSldnSegment(Dataset):
         pe[:, 1::2] = np.cos(position * div_term[: d_model // 2])
         return pe
 
-    def compute_edge_index(self, n_hosts, fsd_flowsim):
-        edge_index = []
+    def compute_edge_index(self, n_hosts, fid, fsd_flowsim, fats, fcts):
         n_flows = len(fsd_flowsim)
-        link_to_node_id = {}
-        link_node_id = n_flows
-        for flow_node_idx in range(n_flows):
-            src = fsd_flowsim[flow_node_idx, 0]
-            dst = fsd_flowsim[flow_node_idx, 1]
-            assert src < dst
+        edge_index = []
 
-            link_pair = (src, src + n_hosts)
-            if link_pair in link_to_node_id:
-                link_node_id_tmp = link_to_node_id[link_pair]
-            else:
-                link_node_id_tmp = link_node_id
-                link_to_node_id[link_pair] = link_node_id_tmp
-                link_node_id += 1
+        fid_idx = np.argsort(fid)
+        fsd_flowsim = fsd_flowsim[fid_idx]
+        fats = fats[fid_idx]
+        fcts = fcts[fid_idx]
 
-            edge_index.append([link_node_id_tmp, flow_node_idx])
-            edge_index.append([flow_node_idx, link_node_id_tmp])
+        src_dst_to_links = {}
+        for src in range(n_hosts - 1):
+            for dst in range(src + 1, n_hosts):
+                link_set = set([(src, src + n_hosts), (dst + n_hosts, dst)])
+                for link_idx in range(src, dst):
+                    link_set.add((n_hosts + link_idx, n_hosts + link_idx + 1))
+                src_dst_to_links[(src, dst)] = link_set
 
-            link_pair = (dst + n_hosts, dst)
-            if link_pair in link_to_node_id:
-                link_node_id_tmp = link_to_node_id[link_pair]
-            else:
-                link_node_id_tmp = link_node_id
-                link_to_node_id[link_pair] = link_node_id_tmp
-                link_node_id += 1
+        for flow_node_idx in range(1, n_flows):
+            first_interacting_flows = set()
+            src, dst = fsd_flowsim[flow_node_idx, 0], fsd_flowsim[flow_node_idx, 1]
+            link_sets_head = src_dst_to_links[(src, dst)]
+            fat_head = fats[flow_node_idx]
 
-            edge_index.append([link_node_id_tmp, flow_node_idx])
-            edge_index.append([flow_node_idx, link_node_id_tmp])
+            other_flow_idx = flow_node_idx - 1
+            while (
+                other_flow_idx >= 0
+                and len(first_interacting_flows) < len(src_dst_to_links) - 1
+            ):
 
-            for link_idx in range(src, dst):
-                link_pair = (n_hosts + link_idx, n_hosts + link_idx + 1)
-                if link_pair in link_to_node_id:
-                    link_node_id_tmp = link_to_node_id[link_pair]
-                else:
-                    link_node_id_tmp = link_node_id
-                    link_to_node_id[link_pair] = link_node_id_tmp
-                    link_node_id += 1
+                other_src, other_dst = (
+                    fsd_flowsim[other_flow_idx, 0],
+                    fsd_flowsim[other_flow_idx, 1],
+                )
 
-                edge_index.append([link_node_id_tmp, flow_node_idx])
-                edge_index.append([flow_node_idx, link_node_id_tmp])
-        # edge_index.append([n_flows, n_flows + n_hosts])
-        # for link_idx in range(1, n_hosts - 1):
-        #     edge_index.append([n_flows + link_idx, n_flows + n_hosts + link_idx])
-        #     edge_index.append(
-        #         [n_flows + n_hosts + link_idx - 1, n_flows + n_links + link_idx]
-        #     )
-        # edge_index.append([n_flows + 2 * n_hosts - 2, n_flows + n_links + n_hosts - 1])
+                # Check if other flow shares links with current flow
+                if (other_src, other_dst) == (src, dst) or (
+                    other_src,
+                    other_dst,
+                ) in first_interacting_flows:
+                    other_flow_idx -= 1
+                    continue
+
+                link_sets_tail = src_dst_to_links[(other_src, other_dst)]
+                overlapping_links = len(link_sets_head.intersection(link_sets_tail))
+
+                # Only consider flows that interact within the timespan
+                if overlapping_links > 0 and fcts[other_flow_idx] >= fat_head:
+                    edge_index.append(
+                        [
+                            fid_idx[other_flow_idx],
+                            fid_idx[flow_node_idx],
+                            overlapping_links,
+                        ]
+                    )
+                    first_interacting_flows.add((other_src, other_dst))
+                other_flow_idx -= 1
         edge_index = np.array(edge_index).T
+
         # Sort edge_index by destination node (second row)
         sorted_indices = np.argsort(edge_index[1, :])
         edge_index = edge_index[:, sorted_indices]
+
         return edge_index
 
 
