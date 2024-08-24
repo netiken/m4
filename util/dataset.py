@@ -16,6 +16,7 @@ from .consts import (
     # PERCENTILE_METHOD,
     N_BACKGROUND,
 )
+from .func import z_score_normalization
 from collections import defaultdict
 
 
@@ -1063,8 +1064,12 @@ class PathFctSldnSegment(Dataset):
             fats_ia = fats - np.min(fats)
             assert (fats_ia >= 0).all()
 
-            sizes = np.log1p(sizes)
-            fats_ia = np.log1p(fats_ia)
+            # sizes = np.log1p(sizes)
+            # fats_ia = np.log1p(fats_ia)
+            sizes = z_score_normalization(sizes)
+            fats_ia = z_score_normalization(fats_ia)
+            sldn_flowsim = z_score_normalization(sldn_flowsim)
+
             flag_from_last_period = np.array(fats < period_start_time)
             # flag_flow_incomplete = np.array(fats + fcts > period_end_time)
             # assert not flag_flow_incomplete.all()

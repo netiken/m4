@@ -5,6 +5,25 @@ from scipy.stats import rankdata
 import logging
 import struct
 
+
+def z_score_normalization(data):
+    """
+    Perform Z-Score normalization (standardization) on the input data.
+
+    Args:
+        data (np.array): The input data array to be normalized.
+
+    Returns:
+        normalized_data (np.array): The Z-Score normalized data.
+        mean (float): The mean of the input data.
+        std (float): The standard deviation of the input data.
+    """
+    mean = data.mean()
+    std = data.std()
+    normalized_data = (data - mean) / std
+    return normalized_data, mean, std
+
+
 def fix_seed(seed):
     # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
     torch.manual_seed(seed)
@@ -15,7 +34,8 @@ def fix_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
     # torch.use_deterministic_algorithms(True)
-    
+
+
 def decode_dict(d, encoding_used="utf-8"):
     return {
         k.decode(encoding_used): (
@@ -24,21 +44,25 @@ def decode_dict(d, encoding_used="utf-8"):
         for k, v in d.items()
     }
 
+
 def calculate_percentiles(arr):
-    ranks = rankdata(arr, method='min')  # Get the ranks of the elements
+    ranks = rankdata(arr, method="min")  # Get the ranks of the elements
     percentiles = (ranks - 1) / (len(arr) - 1) * 100  # Convert ranks to percentiles
     return percentiles
 
-def map_percentiles(arr,arr_std):
+
+def map_percentiles(arr, arr_std):
     assert len(arr) == len(arr_std)
     sorted_arr_std = np.sort(arr_std)
-    ranks = rankdata(arr, method='ordinal')-1  # Get the ranks of the elements
+    ranks = rankdata(arr, method="ordinal") - 1  # Get the ranks of the elements
     res = sorted_arr_std[ranks]
     return res
+
+
 def serialize_fp32(file, tensor):
-    """ writes one fp32 tensor to file that is open in wb mode """
+    """writes one fp32 tensor to file that is open in wb mode"""
     d = tensor.detach().cpu().view(-1).to(torch.float32).numpy()
-    b = struct.pack(f'{len(d)}f', *d)
+    b = struct.pack(f"{len(d)}f", *d)
     file.write(b)
 
 
@@ -68,12 +92,15 @@ def parse_output_get_input(res, n_flows):
         weight_scatter_indices,
         active_flows,
     )
+
+
 class fileFilter(logging.Filter):
     def filter(self, record):
         # return (not record.getMessage().startswith("Added")) and (
         #     not record.getMessage().startswith("Rank ")
         # )
         return True
+
 
 def create_logger(log_name):
     logging.basicConfig(
