@@ -393,7 +393,7 @@ class Attention(nn.Module):
 class GNNLayer(nn.Module):
     def __init__(self, c_in, c_out, dropout=0.2, enable_lstm=False):
         super(GNNLayer, self).__init__()
-        self.conv = GraphConv(c_in, c_out, aggr="mean")
+        self.conv = GraphConv(c_in, c_out, aggr="add")
         # self.conv = SAGEConv(c_in, c_out, aggr="mean")  # using mean aggregation
         # self.conv = GCNConv(c_in, c_out)
         # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
@@ -585,7 +585,7 @@ class FlowSimLstm(LightningModule):
                     #     enable_lstm=enable_lstm,
                     # )
                     GNNLayer(
-                        input_size if i == 0 else gcn_hidden_size,
+                        2 if i == 0 else gcn_hidden_size,
                         gcn_hidden_size,
                         dropout=dropout,
                         enable_lstm=enable_lstm,
@@ -665,7 +665,7 @@ class FlowSimLstm(LightningModule):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
 
-                x_gnn_input = x[i, :num_flow_nodes, :]
+                x_gnn_input = x[i, :num_flow_nodes, :2]
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 
@@ -725,7 +725,7 @@ class FlowSimLstm(LightningModule):
         est = est.masked_fill(~attention_mask, 0.0)
         gt = gt.masked_fill(~attention_mask, 0.0)
         # Calculate the loss
-        loss = self.loss_fn(est, gt, self.loss_average) * 5.0
+        loss = self.loss_fn(est, gt, self.loss_average)
 
         self._log_loss(loss, tag)
         # if estimated.size(0) == 1:

@@ -22,15 +22,15 @@ model:
   model_name: "lstm"
   input_size: 5
   n_layer: 2
-  gcn_n_layer: 4
+  gcn_n_layer: 2
   loss_fn_type: "l1"
-  hidden_size: 512
+  hidden_size: 256
   gcn_hidden_size: 128
   dropout: 0.2
   enable_bidirectional: True
   enable_positional_encoding: False
-  enable_gnn: True
-  enable_lstm: False
+  enable_gnn: False
+  enable_lstm: True
 
 # Training parameters
 training:

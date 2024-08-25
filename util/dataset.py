@@ -275,7 +275,7 @@ class DataModulePerFlow(LightningDataModule):
                                         len(period) for period in busy_periods
                                     ]
                                     if (
-                                        np.mean(len_per_period) > 80
+                                        np.mean(len_per_period) > 50
                                         or np.max(len_per_period) > 10000
                                     ):
                                         continue
@@ -295,12 +295,12 @@ class DataModulePerFlow(LightningDataModule):
                                             for segment_id in range(len(busy_periods))
                                         ]
 
-                                        sample_indices = np.random.choice(
-                                            len(len_per_period),
-                                            segments_per_seq * 5,
-                                            replace=True,
-                                        )
-                                        # sample_indices = np.arange(len(len_per_period))
+                                        # sample_indices = np.random.choice(
+                                        #     len(len_per_period),
+                                        #     segments_per_seq * 5,
+                                        #     replace=True,
+                                        # )
+                                        sample_indices = np.arange(len(len_per_period))
 
                                         len_per_period_all.extend(
                                             [len_per_period[i] for i in sample_indices]
@@ -531,14 +531,14 @@ class DataModulePerFlow(LightningDataModule):
                                                         len(busy_periods)
                                                     )
                                                 ]
-                                                sample_indices = np.random.choice(
-                                                    len(len_per_period),
-                                                    self.segments_per_seq * 5,
-                                                    replace=True,
-                                                )
-                                                # sample_indices = np.arange(
-                                                #     len(len_per_period)
+                                                # sample_indices = np.random.choice(
+                                                #     len(len_per_period),
+                                                #     self.segments_per_seq * 5,
+                                                #     replace=True,
                                                 # )
+                                                sample_indices = np.arange(
+                                                    len(len_per_period)
+                                                )
 
                                                 len_per_period_all.extend(
                                                     [
@@ -1024,6 +1024,7 @@ class PathFctSldnSegment(Dataset):
             assert len(busy_periods) == len(busy_periods_time)
 
             fid_period = np.array(busy_periods[segment_id]).astype(int)
+            fid_period = np.sort(fid_period)
             fsd_ori = np.load(f"{dir_input_tmp}/fsd.npy")
 
             # Sort and count the occurrences in one pass
@@ -1083,10 +1084,10 @@ class PathFctSldnSegment(Dataset):
                 input_data = np.column_stack(
                     (
                         sldn_flowsim,
+                        sizes,
+                        fats_ia,
                         n_links_passed,
                         flag_from_last_period,
-                        fats_ia,
-                        sizes,
                         positional_encodings,
                     )
                 ).astype(np.float32)
@@ -1094,10 +1095,10 @@ class PathFctSldnSegment(Dataset):
                 input_data = np.column_stack(
                     (
                         sldn_flowsim,
+                        sizes,
+                        fats_ia,
                         n_links_passed,
                         flag_from_last_period,
-                        fats_ia,
-                        sizes,
                     )
                 ).astype(np.float32)
             # input_data = np.log1p(input_data)

@@ -19,7 +19,7 @@ EPS = 1e-12
 
 # SIZE_BUCKET_LIST_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, $\infty$)"]
 
-balance_len_bins = [2, 4, 6, 8, 10, 15, 20, 30, 40, 50, 75, 100, 200]
+balance_len_bins = [2, 4, 6, 8, 10, 15, 20, 30, 40, 50, 75, 100]
 balance_len_bins_label = [
     "(0, 2)",
     "[2,4)",
@@ -33,8 +33,7 @@ balance_len_bins_label = [
     "[40,50)",
     "[50,75)",
     "[75,100)",
-    "[100,200)",
-    "[200, $\infty$)",
+    "[100, $\infty$)",
 ]
 # balance_len_bins = [2, 4, 8, 16, 32, 64, 128, 256]
 # balance_len_bins_label = [
