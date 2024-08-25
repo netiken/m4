@@ -397,13 +397,13 @@ class GNNLayer(nn.Module):
         self.conv = SAGEConv(c_in, c_out, aggr="lstm")  # using mean aggregation
         # self.conv = GCNConv(c_in, c_out)
         # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
-        self.dropout = nn.Dropout(p=dropout)
+        # self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, node_feats, edge_index):
         # node_feats = self.conv(node_feats, edge_index[:2], edge_weight=edge_index[2])
         node_feats = self.conv(node_feats, edge_index[:2])
-        node_feats = F.relu(node_feats)
-        node_feats = self.dropout(node_feats)
+        # node_feats = F.relu(node_feats)
+        # node_feats = self.dropout(node_feats)
         return node_feats
 
 
@@ -580,7 +580,7 @@ class FlowSimLstm(LightningModule):
             self.gcn_layers = nn.ModuleList(
                 [
                     GNNLayer(
-                        input_size if i == 0 else gcn_hidden_size,
+                        input_size - 1 if i == 0 else gcn_hidden_size,
                         gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
                         dropout=dropout,
                         enable_lstm=enable_lstm,
@@ -660,7 +660,7 @@ class FlowSimLstm(LightningModule):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
 
-                x_gnn_input = x[i, :num_flow_nodes, :]
+                x_gnn_input = x[i, :num_flow_nodes, :-1]
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 

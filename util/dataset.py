@@ -1066,8 +1066,8 @@ class PathFctSldnSegment(Dataset):
             fats_ia = fats - np.min(fats)
             assert (fats_ia >= 0).all()
 
-            sizes = np.log1p(sizes)
-            fats_ia = np.log1p(fats_ia)
+            sizes = np.log2(sizes / 1000.0 + 1)
+            fats_ia = np.log2(fats_ia/10000.0 + 1)
             # sizes = z_score_normalization(sizes)
             # fats_ia = z_score_normalization(fats_ia)
 
