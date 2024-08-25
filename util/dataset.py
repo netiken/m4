@@ -991,6 +991,7 @@ class PathFctSldnSegment(Dataset):
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
         self.lr = 10.0
+        self.n_gnn_connection_limit = 10
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_gnn = enable_gnn
@@ -1151,15 +1152,14 @@ class PathFctSldnSegment(Dataset):
                 src_dst_to_links[(src, dst)] = link_set
 
         for flow_node_idx in range(1, n_flows):
-            first_interacting_flows = set()
+            n_gnn_connection = 0
             pair_target = (fsd_flowsim[flow_node_idx, 0], fsd_flowsim[flow_node_idx, 1])
             link_sets_head = src_dst_to_links[pair_target]
             fat_head = fats[flow_node_idx]
 
             other_flow_idx = flow_node_idx - 1
             while (
-                other_flow_idx >= 0
-                and len(first_interacting_flows) < len(src_dst_to_links) - 1
+                other_flow_idx >= 0 and n_gnn_connection < self.n_gnn_connection_limit
             ):
 
                 pair_other = (
@@ -1168,9 +1168,8 @@ class PathFctSldnSegment(Dataset):
                 )
 
                 # Check if other flow shares links with current flow
-                if pair_other in first_interacting_flows:
-                    other_flow_idx -= 1
-                    continue
+                if pair_other == pair_target:
+                    break
 
                 link_sets_tail = src_dst_to_links[pair_other]
                 overlapping_links = len(link_sets_head.intersection(link_sets_tail))
@@ -1191,7 +1190,7 @@ class PathFctSldnSegment(Dataset):
                             overlapping_links,
                         ]
                     )
-                    first_interacting_flows.add(pair_other)
+                    n_gnn_connection += 1
                 other_flow_idx -= 1
         edge_index = np.array(edge_index).T
 
@@ -1200,6 +1199,74 @@ class PathFctSldnSegment(Dataset):
         edge_index = edge_index[:, sorted_indices]
 
         return edge_index
+
+    # def compute_edge_index(self, n_hosts, fid, fsd_flowsim, fats, fcts):
+    #     n_flows = len(fsd_flowsim)
+    #     edge_index = [[0, 0, 1]]
+
+    #     fid_idx = np.argsort(fid)
+    #     fsd_flowsim = fsd_flowsim[fid_idx]
+    #     fats = fats[fid_idx]
+    #     fcts = fcts[fid_idx]
+
+    #     src_dst_to_links = {}
+    #     for src in range(n_hosts - 1):
+    #         for dst in range(src + 1, n_hosts):
+    #             link_set = set([(src, src + n_hosts), (dst + n_hosts, dst)])
+    #             for link_idx in range(src, dst):
+    #                 link_set.add((n_hosts + link_idx, n_hosts + link_idx + 1))
+    #             src_dst_to_links[(src, dst)] = link_set
+
+    #     for flow_node_idx in range(1, n_flows):
+    #         first_interacting_flows = set()
+    #         pair_target = (fsd_flowsim[flow_node_idx, 0], fsd_flowsim[flow_node_idx, 1])
+    #         link_sets_head = src_dst_to_links[pair_target]
+    #         fat_head = fats[flow_node_idx]
+
+    #         other_flow_idx = flow_node_idx - 1
+    #         while (
+    #             other_flow_idx >= 0
+    #             and len(first_interacting_flows) < len(src_dst_to_links) - 1
+    #         ):
+
+    #             pair_other = (
+    #                 fsd_flowsim[other_flow_idx, 0],
+    #                 fsd_flowsim[other_flow_idx, 1],
+    #             )
+
+    #             # Check if other flow shares links with current flow
+    #             if pair_other in first_interacting_flows:
+    #                 other_flow_idx -= 1
+    #                 continue
+
+    #             link_sets_tail = src_dst_to_links[pair_other]
+    #             overlapping_links = len(link_sets_head.intersection(link_sets_tail))
+
+    #             # Only consider flows that interact within the timespan
+    #             if overlapping_links > 0 and fcts[other_flow_idx] >= fat_head:
+    #                 edge_index.append(
+    #                     [
+    #                         fid_idx[other_flow_idx],
+    #                         fid_idx[flow_node_idx],
+    #                         overlapping_links,
+    #                     ]
+    #                 )
+    #                 edge_index.append(
+    #                     [
+    #                         fid_idx[flow_node_idx],
+    #                         fid_idx[other_flow_idx],
+    #                         overlapping_links,
+    #                     ]
+    #                 )
+    #                 first_interacting_flows.add(pair_other)
+    #             other_flow_idx -= 1
+    #     edge_index = np.array(edge_index).T
+
+    #     # Sort edge_index by destination node (second row)
+    #     sorted_indices = np.argsort(edge_index[1, :])
+    #     edge_index = edge_index[:, sorted_indices]
+
+    #     return edge_index
 
 
 class PathFctSldnSegmentTmp(Dataset):
