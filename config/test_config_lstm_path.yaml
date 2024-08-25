@@ -13,7 +13,7 @@ dataset:
   output_type: "fctSldn" # fctSldn, queueLen
   enable_segmentation: True
   segments_per_seq: 20
-  sampling_method: "balanced" # weighted, uniform, balanced
+  sampling_method: "uniform" # weighted, uniform, balanced
   enable_path: True
   flow_size_threshold: 100000000
 
@@ -24,12 +24,12 @@ model:
   n_layer: 2
   gcn_n_layer: 2
   loss_fn_type: "l1"
-  hidden_size: 512
-  gcn_hidden_size: 128
+  hidden_size: 256
+  gcn_hidden_size: 16
   dropout: 0.2
   enable_bidirectional: True
   enable_positional_encoding: False
-  enable_gnn: True
+  enable_gnn: False
   enable_lstm: True
 
 # Training parameters

@@ -393,14 +393,15 @@ class Attention(nn.Module):
 class GNNLayer(nn.Module):
     def __init__(self, c_in, c_out, dropout=0.2, enable_lstm=False):
         super(GNNLayer, self).__init__()
-        self.conv = GraphConv(c_in, c_out, aggr="add")
-        # self.conv = SAGEConv(c_in, c_out, aggr="mean")  # using mean aggregation
+        # self.conv = GraphConv(c_in, c_out, aggr="mean")
+        self.conv = SAGEConv(c_in, c_out, aggr="lstm")  # using mean aggregation
         # self.conv = GCNConv(c_in, c_out)
         # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
         self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, node_feats, edge_index):
-        node_feats = self.conv(node_feats, edge_index[:2], edge_weight=edge_index[2])
+        # node_feats = self.conv(node_feats, edge_index[:2], edge_weight=edge_index[2])
+        node_feats = self.conv(node_feats, edge_index[:2])
         node_feats = F.relu(node_feats)
         node_feats = self.dropout(node_feats)
         return node_feats
@@ -578,15 +579,9 @@ class FlowSimLstm(LightningModule):
             logging.info(f"GNN and LSTM enabled")
             self.gcn_layers = nn.ModuleList(
                 [
-                    # GNNLayer(
-                    #     input_size - 1 if i == 0 else gcn_hidden_size,
-                    #     gcn_hidden_size if i != gcn_n_layer - 1 else input_size - 1,
-                    #     dropout=dropout,
-                    #     enable_lstm=enable_lstm,
-                    # )
                     GNNLayer(
-                        2 if i == 0 else gcn_hidden_size,
-                        gcn_hidden_size,
+                        input_size if i == 0 else gcn_hidden_size,
+                        gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
                         dropout=dropout,
                         enable_lstm=enable_lstm,
                     )
@@ -594,7 +589,7 @@ class FlowSimLstm(LightningModule):
                 ]
             )
             self.model_lstm = LSTMModel(
-                input_size + gcn_hidden_size,
+                input_size * 2,
                 hidden_size,
                 output_size,
                 n_layer,
@@ -656,7 +651,7 @@ class FlowSimLstm(LightningModule):
     ):
         if self.enable_gnn and self.enable_lstm:
             batch_size = x.size(0)
-            feature_dim = self.gcn_hidden_size
+            feature_dim = x.size(2)
 
             batch_gnn_output = torch.zeros(
                 (batch_size, x.size(1), feature_dim), device=x.device
@@ -665,7 +660,7 @@ class FlowSimLstm(LightningModule):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
 
-                x_gnn_input = x[i, :num_flow_nodes, :2]
+                x_gnn_input = x[i, :num_flow_nodes, :]
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 
@@ -677,7 +672,6 @@ class FlowSimLstm(LightningModule):
             res, _ = self.model_lstm(x, lengths, lengths_per_path, n_paths_per_batch)
         elif self.enable_gnn:
             batch_size = x.size(0)
-            feature_dim = x.size(2) - 1
 
             res = torch.zeros((batch_size, x.size(1), 1), device=x.device)
             for i in range(batch_size):

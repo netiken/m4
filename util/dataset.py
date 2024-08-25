@@ -275,7 +275,7 @@ class DataModulePerFlow(LightningDataModule):
                                         len(period) for period in busy_periods
                                     ]
                                     if (
-                                        np.mean(len_per_period) > 50
+                                        np.mean(len_per_period) > 100
                                         or np.max(len_per_period) > 10000
                                     ):
                                         continue
@@ -1036,7 +1036,7 @@ class PathFctSldnSegment(Dataset):
             fid_period = np.concatenate([dict_tmp[key] for key in sorted_keys])
             n_inputs_per_path = np.array([len(dict_tmp[key]) for key in sorted_keys])
 
-            period_start_time, _ = busy_periods_time[segment_id]
+            period_start_time, period_end_time = busy_periods_time[segment_id]
 
             # get all previous flows
             sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid_period]
@@ -1071,12 +1071,12 @@ class PathFctSldnSegment(Dataset):
             # fats_ia = z_score_normalization(fats_ia)
 
             flag_from_last_period = np.array(fats < period_start_time)
-            # flag_flow_incomplete = np.array(fats + fcts > period_end_time)
-            # assert not flag_flow_incomplete.all()
+            flag_flow_incomplete = np.array(fats + fcts > period_end_time)
+            assert not flag_flow_incomplete.all()
 
             # sldn_flowsim[flag_flow_incomplete] = 0
             # flowsim_dist[flag_flow_incomplete] = 0
-            # output_data[flag_flow_incomplete] = PLACEHOLDER
+            output_data[flag_flow_incomplete] = PLACEHOLDER
 
             # Generate positional encoding
             if self.enable_positional_encoding:
@@ -1249,7 +1249,7 @@ class PathFctSldnSegmentTmp(Dataset):
 
             fid_period = np.array(busy_periods[segment_id]).astype(int)
             fid_period = np.sort(fid_period)
-            period_start_time, period_end_time = busy_periods_time[segment_id]
+            period_start_time, _ = busy_periods_time[segment_id]
 
             # get all previous flows
             fid_ori = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
