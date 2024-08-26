@@ -5,6 +5,7 @@ from util.consts import get_base_delay_link, get_base_delay_transmission
 import argparse
 import yaml
 from ctypes import *
+from collections import defaultdict
 
 
 class FCTStruct(Structure):
@@ -57,7 +58,7 @@ class Inference:
     def load_model(self, checkpoint_path):
         model_config = self.model_config
         training_config = self.training_config
-
+        dataset_config = model_config["dataset"]
         if self.model_name == "lstm":
             model = FlowSimLstm.load_from_checkpoint(
                 checkpoint_path,
@@ -79,6 +80,8 @@ class Inference:
                     "enable_positional_encoding", False
                 ),
                 enable_gnn=model_config.get("enable_gnn", False),
+                enable_lstm=model_config.get("enable_lstm", False),
+                enable_path=dataset_config.get("enable_path", False),
             )
         elif self.model_name == "transformer":
             model = FlowSimTransformer.load_from_checkpoint(
@@ -144,22 +147,139 @@ class Inference:
         return self.postprocess(output)
 
 
-def run_flow_simulation(flows_info, nhosts=21, lr=10):
+class OnlineBusyPeriodPathProcessor:
+    def __init__(self, nhosts, flow_size_threshold):
+        self.nhosts = nhosts
+        self.flow_size_threshold = flow_size_threshold
+
+        self.flows = {}
+        self.active_graphs = {}
+        self.link_to_graph = {}
+        self.large_flow_to_info = {}
+        self.flow_to_size = {}
+        self.graph_id_new = 0
+
+        self.busy_periods = []
+        self.busy_periods_len = []
+        self.busy_periods_duration = []
+        self.busy_periods_unique = set()
+        self.current_time = 0
+
+    def process_event(self, time, event, flow_id, links, size):
+        self.current_time = time
+
+        if event == "start":
+            self.flow_to_size[flow_id] = size
+            if size > self.flow_size_threshold:
+                self.large_flow_to_info[flow_id] = (time, links)
+            else:
+                self._process_small_flow_start(flow_id, links)
+
+        elif event == "end":
+            self.flow_to_size.pop(flow_id, None)
+            if flow_id in self.large_flow_to_info:
+                self.large_flow_to_info.pop(flow_id, None)
+            else:
+                self._process_small_flow_end(flow_id, links)
+
+    def _process_small_flow_start(self, flow_id, links):
+        new_active_links = defaultdict(set)
+        new_all_links = set()
+        new_flows = set()
+        new_all_flows = set()
+
+        involved_graph_ids = set()
+        for link in links:
+            if link in self.link_to_graph:
+                involved_graph_ids.add(self.link_to_graph[link])
+
+        if involved_graph_ids:
+            for gid in involved_graph_ids:
+                graph = self.active_graphs[gid]
+                new_active_links.update(graph["active_links"])
+                new_all_links.update(graph["all_links"])
+                new_flows.update(graph["active_flows"])
+                new_all_flows.update(graph["all_flows"])
+                if self.current_time > graph["start_time"]:
+                    self.current_time = graph["start_time"]
+
+                for link in graph["active_links"]:
+                    self.link_to_graph[link] = self.graph_id_new
+                del self.active_graphs[gid]
+
+        for link in links:
+            new_active_links[link].add(flow_id)
+            new_all_links.add(link)
+            self.link_to_graph[link] = self.graph_id_new
+        new_flows.add(flow_id)
+        new_all_flows.add(flow_id)
+        for large_flow_id in self.large_flow_to_info:
+            _, links_tmp = self.large_flow_to_info[large_flow_id]
+            if large_flow_id not in new_all_flows and not links_tmp.isdisjoint(
+                new_all_links
+            ):
+                new_all_flows.add(large_flow_id)
+
+        self.active_graphs[self.graph_id_new] = {
+            "active_links": new_active_links,
+            "all_links": new_all_links,
+            "active_flows": new_flows,
+            "all_flows": new_all_flows,
+            "start_time": self.current_time,
+        }
+        self.graph_id_new += 1
+
+    def _process_small_flow_end(self, flow_id, links):
+        graph = None
+        for link in links:
+            if link in self.link_to_graph:
+                graph_id = self.link_to_graph[link]
+                graph = self.active_graphs.get(graph_id)
+                break
+
+        if graph:
+            for link in links:
+                if flow_id in graph["active_links"][link]:
+                    graph["active_links"][link].remove(flow_id)
+                    if not graph["active_links"][link]:
+                        del graph["active_links"][link]
+                        del self.link_to_graph[link]
+
+            if flow_id in graph["active_flows"]:
+                graph["active_flows"].remove(flow_id)
+
+            n_small_flows = len(
+                [
+                    flow_id
+                    for flow_id in graph["active_flows"]
+                    if self.flow_to_size[flow_id] <= self.flow_size_threshold
+                ]
+            )
+
+            if n_small_flows == 0:
+                self.busy_periods.append(tuple(graph["all_flows"]))
+                self.busy_periods_len.append(len(graph["all_flows"]))
+                self.busy_periods_duration.append(
+                    [graph["start_time"], self.current_time]
+                )
+                self.busy_periods_unique.update(graph["all_flows"])
+
+                del self.active_graphs[graph_id]
+
+    def finalize(self):
+        return self.busy_periods, self.busy_periods_duration, self.busy_periods_unique
+
+
+def run_flow_simulation(flows_info, nhosts=5, lr=10):
     size, fat, fsd = map(np.array, zip(*flows_info))
     nflows = len(size)
-    # Adjust nhosts and flow source/destination if nhosts is 21
-    if nhosts == 21:
-        nhosts = 3
-        fsd[:, 0] = 0
-        fsd[:, 1] = 2
-    # Prepare data for the C function
+
     fats_pt = make_array(c_double, fat)
     sizes_pt = make_array(c_double, size)
     src_pt = make_array(c_int, fsd[:, 0])
     dst_pt = make_array(c_int, fsd[:, 1])
     topo_pt = make_array(c_int, np.array([1, 4]))
 
-    # Run the flow simulation
     res = C_LIB.get_fct_mmf(
         nflows, fats_pt, sizes_pt, src_pt, dst_pt, nhosts, topo_pt, 2, 8, 2, lr
     )
@@ -169,7 +289,7 @@ def run_flow_simulation(flows_info, nhosts=21, lr=10):
     return estimated_fcts
 
 
-def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10, max_inflight_flows=0):
+def load_data(dir_input, spec, topo_type="_topo-pl-5_s0", lr=10, max_inflight_flows=0):
     topo_type += f"_i{max_inflight_flows}"
     dir_input_tmp = f"{dir_input}/{spec}"
 
@@ -177,33 +297,23 @@ def load_data(dir_input, spec, topo_type="_topo-pl-21_s0", lr=10, max_inflight_f
     size = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
     fat = np.load(f"{dir_input_tmp}/fat.npy")[fid]
     fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
-    assert np.all(fid[:-1] <= fid[1:])
+    assert np.all(fid[:-1] <= fid[1:]) and len(fid) % 10000 == 0
 
     fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
     i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
-    # sldn = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
-
-    # pkt_head = np.clip(size, a_min=0, a_max=MTU)
-    # delay_propagation = DELAY_PROPAGATION_BASE * 2
-    # pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
-    # delay_transmission = pkt_size / lr
-    # delay_propagation_perflow = delay_propagation + delay_transmission
-    # fct_ideal = (
-    #     size + np.ceil(size / MTU) * HEADER_SIZE
-    # ) * BYTE_TO_BIT / lr + delay_propagation_perflow
 
     assert len(size) == len(fcts)
     return size, fat, fsd, fcts, i_fcts
 
 
-def interactive_inference(
+def interactive_inference_path(
     inference,
     size,
     fat,
     fsd,
     fcts,
     i_fcts,
-    nhosts=21,
+    nhosts=5,
     flow_size_threshold=100000,
     lr=10,
     max_inflight_flows=5,
@@ -211,30 +321,25 @@ def interactive_inference(
     if max_inflight_flows == 0:
         max_inflight_flows = 1000000
     n_flows_total = len(size)
-    # print(f"Total number of flows: {n_flows_total}")
-    # n_flows_total = 1000
 
-    # flow_id: [flag_complete_previous_period, flag_from_last_period]
     flows_period = {}
 
     flow_completion_times = {}
     flow_fct_sldn = {}
-    current_time = 0  # Initialize the current time
+    current_time = 0
     inflight_flows = 0
 
     flow_id_in_prop = 0
+    processor = OnlineBusyPeriodPathProcessor(nhosts, flow_size_threshold)
+
     while flow_id_in_prop < n_flows_total or len(flows_period) > 0:
-        # if flow_id_in_prop%1000==0:
-        # print(f"Flow {flow_id_in_prop} processed")
         flow_arrival_time = float("inf")
         flow_completion_time = float("inf")
         if flow_id_in_prop < n_flows_total:
             if inflight_flows < max_inflight_flows:
                 flow_arrival_time = np.maximum(fat[flow_id_in_prop], current_time)
-                # print(f"Flow {flow_id_in_prop} added to queue")
 
         if flows_period:
-
             flows_info = [
                 [size[flow_id], fat[flow_id], fsd[flow_id]] for flow_id in flows_period
             ]
@@ -247,12 +352,19 @@ def interactive_inference(
                 flow_info = flows_period[flow_id]
                 if not flow_info[0]:
                     flow_id_info_active.append(flow_id)
+                    links = set()
+                    links.add((fsd[flow_id][0], nhosts + fsd[flow_id][0]))
+                    for link_idx in range(fsd[flow_id][0], fsd[flow_id][1]):
+                        links.add((nhosts + link_idx, nhosts + link_idx + 1))
+                    links.add((nhosts + fsd[flow_id][1], fsd[flow_id][1]))
+
                     flows_info_active.append(
                         [
                             size[flow_id],
                             fat[flow_id],
                             fcts_flowsim[flow_idx],
                             flow_info[1],
+                            links,
                         ]
                     )
 
@@ -275,22 +387,18 @@ def interactive_inference(
             fat_min = fat[completed_flow_id]
 
         if flow_arrival_time < flow_completion_time:
-            # Next event is flow arrival
             current_time = flow_arrival_time
             inflight_flows += 1
             flows_period[flow_id_in_prop] = [0, 0]
-            # print(f"Event: Flow {flow_id_in_prop} Arrival at {current_time}")
             flow_id_in_prop += 1
         else:
-            # Next event is flow completion
             current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = flow_completion_time - fat_min
             flow_fct_sldn[completed_flow_id] = sldn_min
             inflight_flows -= 1
-            # print(f"Event: Flow {completed_flow_id} Completion at {current_time}")
+
             if inflight_flows == 0:
                 flows_period = {}
-                # print("Busy period reset")
             else:
                 n_small_flows = len(
                     [
@@ -307,17 +415,14 @@ def interactive_inference(
                             flows_period[flow_id][1] = 1
                             if flow_id in flow_completion_times:
                                 flows_period[flow_id][0] = 1
-        # print(f"Current time: {current_time}, Inflight flows: {inflight_flows}, Active flows: {len(active_flows)}")
+
     data_dict = {}
-    # Compare recorded flow completion times with the ground truth
     for flow_id in flow_completion_times:
         predicted_completion_time = flow_completion_times[flow_id]
         actual_completion_time = fcts[flow_id]
-        # print(f"Flow ID: {flow_id}, Predicted Completion Time: {predicted_completion_time}, Actual Completion Time: {actual_completion_time}")
         predicted_sldn = flow_fct_sldn[flow_id]
         assert predicted_sldn != np.inf
         actual_sldn = fcts[flow_id] / i_fcts[flow_id]
-        # print(f"Flow ID: {flow_id}, Predicted SLDN: {predicted_sldn}, Actual SLDN: {actual_sldn}")
 
         data_dict[flow_id] = [
             predicted_completion_time,
@@ -329,34 +434,32 @@ def interactive_inference(
     sorted_flow_ids = sorted(data_dict.keys())
     res = np.array([data_dict[flow_id] for flow_id in sorted_flow_ids])
     return res[:, :2], res[:, 2:]
-    # Saving the data to a .npz file
-    # np.savez(f'./res/inference_{n_flows_total}_{max_inflight_flows}.npz',
-    #  fct=res[:, :2],
-    #  sldn=res[:, 2:])
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Interactive Inference Script")
+    parser = argparse.ArgumentParser(
+        description="Interactive Inference Script for Path Scenario"
+    )
     parser.add_argument(
         "--config",
         type=str,
         required=False,
         help="Path to the YAML configuration file",
-        default="./config/test_config_lstm_link.yaml",
+        default="./config/test_config_lstm_path.yaml",
     )
     parser.add_argument(
         "--input",
         type=str,
         required=False,
         help="Path to the input data directory",
-        default="/data2/lichenni/perflow_link",
+        default="/data2/lichenni/perflow_path",
     )
     parser.add_argument(
         "--output",
         type=str,
         required=False,
         help="Path to save the output predictions",
-        default="/data2/lichenni/output_perflow_link",
+        default="/data2/lichenni/output_perflow",
     )
 
     args = parser.parse_args()
@@ -370,21 +473,20 @@ def main():
     lr = data_config["lr"]
     flow_size_threshold = data_config["flow_size_threshold"]
 
-    args.checkpoint = f"{args.output}/link_{flow_size_threshold}_shard2000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/best.ckpt"
+    args.checkpoint = f"{args.output}/path_{flow_size_threshold}_shard1000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last.ckpt"
     inference = Inference(
         model_config, training_config, checkpoint_path=args.checkpoint, lr=lr
     )
     empirical_str = "_empirical"
-    # empirical_str=''
     args.input += empirical_str
 
     print(f"Start inference with flow_size_threshold={flow_size_threshold}")
-    # for max_inflight_flows in [0, 4, 6, 15]:
+
     for max_inflight_flows in [0]:
         fct, sldn = [], []
-        for shard in np.arange(0, 50):
-            for nflows in [2000]:
-                for nhosts in [21]:
+        for shard in np.arange(0, 10):
+            for nflows in [10000]:
+                for nhosts in [5]:
                     spec = f"shard{shard}_nflows{nflows}_nhosts{nhosts}_lr{lr}Gbps"
                     size, fat, fsd, fcts, i_fcts = load_data(
                         args.input,
@@ -393,8 +495,7 @@ def main():
                         max_inflight_flows=max_inflight_flows,
                     )
 
-                    # Perform interactive inference
-                    fct_tmp, sldn_tmp = interactive_inference(
+                    fct_tmp, sldn_tmp = interactive_inference_path(
                         inference,
                         size,
                         fat,
