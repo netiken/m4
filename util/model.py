@@ -397,13 +397,13 @@ class GNNLayer(nn.Module):
         self.conv = SAGEConv(c_in, c_out, aggr="lstm")  # using mean aggregation
         # self.conv = GCNConv(c_in, c_out)
         # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
-        # self.dropout = nn.Dropout(p=dropout)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, node_feats, edge_index):
         # node_feats = self.conv(node_feats, edge_index[:2], edge_weight=edge_index[2])
         node_feats = self.conv(node_feats, edge_index[:2])
         # node_feats = F.relu(node_feats)
-        # node_feats = self.dropout(node_feats)
+        node_feats = self.dropout(node_feats)
         return node_feats
 
 

@@ -275,7 +275,7 @@ class DataModulePerFlow(LightningDataModule):
                                         len(period) for period in busy_periods
                                     ]
                                     if (
-                                        np.mean(len_per_period) > 100
+                                        np.mean(len_per_period) > 50
                                         or np.max(len_per_period) > 10000
                                     ):
                                         continue
@@ -991,7 +991,7 @@ class PathFctSldnSegment(Dataset):
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
         self.lr = 10.0
-        self.n_gnn_connection_limit = 10
+        self.n_gnn_connection_limit = 100
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_gnn = enable_gnn
@@ -1067,7 +1067,7 @@ class PathFctSldnSegment(Dataset):
             assert (fats_ia >= 0).all()
 
             sizes = np.log2(sizes / 1000.0 + 1)
-            fats_ia = np.log2(fats_ia/10000.0 + 1)
+            fats_ia = np.log2(fats_ia / 10000.0 + 1)
             # sizes = z_score_normalization(sizes)
             # fats_ia = z_score_normalization(fats_ia)
 
