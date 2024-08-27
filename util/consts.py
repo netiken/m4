@@ -19,7 +19,7 @@ EPS = 1e-12
 
 # SIZE_BUCKET_LIST_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, $\infty$)"]
 
-balance_len_bins = [2, 4, 6, 8, 10, 15, 20, 30, 40, 50, 75, 100]
+balance_len_bins = [2, 4, 6, 8, 10, 15, 20, 30, 40, 60, 80, 100]
 balance_len_bins_label = [
     "(0, 2)",
     "[2,4)",
@@ -30,10 +30,20 @@ balance_len_bins_label = [
     "[15,20)",
     "[20,30)",
     "[30,40)",
-    "[40,50)",
-    "[50,75)",
-    "[75,100)",
+    "[40,60)",
+    "[60,80)",
+    "[80,100)",
     "[100, $\infty$)",
+]
+
+balance_len_bins_test = [10, 50, 100, 500, 1000]
+balance_len_bins_test_label = [
+    "(0, 10)",
+    "[10,50)",
+    "[50,100)",
+    "[100,500)",
+    "[500,1000)",
+    "[1000, $\infty$)",
 ]
 # balance_len_bins = [2, 4, 8, 16, 32, 64, 128, 256]
 # balance_len_bins_label = [
@@ -48,16 +58,14 @@ balance_len_bins_label = [
 #     "[256, $\infty$)",
 # ]
 
-balance_size_bins = [1000, 5000, 10000, 20000, 50000, 200000, 1000000]
+balance_size_bins = [10000, 50000, 100000, 500000, 1000000]
 balance_size_bins_label = [
-    "(0, 1MTU)",
-    "[1MTU, 5MTU)",
-    "[5MTU, 10MTU)",
-    "[10MTU, 20MTU)",
-    "[20MTU, 50MTU)",
-    "[50MTU, 200MTU)",
-    "[200MTU, 1000MTU)",
-    "[1000MTU, $\infty$)",
+    "(0, 10KB)",
+    "[10KB,50KB)",
+    "[50KB,100KB)",
+    "[100KB,500KB)",
+    "[500KB,1MB)",
+    "[1MB, $\infty$)",
 ]
 
 

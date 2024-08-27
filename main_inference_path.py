@@ -147,60 +147,117 @@ class Inference:
         return self.postprocess(output)
 
 
-class OnlineSubgraphProcessor:
+class OnlineTrafficGenerator:
     def __init__(self, nhosts, flow_size_threshold):
         self.nhosts = nhosts
         self.flow_size_threshold = flow_size_threshold
-        self.subgraphs = {}
-        self.subgraph_id_counter = 0
+        self.active_graphs = {}
+        self.link_to_graph = {}
+        self.large_flow_to_info = {}
+        self.flow_to_size = {}
+        self.graph_id_new = 0
 
-    def _create_subgraph(self):
-        subgraph_id = self.subgraph_id_counter
-        self.subgraph_id_counter += 1
-        self.subgraphs[subgraph_id] = {
-            "flows": set(),
-            "links": set(),
+    def _create_subgraph(self, cur_time):
+        subgraph_id = self.graph_id_new
+        self.graph_id_new += 1
+        self.active_graphs[subgraph_id] = {
+            "active_links": defaultdict(set),
+            # "all_links": set(),
             "active_flows": set(),
-            "start_time": None,
-            "end_time": None,
+            "all_flows": set(),
+            "start_time": cur_time,
         }
         return subgraph_id
 
-    def _assign_flow_to_subgraph(self, flow_id, links, time):
-        assigned_subgraph_id = None
-        for subgraph_id, subgraph in self.subgraphs.items():
-            if not subgraph["links"].isdisjoint(links):
-                subgraph["flows"].add(flow_id)
-                subgraph["links"].update(links)
-                if subgraph["start_time"] is None or time < subgraph["start_time"]:
-                    subgraph["start_time"] = time
-                assigned_subgraph_id = subgraph_id
-                break
+    def _assign_flow_to_subgraph(self, flow_id, links, cur_time):
+        involved_graph_ids = set()
+        for link in links:
+            if link in self.link_to_graph:
+                involved_graph_ids.add(self.link_to_graph[link])
 
-        if assigned_subgraph_id is None:
-            assigned_subgraph_id = self._create_subgraph()
-            self.subgraphs[assigned_subgraph_id]["flows"].add(flow_id)
-            self.subgraphs[assigned_subgraph_id]["links"].update(links)
-            self.subgraphs[assigned_subgraph_id]["start_time"] = time
+        if involved_graph_ids:
+            # Merge the involved subgraphs into one
+            subgraph_id = min(involved_graph_ids)
+            main_graph = self.active_graphs[subgraph_id]
 
-        return assigned_subgraph_id
+            for gid in involved_graph_ids:
+                if gid == subgraph_id:
+                    continue
+                # Merge other graphs into the main graph
+                other_graph = self.active_graphs.pop(gid)
+                main_graph["active_links"].update(other_graph["active_links"])
+                # main_graph["all_links"].update(other_graph["all_links"])
+                main_graph["active_flows"].update(other_graph["active_flows"])
+                main_graph["all_flows"].update(other_graph["all_flows"])
+                for link in other_graph["active_links"]:
+                    self.link_to_graph[link] = subgraph_id
 
-    def process_event(self, time, event, flow_id, links, size):
-        subgraph_id = self._assign_flow_to_subgraph(flow_id, links, time)
+            if cur_time > main_graph["start_time"]:
+                main_graph["start_time"] = cur_time
 
-        subgraph = self.subgraphs[subgraph_id]
+        else:
+            # No overlap, create a new subgraph
+            subgraph_id = self._create_subgraph(cur_time)
+
+        # Update the subgraph with the new flow
+        for link in links:
+            self.active_graphs[subgraph_id]["active_links"][link].add(flow_id)
+            # self.active_graphs[subgraph_id]["all_links"].add(link)
+            self.link_to_graph[link] = subgraph_id
+
+        self.active_graphs[subgraph_id]["active_flows"].add(flow_id)
+        self.active_graphs[subgraph_id]["all_flows"].add(flow_id)
+
+        # Check if any large flow intersects with this new subgraph
+        for large_flow_id, (
+            large_flow_time,
+            large_flow_links,
+        ) in self.large_flow_to_info.items():
+            if large_flow_id not in self.active_graphs[subgraph_id][
+                "all_flows"
+            ] and not large_flow_links.isdisjoint(links):
+                self.active_graphs[subgraph_id]["all_flows"].add(large_flow_id)
+
+        return subgraph_id
+
+    def process_event(
+        self, cur_time, event, flow_id, links, size, subgraph_id_completed=None
+    ):
         if event == "start":
-            subgraph["active_flows"].add(flow_id)
+            self.flow_to_size[flow_id] = size
+            if size > self.flow_size_threshold:
+                self.large_flow_to_info[flow_id] = (cur_time, links)
+            else:
+                self._assign_flow_to_subgraph(flow_id, links, cur_time)
         elif event == "end":
-            subgraph["active_flows"].remove(flow_id)
-            if not subgraph["active_flows"]:
-                subgraph["end_time"] = time
+            self.flow_to_size.pop(flow_id, None)
+            if flow_id in self.large_flow_to_info:
+                self.large_flow_to_info.pop(flow_id)
+            else:
+                graph_id = subgraph_id_completed
+                if graph_id is not None:
+                    graph = self.active_graphs[graph_id]
+
+                    for link in links:
+                        if flow_id in graph["active_links"][link]:
+                            graph["active_links"][link].remove(flow_id)
+                            if not graph["active_links"][link]:
+                                del graph["active_links"][link]
+                                del self.link_to_graph[link]
+
+                    graph["active_flows"].remove(flow_id)
+
+                    if not any(
+                        self.flow_to_size[flow] <= self.flow_size_threshold
+                        for flow in graph["active_flows"]
+                    ):
+                        del self.active_graphs[graph_id]
 
     def get_subgraphs(self):
-        return self.subgraphs
+        return self.active_graphs
 
     def has_flows(self):
-        return len(self.subgraphs) > 0
+        return bool(self.active_graphs)
 
 
 def run_flow_simulation(flows_info, nhosts=5, lr=10):
@@ -263,30 +320,30 @@ def interactive_inference_path(
 
     flow_completion_times = {}
     flow_fct_sldn = {}
-    inflight_flows = 0
 
-    processor = OnlineSubgraphProcessor(nhosts, flow_size_threshold)
+    traffic_generator = OnlineTrafficGenerator(nhosts, flow_size_threshold)
     current_time = 0
 
+    inflight_flows = 0
     flow_id_in_prop = 0
     while len(flow_completion_times) != n_flows_total:
         flow_arrival_time = float("inf")
         flow_completion_time = float("inf")
+        completed_flow_id = None
+
         if flow_id_in_prop < n_flows_total:
             if inflight_flows < max_inflight_flows:
-                flow_arrival_time = np.maximum(fat[flow_id_in_prop], current_time)
-                # print(f"Flow {flow_id_in_prop} added to queue")
+                flow_arrival_time = max(fat[flow_id_in_prop], current_time)
 
-        # Find the next flow to complete across all subgraphs
+        # Process flow completions across all subgraphs
+        if traffic_generator.has_flows():
+            subgraphs = traffic_generator.get_subgraphs()
 
-        if processor.has_flows():
-            subgraphs = processor.get_subgraphs()
-
-            flow_completion_time_tmp = np.inf
             for subgraph_id, subgraph in subgraphs.items():
+                period_start_time = subgraph["start_time"]
                 flows_info = [
                     [size[flow_id], fat[flow_id], fsd[flow_id]]
-                    for flow_id in subgraph["active_flows"]
+                    for flow_id in subgraph["all_flows"]
                 ]
                 fcts_flowsim = run_flow_simulation(flows_info, nhosts, lr)
 
@@ -300,34 +357,34 @@ def interactive_inference_path(
                                 size[flow_id],
                                 fat[flow_id],
                                 fcts_flowsim[flow_idx],
-                                0,  # Assuming 0 as flag_from_last_period for simplicity
+                                fat[flow_id] < period_start_time,
                             ]
                         )
 
                 predictions = inference.infer(flows_info_active)
                 sldn_est = predictions[0, :, 0]
 
-                fct_stamp_est = []
                 for idx, sldn_tmp in enumerate(sldn_est):
                     flow_id = flow_id_info_active[idx]
-                    if flow_id in flow_completion_times:
-                        fct_stamp_est.append(np.inf)
-                    else:
-                        fct_stamp_est.append(fat[flow_id] + sldn_tmp * i_fcts[flow_id])
-                min_idx = np.argmin(fct_stamp_est, axis=0)
+                    estimated_completion_time = (
+                        fat[flow_id] + sldn_tmp * i_fcts[flow_id]
+                    )
 
-                if fct_stamp_est[min_idx] < flow_completion_time_tmp:
-                    flow_completion_time_tmp = fct_stamp_est[min_idx]
-                    completed_flow_id = flow_id_info_active[min_idx]
-                    sldn_min = sldn_est[min_idx]
-                    fat_min = fat[completed_flow_id]
+                    if (
+                        flow_id not in flow_completion_times
+                        and estimated_completion_time < flow_completion_time
+                    ):
+                        flow_completion_time = estimated_completion_time
+                        completed_flow_id = flow_id
+                        sldn_min = sldn_tmp
+                        subgraph_id_completed = subgraph_id
 
+        # Determine the next event (either flow arrival or flow completion)
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
             current_time = flow_arrival_time
             links = src_dst_to_links[fsd[flow_id_in_prop][0], fsd[flow_id_in_prop][1]]
-            # Process the arrival of the new flow and assign it to a subgraph
-            processor.process_event(
+            traffic_generator.process_event(
                 fat[flow_id_in_prop],
                 "start",
                 flow_id_in_prop,
@@ -336,26 +393,25 @@ def interactive_inference_path(
             )
             inflight_flows += 1
             flow_id_in_prop += 1
-        else:
+        elif completed_flow_id is not None:
             # Next event is flow completion
             current_time = flow_completion_time
-            flow_completion_times[completed_flow_id] = flow_completion_time - fat_min
+            flow_completion_times[completed_flow_id] = (
+                flow_completion_time - fat[completed_flow_id]
+            )
             flow_fct_sldn[completed_flow_id] = sldn_min
 
-            # print(f"Event: Flow {completed_flow_id} Completion at {current_time}")
-
-            # Process the flow completion event
-            link_set = src_dst_to_links[
+            links = src_dst_to_links[
                 fsd[completed_flow_id][0], fsd[completed_flow_id][1]
             ]
-            processor.process_event(
+            traffic_generator.process_event(
                 current_time,
                 "end",
                 completed_flow_id,
-                link_set,
+                links,
                 size[completed_flow_id],
+                subgraph_id_completed,
             )
-            # Update the current time and mark the flow as completed
             inflight_flows -= 1
 
     data_dict = {}
