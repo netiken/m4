@@ -25,16 +25,16 @@ model:
   gcn_n_layer: 4
   loss_fn_type: "l1"
   hidden_size: 256
-  gcn_hidden_size: 64
+  gcn_hidden_size: 128
   dropout: 0.2
   enable_bidirectional: True
   enable_positional_encoding: False
   enable_gnn: True
-  enable_lstm: True
+  enable_lstm: False
 
 # Training parameters
 training:
-  gpu: [0,0,1,1]
+  gpu: [0,1]
   # gpu: [0,1,2,3]
   n_epochs: 1000
   batch_size: 32

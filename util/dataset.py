@@ -991,7 +991,6 @@ class PathFctSldnSegment(Dataset):
         self.dir_input = dir_input
         self.use_first_epoch_logic = True
         self.lr = 10.0
-        self.n_gnn_connection_limit = 100
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_gnn = enable_gnn
@@ -1158,9 +1157,7 @@ class PathFctSldnSegment(Dataset):
             fat_head = fats[flow_node_idx]
 
             other_flow_idx = flow_node_idx - 1
-            while (
-                other_flow_idx >= 0 and n_gnn_connection < self.n_gnn_connection_limit
-            ):
+            while other_flow_idx >= 0:
 
                 pair_other = (
                     fsd_flowsim[other_flow_idx, 0],
