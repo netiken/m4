@@ -111,7 +111,7 @@ class Inference:
 
         return model
 
-    def preprocess(self, flows_info_active, nhosts):
+    def preprocess(self, flows_info_active, nhosts, src_dst_to_links):
         sizes, fats, fcts_flowsim, fsd, flag_from_last_period = map(
             np.array, zip(*flows_info_active)
         )
@@ -138,7 +138,7 @@ class Inference:
             (sizes, fats_ia, sldn_flowsim, n_links_passed, flag_from_last_period)
         )
 
-        edge_index = self.compute_edge_index(nhosts, fid_period, fsd)
+        edge_index = self.compute_edge_index(nhosts, fid_period, fsd, src_dst_to_links)
 
         return (
             torch.tensor(input_data, dtype=torch.float32).to(self.device),
@@ -150,20 +150,12 @@ class Inference:
     def postprocess(self, output):
         return output.cpu().detach().numpy()
 
-    def compute_edge_index(self, n_hosts, fid, fsd_flowsim):
+    def compute_edge_index(self, n_hosts, fid, fsd_flowsim, src_dst_to_links):
         n_flows = len(fsd_flowsim)
         edge_index = [[0, 0, 1]]
 
         fid_idx = np.argsort(fid)
         fsd_flowsim = fsd_flowsim[fid_idx]
-
-        src_dst_to_links = {}
-        for src in range(n_hosts - 1):
-            for dst in range(src + 1, n_hosts):
-                link_set = set([(src, src + n_hosts), (dst + n_hosts, dst)])
-                for link_idx in range(src, dst):
-                    link_set.add((n_hosts + link_idx, n_hosts + link_idx + 1))
-                src_dst_to_links[(src, dst)] = link_set
 
         for flow_node_idx in range(1, n_flows):
             n_gnn_connection = 0
@@ -213,9 +205,9 @@ class Inference:
 
         return edge_index
 
-    def infer(self, flows_info_active, nhosts):
+    def infer(self, flows_info_active, nhosts, src_dst_to_links):
         data, edge_index, lengths_per_path, n_paths_per_batch = self.preprocess(
-            flows_info_active, nhosts
+            flows_info_active, nhosts, src_dst_to_links
         )
         lengths = np.array([len(data)])
         edge_index_len = np.array([edge_index.shape[1]])
@@ -249,8 +241,12 @@ class OnlineTrafficGenerator:
         self.flow_size_threshold = flow_size_threshold
         self.active_graphs = {}
         self.link_to_graph = {}
+
         self.large_flow_to_info = {}
-        self.large_flow_to_unassigned = set()
+        self.large_flow_to_graph = defaultdict(set)
+        self.large_flow_unassigned = set()
+        self.large_flow_compeleted = set()
+
         self.flow_to_size = sizes
         self.graph_id_new = 0
 
@@ -259,9 +255,9 @@ class OnlineTrafficGenerator:
         self.graph_id_new += 1
         self.active_graphs[subgraph_id] = {
             "active_links": defaultdict(set),
-            # "all_links": set(),
-            "active_flows": set(),
-            "all_flows": set(),
+            "flows_small": set(),
+            "flows_large": set(),
+            "flows_small_completed": set(),
             "start_time": cur_time,
         }
         return subgraph_id
@@ -283,9 +279,11 @@ class OnlineTrafficGenerator:
                 # Merge other graphs into the main graph
                 other_graph = self.active_graphs.pop(gid)
                 main_graph["active_links"].update(other_graph["active_links"])
-                # main_graph["all_links"].update(other_graph["all_links"])
-                main_graph["active_flows"].update(other_graph["active_flows"])
-                main_graph["all_flows"].update(other_graph["all_flows"])
+                main_graph["flows_small"].update(other_graph["flows_small"])
+                main_graph["flows_large"].update(other_graph["flows_large"])
+                main_graph["flows_small_completed"].update(
+                    other_graph["flows_small_completed"]
+                )
                 for link in other_graph["active_links"]:
                     self.link_to_graph[link] = subgraph_id
 
@@ -299,11 +297,9 @@ class OnlineTrafficGenerator:
         # Update the subgraph with the new flow
         for link in links:
             self.active_graphs[subgraph_id]["active_links"][link].add(flow_id)
-            # self.active_graphs[subgraph_id]["all_links"].add(link)
             self.link_to_graph[link] = subgraph_id
 
-        self.active_graphs[subgraph_id]["active_flows"].add(flow_id)
-        self.active_graphs[subgraph_id]["all_flows"].add(flow_id)
+        self.active_graphs[subgraph_id]["flows_small"].add(flow_id)
 
         # Check if any large flow intersects with this new subgraph
         for large_flow_id, (
@@ -311,19 +307,20 @@ class OnlineTrafficGenerator:
             large_flow_links,
         ) in self.large_flow_to_info.items():
             if large_flow_id not in self.active_graphs[subgraph_id][
-                "all_flows"
+                "flows_large"
             ] and not large_flow_links.isdisjoint(links):
-                self.active_graphs[subgraph_id]["all_flows"].add(large_flow_id)
-                if large_flow_id in self.large_flow_to_unassigned:
-                    self.large_flow_to_unassigned.remove(large_flow_id)
+                self.active_graphs[subgraph_id]["flows_large"].add(large_flow_id)
+                self.large_flow_to_graph[large_flow_id].add(subgraph_id)
+                if large_flow_id in self.large_flow_unassigned:
+                    self.large_flow_unassigned.remove(large_flow_id)
 
         return subgraph_id
 
     def get_active_flows(self, subgraph_id):
-        flows = self.active_graphs[subgraph_id]["active_flows"]
-        for large_flow_id in self.large_flow_to_info:
-            if large_flow_id in self.active_graphs[subgraph_id]["all_flows"]:
-                flows.add(large_flow_id)
+        flows = (
+            self.active_graphs[subgraph_id]["flows_small"]
+            | self.active_graphs[subgraph_id]["flows_large"]
+        )
         flows = sorted(flows)
         return flows
 
@@ -333,14 +330,15 @@ class OnlineTrafficGenerator:
         if event == "start":
             if size > self.flow_size_threshold:
                 self.large_flow_to_info[flow_id] = (cur_time, links)
-                self.large_flow_to_unassigned.add(flow_id)
+                self.large_flow_unassigned.add(flow_id)
             else:
                 self._assign_flow_to_subgraph(flow_id, links, cur_time)
         elif event == "end":
             if flow_id in self.large_flow_to_info:
+                self.large_flow_compeleted.add(flow_id)
                 self.large_flow_to_info.pop(flow_id)
-                if flow_id in self.large_flow_to_unassigned:
-                    self.large_flow_to_unassigned.remove(flow_id)
+                if flow_id in self.large_flow_unassigned:
+                    self.large_flow_unassigned.remove(flow_id)
                     return
             else:
                 graph_id = subgraph_id_completed
@@ -354,22 +352,26 @@ class OnlineTrafficGenerator:
                                 del graph["active_links"][link]
                                 del self.link_to_graph[link]
 
-                    graph["active_flows"].remove(flow_id)
+                    graph["flows_small_completed"].add(flow_id)
 
-                    if not any(
-                        self.flow_to_size[flow] <= self.flow_size_threshold
-                        for flow in graph["active_flows"]
-                    ):
-                        del self.active_graphs[graph_id]
+                    if graph["flows_small"] == graph["flows_small_completed"]:
+                        for flow_id in graph["flows_large"]:
+                            self.large_flow_to_graph[flow_id].remove(graph_id)
+                            if (
+                                flow_id not in self.large_flow_compeleted
+                                and not self.large_flow_to_graph[flow_id]
+                            ):
+                                self.large_flow_unassigned.add(flow_id)
+                    del self.active_graphs[graph_id]
 
     def get_subgraphs(self):
         return self.active_graphs
 
     def get_large_flows_unassigned(self):
-        return sorted(list(self.large_flow_to_unassigned))
+        return sorted(list(self.large_flow_unassigned))
 
     def has_flows(self):
-        return bool(self.active_graphs) or bool(self.large_flow_to_unassigned)
+        return bool(self.active_graphs) or bool(self.large_flow_unassigned)
 
 
 def run_flow_simulation(flows_info, nhosts=5, lr=10):
@@ -417,16 +419,10 @@ def interactive_inference_path(
     flow_size_threshold=100000,
     lr=10,
     max_inflight_flows=5,
+    src_dst_to_links=None,
 ):
     if max_inflight_flows == 0:
         max_inflight_flows = 1000000
-    src_dst_to_links = {}
-    for src in range(nhosts - 1):
-        for dst in range(src + 1, nhosts):
-            link_set = set([(src, src + nhosts), (dst + nhosts, dst)])
-            for link_idx in range(src, dst):
-                link_set.add((nhosts + link_idx, nhosts + link_idx + 1))
-            src_dst_to_links[(src, dst)] = link_set
 
     n_flows_total = len(size)
 
@@ -472,9 +468,10 @@ def interactive_inference_path(
 
             for subgraph_id, subgraph in subgraphs.items():
                 period_start_time = subgraph["start_time"]
+                flows_large = sorted(list(subgraph["flows_large"]))
                 flows_info = [
                     [size[flow_id], fat[flow_id], fsd[flow_id]]
-                    for flow_id in subgraph["all_flows"]
+                    for flow_id in flows_large
                 ]
                 fcts_flowsim = run_flow_simulation(flows_info, nhosts, lr)
 
@@ -482,19 +479,20 @@ def interactive_inference_path(
                 flow_id_info_active = []
                 flows = traffic_generator.get_active_flows(subgraph_id)
                 for flow_idx, flow_id in enumerate(flows):
-                    if flow_id not in flow_completion_times:
-                        flow_id_info_active.append(flow_id)
-                        flows_info_active.append(
-                            [
-                                size[flow_id],
-                                fat[flow_id],
-                                fcts_flowsim[flow_idx],
-                                fsd[flow_id],
-                                fat[flow_id] < period_start_time,
-                            ]
-                        )
+                    flow_id_info_active.append(flow_id)
+                    flows_info_active.append(
+                        [
+                            size[flow_id],
+                            fat[flow_id],
+                            fcts_flowsim[flow_idx],
+                            fsd[flow_id],
+                            fat[flow_id] < period_start_time,
+                        ]
+                    )
 
-                predictions = inference.infer(flows_info_active, nhosts)
+                predictions = inference.infer(
+                    flows_info_active, nhosts, src_dst_to_links
+                )
                 sldn_est = predictions[0, :, 0]
 
                 for idx, sldn_tmp in enumerate(sldn_est):
@@ -567,6 +565,17 @@ def interactive_inference_path(
     return res[:, :2], res[:, 2:]
 
 
+def load_routing_table(nhosts):
+    src_dst_to_links = {}
+    for src in range(nhosts - 1):
+        for dst in range(src + 1, nhosts):
+            link_set = set([(src, src + nhosts), (dst + nhosts, dst)])
+            for link_idx in range(src, dst):
+                link_set.add((nhosts + link_idx, nhosts + link_idx + 1))
+            src_dst_to_links[(src, dst)] = link_set
+    return src_dst_to_links
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Interactive Inference Script for Path Scenario"
@@ -619,6 +628,8 @@ def main():
             for nflows in [10000]:
                 for nhosts in [5]:
                     spec = f"shard{shard}_nflows{nflows}_nhosts{nhosts}_lr{lr}Gbps"
+                    src_dst_to_links = load_routing_table(nhosts)
+
                     size, fat, fsd, fcts, i_fcts = load_data(
                         args.input,
                         spec=spec,
@@ -637,6 +648,7 @@ def main():
                         flow_size_threshold=flow_size_threshold,
                         lr=lr,
                         max_inflight_flows=max_inflight_flows,
+                        src_dst_to_links=src_dst_to_links,
                     )
                     print(
                         f"Finished workload={shard}. fct shape: {fct_tmp.shape}, sldn shape: {sldn_tmp.shape}"
