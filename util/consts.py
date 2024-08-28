@@ -64,10 +64,9 @@ balance_len_bins_test_label = [
 #     "[256, $\infty$)",
 # ]
 
-balance_size_bins = [10000, 50000, 100000, 500000, 1000000]
+balance_size_bins = [50000, 100000, 500000, 1000000]
 balance_size_bins_label = [
-    "(0, 10KB)",
-    "[10KB,50KB)",
+    "(0, 50KB)",
     "[50KB,100KB)",
     "[100KB,500KB)",
     "[500KB,1MB)",

@@ -54,6 +54,7 @@ class Inference:
         self.model = self.load_model(checkpoint_path)
         self.model.to(self.device)
         self.model.eval()
+        self.n_gnn_connection_limit = 100
 
     def load_model(self, checkpoint_path):
         model_config = self.model_config
@@ -110,35 +111,125 @@ class Inference:
 
         return model
 
-    def preprocess(self, flows_info_active):
-        sizes, fats, fcts_flowsim, flag_from_last_period = map(
+    def preprocess(self, flows_info_active, nhosts):
+        sizes, fats, fcts_flowsim, fsd, flag_from_last_period = map(
             np.array, zip(*flows_info_active)
         )
-        fats_ia = np.diff(fats)
-        fats_ia = np.insert(fats_ia, 0, 0)
+        fid_period = np.arange(len(sizes))
+        dict_tmp = defaultdict(list)
+        for i in fid_period:
+            key = (fsd[i][0] - fsd[i][1], fsd[i][0])
+            dict_tmp[key].append(i)
+        sorted_keys = sorted(dict_tmp.keys())
+        fid_period = np.concatenate([dict_tmp[key] for key in sorted_keys])
+        lengths_per_path = np.array([len(dict_tmp[key]) for key in sorted_keys])
+        n_paths_per_batch = len(sorted_keys)
 
-        n_links_passed = np.ones_like(fcts_flowsim) * 2
+        fats_ia = fats - np.min(fats)
+        n_links_passed = abs(fsd[:, 1] - fsd[:, 0]) + 2
         base_delay = get_base_delay_link(sizes, n_links_passed, self.lr)
         i_fcts_flowsim = get_base_delay_transmission(sizes, self.lr) + base_delay
         fcts_flowsim += base_delay
         sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
 
-        sizes = np.log1p(sizes)
-        fats_ia = np.log1p(fats_ia)
+        sizes = np.log2(sizes / 1000.0 + 1)
+        fats_ia = np.log2(fats_ia / 10000.0 + 1)
         input_data = np.column_stack(
-            (sizes, fats_ia, sldn_flowsim, flag_from_last_period)
+            (sizes, fats_ia, sldn_flowsim, n_links_passed, flag_from_last_period)
         )
-        return torch.tensor(input_data, dtype=torch.float32).to(self.device)
+
+        edge_index = self.compute_edge_index(nhosts, fid_period, fsd)
+
+        return (
+            torch.tensor(input_data, dtype=torch.float32).to(self.device),
+            edge_index,
+            np.array([lengths_per_path]),
+            np.array([n_paths_per_batch]),
+        )
 
     def postprocess(self, output):
         return output.cpu().detach().numpy()
 
-    def infer(self, flows_info_active):
-        data = self.preprocess(flows_info_active)
+    def compute_edge_index(self, n_hosts, fid, fsd_flowsim):
+        n_flows = len(fsd_flowsim)
+        edge_index = [[0, 0, 1]]
+
+        fid_idx = np.argsort(fid)
+        fsd_flowsim = fsd_flowsim[fid_idx]
+
+        src_dst_to_links = {}
+        for src in range(n_hosts - 1):
+            for dst in range(src + 1, n_hosts):
+                link_set = set([(src, src + n_hosts), (dst + n_hosts, dst)])
+                for link_idx in range(src, dst):
+                    link_set.add((n_hosts + link_idx, n_hosts + link_idx + 1))
+                src_dst_to_links[(src, dst)] = link_set
+
+        for flow_node_idx in range(1, n_flows):
+            n_gnn_connection = 0
+            pair_target = (fsd_flowsim[flow_node_idx, 0], fsd_flowsim[flow_node_idx, 1])
+            link_sets_head = src_dst_to_links[pair_target]
+
+            other_flow_idx = flow_node_idx - 1
+            while (
+                other_flow_idx >= 0 and n_gnn_connection < self.n_gnn_connection_limit
+            ):
+
+                pair_other = (
+                    fsd_flowsim[other_flow_idx, 0],
+                    fsd_flowsim[other_flow_idx, 1],
+                )
+
+                # Check if other flow shares links with current flow
+                if pair_other == pair_target:
+                    break
+
+                link_sets_tail = src_dst_to_links[pair_other]
+                overlapping_links = len(link_sets_head.intersection(link_sets_tail))
+
+                # Only consider flows that interact within the timespan
+                if overlapping_links > 0:
+                    edge_index.append(
+                        [
+                            fid_idx[other_flow_idx],
+                            fid_idx[flow_node_idx],
+                            overlapping_links,
+                        ]
+                    )
+                    edge_index.append(
+                        [
+                            fid_idx[flow_node_idx],
+                            fid_idx[other_flow_idx],
+                            overlapping_links,
+                        ]
+                    )
+                    n_gnn_connection += 1
+                other_flow_idx -= 1
+        edge_index = np.array(edge_index).T
+
+        # Sort edge_index by destination node (second row)
+        sorted_indices = np.argsort(edge_index[1, :])
+        edge_index = edge_index[:, sorted_indices]
+
+        return edge_index
+
+    def infer(self, flows_info_active, nhosts):
+        data, edge_index, lengths_per_path, n_paths_per_batch = self.preprocess(
+            flows_info_active, nhosts
+        )
+        lengths = np.array([len(data)])
+        edge_index_len = np.array([edge_index.shape[1]])
         with torch.no_grad():
-            lengths = np.array([len(data)])
+
             if self.model_name == "lstm":
-                output, _ = self.model(data.unsqueeze(0), lengths, None, None)
+                output = self.model(
+                    data.unsqueeze(0),
+                    lengths,
+                    edge_index,
+                    edge_index_len,
+                    lengths_per_path,
+                    n_paths_per_batch,
+                )
             elif self.model_name == "transformer":
                 output, _ = self.model(data.unsqueeze(0), lengths)
             else:
@@ -148,13 +239,19 @@ class Inference:
 
 
 class OnlineTrafficGenerator:
-    def __init__(self, nhosts, flow_size_threshold):
+    def __init__(
+        self,
+        nhosts,
+        flow_size_threshold,
+        sizes,
+    ):
         self.nhosts = nhosts
         self.flow_size_threshold = flow_size_threshold
         self.active_graphs = {}
         self.link_to_graph = {}
         self.large_flow_to_info = {}
-        self.flow_to_size = {}
+        self.large_flow_to_unassigned = set()
+        self.flow_to_size = sizes
         self.graph_id_new = 0
 
     def _create_subgraph(self, cur_time):
@@ -217,22 +314,34 @@ class OnlineTrafficGenerator:
                 "all_flows"
             ] and not large_flow_links.isdisjoint(links):
                 self.active_graphs[subgraph_id]["all_flows"].add(large_flow_id)
+                if large_flow_id in self.large_flow_to_unassigned:
+                    self.large_flow_to_unassigned.remove(large_flow_id)
 
         return subgraph_id
+
+    def get_active_flows(self, subgraph_id):
+        flows = self.active_graphs[subgraph_id]["active_flows"]
+        for large_flow_id in self.large_flow_to_info:
+            if large_flow_id in self.active_graphs[subgraph_id]["all_flows"]:
+                flows.add(large_flow_id)
+        flows = sorted(flows)
+        return flows
 
     def process_event(
         self, cur_time, event, flow_id, links, size, subgraph_id_completed=None
     ):
         if event == "start":
-            self.flow_to_size[flow_id] = size
             if size > self.flow_size_threshold:
                 self.large_flow_to_info[flow_id] = (cur_time, links)
+                self.large_flow_to_unassigned.add(flow_id)
             else:
                 self._assign_flow_to_subgraph(flow_id, links, cur_time)
         elif event == "end":
-            self.flow_to_size.pop(flow_id, None)
             if flow_id in self.large_flow_to_info:
                 self.large_flow_to_info.pop(flow_id)
+                if flow_id in self.large_flow_to_unassigned:
+                    self.large_flow_to_unassigned.remove(flow_id)
+                    return
             else:
                 graph_id = subgraph_id_completed
                 if graph_id is not None:
@@ -256,8 +365,11 @@ class OnlineTrafficGenerator:
     def get_subgraphs(self):
         return self.active_graphs
 
+    def get_large_flows_unassigned(self):
+        return sorted(list(self.large_flow_to_unassigned))
+
     def has_flows(self):
-        return bool(self.active_graphs)
+        return bool(self.active_graphs) or bool(self.large_flow_to_unassigned)
 
 
 def run_flow_simulation(flows_info, nhosts=5, lr=10):
@@ -321,7 +433,7 @@ def interactive_inference_path(
     flow_completion_times = {}
     flow_fct_sldn = {}
 
-    traffic_generator = OnlineTrafficGenerator(nhosts, flow_size_threshold)
+    traffic_generator = OnlineTrafficGenerator(nhosts, flow_size_threshold, sizes=size)
     current_time = 0
 
     inflight_flows = 0
@@ -337,6 +449,25 @@ def interactive_inference_path(
 
         # Process flow completions across all subgraphs
         if traffic_generator.has_flows():
+            large_flow_unassigned = traffic_generator.get_large_flows_unassigned()
+            if len(large_flow_unassigned) > 0:
+                flows_info = [
+                    [size[flow_id], fat[flow_id], fsd[flow_id]]
+                    for flow_id in large_flow_unassigned
+                ]
+                fcts_flowsim = run_flow_simulation(flows_info, nhosts, lr)
+                for idx, flow_id in enumerate(large_flow_unassigned):
+                    estimated_completion_time = fat[flow_id] + fcts_flowsim[idx]
+
+                    if (
+                        flow_id not in flow_completion_times
+                        and estimated_completion_time < flow_completion_time
+                    ):
+                        flow_completion_time = estimated_completion_time
+                        completed_flow_id = flow_id
+                        sldn_min = 1
+                        subgraph_id_completed = None
+
             subgraphs = traffic_generator.get_subgraphs()
 
             for subgraph_id, subgraph in subgraphs.items():
@@ -349,7 +480,8 @@ def interactive_inference_path(
 
                 flows_info_active = []
                 flow_id_info_active = []
-                for flow_idx, flow_id in enumerate(subgraph["active_flows"]):
+                flows = traffic_generator.get_active_flows(subgraph_id)
+                for flow_idx, flow_id in enumerate(flows):
                     if flow_id not in flow_completion_times:
                         flow_id_info_active.append(flow_id)
                         flows_info_active.append(
@@ -357,11 +489,12 @@ def interactive_inference_path(
                                 size[flow_id],
                                 fat[flow_id],
                                 fcts_flowsim[flow_idx],
+                                fsd[flow_id],
                                 fat[flow_id] < period_start_time,
                             ]
                         )
 
-                predictions = inference.infer(flows_info_active)
+                predictions = inference.infer(flows_info_active, nhosts)
                 sldn_est = predictions[0, :, 0]
 
                 for idx, sldn_tmp in enumerate(sldn_est):
