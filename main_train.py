@@ -109,6 +109,7 @@ if args.mode == "train":
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
         sampling_method=dataset_config.get("sampling_method", "uniform"),
         enable_path=dataset_config.get("enable_path", False),
+        enable_lstm_on_path=model_config.get("enable_lstm_on_path", False),
     )
 
     # Init checkpointer
@@ -246,6 +247,7 @@ else:
         segments_per_seq=dataset_config.get("segments_per_seq", 200),
         sampling_method=dataset_config.get("sampling_method", "uniform"),
         enable_path=dataset_config.get("enable_path", False),
+        enable_lstm_on_path=model_config.get("enable_lstm_on_path", False),
         mode=args.mode,
         test_on_train=args.test_on_train,
         test_on_empirical=args.test_on_empirical,

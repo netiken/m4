@@ -82,6 +82,7 @@ class Inference:
                 enable_gnn=model_config.get("enable_gnn", False),
                 enable_lstm=model_config.get("enable_lstm", False),
                 enable_path=True,
+                enable_lstm_on_path=model_config.get("enable_lstm_on_path", False),
             )
         elif self.model_name == "transformer":
             model = FlowSimTransformer.load_from_checkpoint(
@@ -269,8 +270,8 @@ class OnlineTrafficGenerator:
                 main_graph["flows_small"].update(other_graph["flows_small"])
                 main_graph["flows_all"].update(other_graph["flows_all"])
                 main_graph["flows_completed"].update(other_graph["flows_completed"])
-                for link in other_graph["active_links"]:
-                    self.link_to_graph[link] = subgraph_id
+            for link in main_graph["active_links"]:
+                self.link_to_graph[link] = subgraph_id
             if main_graph["flows_small"]:
                 flow_id_small_min = min(main_graph["flows_small"])
                 main_graph["start_time"] = self.flow_to_fat[flow_id_small_min]
@@ -296,13 +297,14 @@ class OnlineTrafficGenerator:
     def get_flows_ml(self, subgraph_id, flow_completion_times):
         subgraph = self.active_graphs[subgraph_id]
         flows = subgraph["flows_small"]
+        has_small_flows = len(flows) > 0
         for flow_id in subgraph["flows_all"] - subgraph["flows_small"]:
             if (
                 flow_id not in subgraph["flows_completed"]
                 or flow_completion_times[flow_id] > subgraph["start_time"]
             ):
                 flows.add(flow_id)
-        return sorted(flows)
+        return sorted(flows), has_small_flows
 
     def process_event(
         self, cur_time, event, flow_id, links, subgraph_id_completed=None
@@ -327,7 +329,7 @@ class OnlineTrafficGenerator:
                     del self.active_graphs[graph_id]
                 elif graph["flows_small"] <= graph["flows_completed"]:
                     graph["flows_small"] = set()
-                    graph["start_time"] = np.inf
+                    graph["start_time"] = 0
 
     def get_subgraphs(self):
         return self.active_graphs
@@ -392,7 +394,8 @@ def interactive_inference_path(
     if max_inflight_flows == 0:
         max_inflight_flows = 1000000
 
-    n_flows_total = len(size)
+    # n_flows_total = len(size)
+    n_flows_total = 1000
 
     flow_completion_times = {}
     flow_fct_sldn = {}
@@ -424,20 +427,30 @@ def interactive_inference_path(
                     [size[flow_id], fat[flow_id], fsd[flow_id]] for flow_id in flows_all
                 ]
                 fcts_flowsim = run_flow_simulation(flows_info, nhosts, lr)
+                fcts_flowsim_dict = {
+                    flow_id: fcts_flowsim[idx] for idx, flow_id in enumerate(flows_all)
+                }
 
-                flows_info_active = []
-                flow_id_info_active = []
-                flows = traffic_generator.get_flows_ml(
+                flows, has_small_flows = traffic_generator.get_flows_ml(
                     subgraph_id, flow_completion_times
                 )
-                for flow_idx, flow_id in enumerate(flows):
-                    flow_id_info_active.append(flow_id)
+                # if has_small_flows:
+                flows_info_active = []
+                dict_tmp = defaultdict(list)
+                for i in flows:
+                    key = (fsd[i][0] - fsd[i][1], fsd[i][0])
+                    dict_tmp[key].append(i)
+                sorted_keys = sorted(dict_tmp.keys())
+                flow_id_info_active = np.concatenate(
+                    [dict_tmp[key] for key in sorted_keys]
+                )
+                for flow_id in flows:
                     flows_info_active.append(
                         [
                             size[flow_id],
                             fat[flow_id],
-                            (fcts_flowsim[flow_idx] + base_delay[flow_id])
-                            / i_fcts_flowsim[flow_idx],
+                            (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
+                            / i_fcts_flowsim[flow_id],
                             fsd[flow_id],
                             fat[flow_id] < period_start_time,
                         ]
@@ -445,7 +458,17 @@ def interactive_inference_path(
 
                 predictions = inference.infer(flows_info_active, src_dst_to_links)
                 sldn_est = predictions[0, :, 0]
+                # else:
+                #     flow_id_info_active = []
+                #     sldn_est = []
+                #     for flow_id in flows:
+                #         flow_id_info_active.append(flow_id)
+                #         sldn_est.append(
+                #             (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
+                #             / i_fcts_flowsim[flow_id]
+                #         )
 
+                # sldn_est[sldn_est < 1.0] = 1.0
                 for idx, sldn_tmp in enumerate(sldn_est):
                     flow_id = flow_id_info_active[idx]
                     estimated_completion_time = (
@@ -464,10 +487,9 @@ def interactive_inference_path(
         # Determine the next event (either flow arrival or flow completion)
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
-            current_time = flow_arrival_time
             links = src_dst_to_links[fsd[flow_id_in_prop][0], fsd[flow_id_in_prop][1]]
             traffic_generator.process_event(
-                fat[flow_id_in_prop],
+                flow_arrival_time,
                 "start",
                 flow_id_in_prop,
                 links,
@@ -476,7 +498,6 @@ def interactive_inference_path(
             flow_id_in_prop += 1
         elif completed_flow_id is not None:
             # Next event is flow completion
-            current_time = flow_completion_time
             flow_completion_times[completed_flow_id] = (
                 flow_completion_time - fat[completed_flow_id]
             )
@@ -486,12 +507,13 @@ def interactive_inference_path(
                 fsd[completed_flow_id][0], fsd[completed_flow_id][1]
             ]
             traffic_generator.process_event(
-                current_time,
+                flow_completion_time,
                 "end",
                 completed_flow_id,
                 links,
                 subgraph_id_completed,
             )
+            print(f"Flow {completed_flow_id} completed at {flow_completion_time}")
             inflight_flows -= 1
 
     data_dict = {}
@@ -573,7 +595,7 @@ def main():
 
     for max_inflight_flows in [0]:
         fct, sldn = [], []
-        for shard in np.arange(0, 10):
+        for shard in np.arange(0, 1):
             for nflows in [10000]:
                 for nhosts in [5]:
                     spec = f"shard{shard}_nflows{nflows}_nhosts{nhosts}_lr{lr}Gbps"

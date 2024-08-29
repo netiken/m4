@@ -31,11 +31,11 @@ model:
   enable_positional_encoding: False
   enable_gnn: False
   enable_lstm: True
-  enable_lstm_on_path: True
+  enable_lstm_on_path: False
 
 # Training parameters
 training:
-  gpu: [0,1]
+  gpu: [0,0,1,1]
   # gpu: [0,1,2,3]
   n_epochs: 1000
   batch_size: 32

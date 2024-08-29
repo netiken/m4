@@ -283,13 +283,13 @@ void pl_topology_init_two_layer(int l, long long int *bw)
   pl_compute_baseL_two_layer(pl_l);
   pl_build_topology_two_layer(l, bw);
 
-  printf("Simulating two-layer parking lot: length = %d\n  bw = [", l);
+  // printf("Simulating two-layer parking lot: length = %d\n  bw = [", l);
 
-  for (i = 0; i < totLink-1; i++)
-    printf("%lf, ", *linkid_to_bw_ori[i]);
-  printf("%lf]\n", *linkid_to_bw_ori[i]);
+  // for (i = 0; i < totLink-1; i++)
+  //   printf("%lf, ", *linkid_to_bw_ori[i]);
+  // printf("%lf]\n", *linkid_to_bw_ori[i]);
 
-  printf("%d PEs, %d switches, %d nodes (switch+PE), %d links\n", totPE, totNode - totPE, totNode, totLink);
+  // printf("%d PEs, %d switches, %d nodes (switch+PE), %d links\n", totPE, totNode - totPE, totNode, totLink);
 }
 void pl_topology_init_one_layer(int l, long long int *bw)
 {

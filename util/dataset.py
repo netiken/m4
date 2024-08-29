@@ -195,6 +195,7 @@ class DataModulePerFlow(LightningDataModule):
         segments_per_seq=200,
         sampling_method="uniform",  # uniform, weighted, balanced
         enable_path=False,
+        enable_lstm_on_path=False,
         test_on_train=False,
         test_on_empirical=False,
         test_on_manual=False,
@@ -218,12 +219,13 @@ class DataModulePerFlow(LightningDataModule):
         self.segments_per_seq = segments_per_seq
         self.sampling_method = sampling_method
         self.enable_path = enable_path
+        self.enable_lstm_on_path = enable_lstm_on_path
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_gnn = enable_gnn
         self.enable_abstime = enable_abstime
         logging.info(
-            f"call DataModulePerFlow: dir_input={dir_input}, dir_output={dir_output}, lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}"
+            f"call DataModulePerFlow: dir_input={dir_input}, dir_output={dir_output}, lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}, enable_lstm_on_path={enable_lstm_on_path}"
         )
         data_list = []
         if mode == "train":
@@ -403,6 +405,7 @@ class DataModulePerFlow(LightningDataModule):
                 self.flow_size_threshold,
                 self.enable_gnn,
                 self.enable_abstime,
+                self.enable_lstm_on_path,
             )
             self.val = self.__create_dataset(
                 self.val_list,
@@ -411,6 +414,7 @@ class DataModulePerFlow(LightningDataModule):
                 self.flow_size_threshold,
                 self.enable_gnn,
                 self.enable_abstime,
+                self.enable_lstm_on_path,
             )
 
             self.__dump_data_list(self.dir_output)
@@ -632,6 +636,7 @@ class DataModulePerFlow(LightningDataModule):
                 self.flow_size_threshold,
                 self.enable_gnn,
                 self.enable_abstime,
+                self.enable_lstm_on_path,
             )
             logging.info(f"#tracks: test-{len(data_list_test)}")
 
@@ -702,6 +707,7 @@ class DataModulePerFlow(LightningDataModule):
         flow_size_threshold,
         enable_gnn,
         enable_abstime,
+        enable_lstm_on_path,
     ):
         if self.enable_segmentation:
             if self.enable_path:
@@ -711,6 +717,7 @@ class DataModulePerFlow(LightningDataModule):
                     enable_positional_encoding,
                     flow_size_threshold,
                     enable_gnn,
+                    enable_lstm_on_path,
                 )
             else:
                 return LinkFctSldnSegment(
@@ -986,6 +993,7 @@ class PathFctSldnSegment(Dataset):
         enable_positional_encoding,
         flow_size_threshold,
         enable_gnn,
+        enable_lstm_on_path,
     ):
         self.data_list = data_list
         self.dir_input = dir_input
@@ -995,8 +1003,9 @@ class PathFctSldnSegment(Dataset):
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_gnn = enable_gnn
+        self.enable_lstm_on_path = enable_lstm_on_path
         logging.info(
-            f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn}"
+            f"call PathFctSldnSegment: data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn}, enable_lstm_on_path={enable_lstm_on_path}"
         )
 
     def __len__(self):
@@ -1034,8 +1043,10 @@ class PathFctSldnSegment(Dataset):
                 key = (fsd_ori[i][0] - fsd_ori[i][1], fsd_ori[i][0])
                 dict_tmp[key].append(i)
             sorted_keys = sorted(dict_tmp.keys())
-            fid_period = np.concatenate([dict_tmp[key] for key in sorted_keys])
+            fid_period_tmp = np.concatenate([dict_tmp[key] for key in sorted_keys])
             n_inputs_per_path = np.array([len(dict_tmp[key]) for key in sorted_keys])
+            if self.enable_lstm_on_path:
+                fid_period = fid_period_tmp
 
             period_start_time, period_end_time = busy_periods_time[segment_id]
 
