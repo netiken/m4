@@ -453,6 +453,7 @@ class LSTMModel(nn.Module):
         enable_bidirectional=False,
         enable_positional_encoding=False,
         enable_attention=False,
+        enable_lstm_on_path=False,
     ):
         super(LSTMModel, self).__init__()
         self.hidden_size = hidden_size
@@ -460,6 +461,7 @@ class LSTMModel(nn.Module):
         self.bidirectional = enable_bidirectional
         self.num_directions = 2 if enable_bidirectional else 1
         self.enable_attention = enable_attention
+        self.enable_lstm_on_path = enable_lstm_on_path
         # Adjust the fully connected layer based on bidirectionality
         self.lstm = nn.LSTM(
             input_size * 2 if enable_positional_encoding else input_size,
@@ -486,32 +488,40 @@ class LSTMModel(nn.Module):
 
     def forward(self, x, lengths, lengths_per_path, n_paths_per_batch):
         batch_size = x.size(0)
-        n_feats = x.size(2)
-        n_longest_seq = np.max(lengths_per_path)
-        n_batches_total = np.sum(n_paths_per_batch)
+        if self.enable_lstm_on_path:
+            n_feats = x.size(2)
+            n_longest_seq = np.max(lengths_per_path)
+            n_batches_total = np.sum(n_paths_per_batch)
 
-        x_adj = torch.zeros((n_batches_total, n_longest_seq, n_feats), device=x.device)
+            x_adj = torch.zeros(
+                (n_batches_total, n_longest_seq, n_feats), device=x.device
+            )
 
-        n_batches = 0
-        for i in range(batch_size):
-            n_seq_accumulated = 0
-            for j in range(n_paths_per_batch[i]):
-                seq_len = lengths_per_path[i][j]
-                x_adj[n_batches, : lengths_per_path[i][j]] = x[
-                    i, n_seq_accumulated : n_seq_accumulated + seq_len
-                ]
-                n_seq_accumulated += seq_len
-                n_batches += 1
+            n_batches = 0
+            for i in range(batch_size):
+                n_seq_accumulated = 0
+                for j in range(n_paths_per_batch[i]):
+                    seq_len = lengths_per_path[i][j]
+                    x_adj[n_batches, : lengths_per_path[i][j]] = x[
+                        i, n_seq_accumulated : n_seq_accumulated + seq_len
+                    ]
+                    n_seq_accumulated += seq_len
+                    n_batches += 1
 
-        lengths_per_path_new = np.concatenate(
-            [lengths_per_path[i, : n_paths_per_batch[i]] for i in range(batch_size)]
-        )
+            lengths_per_path_new = np.concatenate(
+                [lengths_per_path[i, : n_paths_per_batch[i]] for i in range(batch_size)]
+            )
 
-        h_t, c_t = self.init_hidden(n_batches_total, x_adj.device)
-        # Pack the padded batch of sequences for LSTM
-        packed_input = nn.utils.rnn.pack_padded_sequence(
-            x_adj, lengths_per_path_new, batch_first=True, enforce_sorted=False
-        )
+            h_t, c_t = self.init_hidden(n_batches_total, x_adj.device)
+            # Pack the padded batch of sequences for LSTM
+            packed_input = nn.utils.rnn.pack_padded_sequence(
+                x_adj, lengths_per_path_new, batch_first=True, enforce_sorted=False
+            )
+        else:
+            h_t, c_t = self.init_hidden(batch_size, x.device)
+            packed_input = nn.utils.rnn.pack_padded_sequence(
+                x, lengths, batch_first=True, enforce_sorted=False
+            )
         packed_output, (h_t, c_t) = self.lstm(packed_input, (h_t, c_t))
 
         # Unpack the output sequence
@@ -526,18 +536,23 @@ class LSTMModel(nn.Module):
         # Apply the fully connected layer to each time step
         out = self.fc(lstm_out)
 
-        # Initialize the final output tensor with the same shape as x
-        out_final = torch.zeros((x.size(0), x.size(1), out.size(2)), device=out.device)
-        n_batches = 0
-        for i in range(batch_size):
-            n_seq_accumulated = 0
-            for j in range(n_paths_per_batch[i]):
-                seq_len = lengths_per_path[i][j]
-                out_final[i, n_seq_accumulated : n_seq_accumulated + seq_len] = out[
-                    n_batches, :seq_len
-                ]
-                n_seq_accumulated += seq_len
-                n_batches += 1
+        if self.enable_lstm_on_path:
+            # Initialize the final output tensor with the same shape as x
+            out_final = torch.zeros(
+                (x.size(0), x.size(1), out.size(2)), device=out.device
+            )
+            n_batches = 0
+            for i in range(batch_size):
+                n_seq_accumulated = 0
+                for j in range(n_paths_per_batch[i]):
+                    seq_len = lengths_per_path[i][j]
+                    out_final[i, n_seq_accumulated : n_seq_accumulated + seq_len] = out[
+                        n_batches, :seq_len
+                    ]
+                    n_seq_accumulated += seq_len
+                    n_batches += 1
+        else:
+            out_final = out
 
         return out_final, (h_t, c_t)
 
@@ -562,6 +577,7 @@ class FlowSimLstm(LightningModule):
         enable_gnn=False,
         enable_lstm=False,
         enable_path=False,
+        enable_lstm_on_path=False,
         loss_average="perflow",  # perflow, perperiod
         save_dir=None,
     ):
@@ -596,6 +612,7 @@ class FlowSimLstm(LightningModule):
                 dropout=dropout,
                 enable_bidirectional=enable_bidirectional,
                 enable_positional_encoding=enable_positional_encoding,
+                enable_lstm_on_path=enable_lstm_on_path,
             )
         elif enable_gnn:
             logging.info(f"GNN enabled")
@@ -620,6 +637,7 @@ class FlowSimLstm(LightningModule):
                 dropout=dropout,
                 enable_bidirectional=enable_bidirectional,
                 enable_positional_encoding=enable_positional_encoding,
+                enable_lstm_on_path=enable_lstm_on_path,
             )
         else:
             assert False, "Either GNN or LSTM must be enabled"
@@ -628,7 +646,7 @@ class FlowSimLstm(LightningModule):
         self.save_dir = save_dir
         self.loss_average = loss_average
         logging.info(
-            f"model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}"
+            f"model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}, enable_lstm_on_path={enable_lstm_on_path}"
         )
 
     def _get_loss_fn(self, loss_fn_type):

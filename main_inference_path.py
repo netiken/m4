@@ -111,7 +111,7 @@ class Inference:
 
         return model
 
-    def preprocess(self, flows_info_active, nhosts, src_dst_to_links):
+    def preprocess(self, flows_info_active, src_dst_to_links):
         sizes, fats, sldn_flowsim, fsd, flag_from_last_period = map(
             np.array, zip(*flows_info_active)
         )
@@ -147,7 +147,7 @@ class Inference:
         return output.cpu().detach().numpy()
 
     def compute_edge_index(self, fid, fsd_flowsim, src_dst_to_links):
-        n_flows = len(fsd_flowsim)
+        n_flows = len(fid)
         edge_index = [[0, 0, 1]]
 
         fid_idx = np.argsort(fid)
@@ -201,9 +201,9 @@ class Inference:
 
         return edge_index
 
-    def infer(self, flows_info_active, nhosts, src_dst_to_links):
+    def infer(self, flows_info_active, src_dst_to_links):
         data, edge_index, lengths_per_path, n_paths_per_batch = self.preprocess(
-            flows_info_active, nhosts, src_dst_to_links
+            flows_info_active, src_dst_to_links
         )
         lengths = np.array([len(data)])
         edge_index_len = np.array([edge_index.shape[1]])
@@ -443,9 +443,7 @@ def interactive_inference_path(
                         ]
                     )
 
-                predictions = inference.infer(
-                    flows_info_active, nhosts, src_dst_to_links
-                )
+                predictions = inference.infer(flows_info_active, src_dst_to_links)
                 sldn_est = predictions[0, :, 0]
 
                 for idx, sldn_tmp in enumerate(sldn_est):
