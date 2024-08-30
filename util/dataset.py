@@ -1117,9 +1117,12 @@ class PathFctSldnSegment(Dataset):
 
             # Compute the adjacency matrix for the bipartite graph
             if self.enable_gnn:
-                edge_index = self.compute_edge_index(
-                    n_hosts, fid_period, fsd, fats, fats + fcts
-                )
+                if self.enable_lstm_on_path:
+                    edge_index = self.compute_edge_index(
+                        n_hosts, fid_period, fsd, fats, fats + fcts
+                    )
+                else:
+                    edge_index = self.compute_edge_index_linknode(n_hosts, fsd)
             else:
                 edge_index = None
             # np.savez(feat_path, input_data=input_data, output_data=output_data,edge_index=edge_index)
@@ -1209,6 +1212,62 @@ class PathFctSldnSegment(Dataset):
         sorted_indices = np.argsort(edge_index[1, :])
         edge_index = edge_index[:, sorted_indices]
 
+        return edge_index
+
+    def compute_edge_index_linknode(self, n_hosts, fsd_flowsim):
+        edge_index = []
+        n_flows = len(fsd_flowsim)
+        link_to_node_id = {}
+        link_node_id = n_flows
+        for flow_node_idx in range(n_flows):
+            src = fsd_flowsim[flow_node_idx, 0]
+            dst = fsd_flowsim[flow_node_idx, 1]
+            assert src < dst
+
+            link_pair = (src, src + n_hosts)
+            if link_pair in link_to_node_id:
+                link_node_id_tmp = link_to_node_id[link_pair]
+            else:
+                link_node_id_tmp = link_node_id
+                link_to_node_id[link_pair] = link_node_id_tmp
+                link_node_id += 1
+
+            edge_index.append([link_node_id_tmp, flow_node_idx])
+            edge_index.append([flow_node_idx, link_node_id_tmp])
+
+            link_pair = (dst + n_hosts, dst)
+            if link_pair in link_to_node_id:
+                link_node_id_tmp = link_to_node_id[link_pair]
+            else:
+                link_node_id_tmp = link_node_id
+                link_to_node_id[link_pair] = link_node_id_tmp
+                link_node_id += 1
+
+            edge_index.append([link_node_id_tmp, flow_node_idx])
+            edge_index.append([flow_node_idx, link_node_id_tmp])
+
+            for link_idx in range(src, dst):
+                link_pair = (n_hosts + link_idx, n_hosts + link_idx + 1)
+                if link_pair in link_to_node_id:
+                    link_node_id_tmp = link_to_node_id[link_pair]
+                else:
+                    link_node_id_tmp = link_node_id
+                    link_to_node_id[link_pair] = link_node_id_tmp
+                    link_node_id += 1
+
+                edge_index.append([link_node_id_tmp, flow_node_idx])
+                edge_index.append([flow_node_idx, link_node_id_tmp])
+        # edge_index.append([n_flows, n_flows + n_hosts])
+        # for link_idx in range(1, n_hosts - 1):
+        #     edge_index.append([n_flows + link_idx, n_flows + n_hosts + link_idx])
+        #     edge_index.append(
+        #         [n_flows + n_hosts + link_idx - 1, n_flows + n_links + link_idx]
+        #     )
+        # edge_index.append([n_flows + 2 * n_hosts - 2, n_flows + n_links + n_hosts - 1])
+        edge_index = np.array(edge_index).T
+        # Sort edge_index by destination node (second row)
+        sorted_indices = np.argsort(edge_index[1, :])
+        edge_index = edge_index[:, sorted_indices]
         return edge_index
 
     # def compute_edge_index(self, n_hosts, fid, fsd_flowsim, fats, fcts):

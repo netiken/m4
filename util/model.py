@@ -589,6 +589,7 @@ class FlowSimLstm(LightningModule):
         self.enable_lstm = enable_lstm
         self.gcn_hidden_size = gcn_hidden_size
         self.enable_path = enable_path
+        self.enable_lstm_on_path = enable_lstm_on_path
         # input_size += N_BACKGROUND
         # GCN layers
         if enable_lstm and enable_gnn:
@@ -677,8 +678,19 @@ class FlowSimLstm(LightningModule):
             for i in range(batch_size):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
+                if self.enable_lstm_on_path:
+                    x_gnn_input = x[i, :num_flow_nodes, :-1]
+                else:
+                    max_node_index = edge_index_trimmed.max().item()
+                    num_link_nodes = max_node_index + 1 - num_flow_nodes
 
-                x_gnn_input = x[i, :num_flow_nodes, :-1]
+                    link_node_feats = torch.full(
+                        (num_link_nodes, feature_dim - 1), 1.0, device=x.device
+                    )
+                    x_gnn_input = torch.cat(
+                        [x[i, :num_flow_nodes, :-1], link_node_feats], dim=0
+                    )
+
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 
@@ -690,13 +702,25 @@ class FlowSimLstm(LightningModule):
             res, _ = self.model_lstm(x, lengths, lengths_per_path, n_paths_per_batch)
         elif self.enable_gnn:
             batch_size = x.size(0)
+            feature_dim = x.size(2)
 
             res = torch.zeros((batch_size, x.size(1), 1), device=x.device)
             for i in range(batch_size):
                 num_flow_nodes = lengths[i]
                 edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
-                x_gnn_input = x[i, :num_flow_nodes, :]
 
+                if self.enable_lstm_on_path:
+                    x_gnn_input = x[i, :num_flow_nodes, :]
+                else:
+                    max_node_index = edge_index_trimmed.max().item()
+                    num_link_nodes = max_node_index + 1 - num_flow_nodes
+
+                    link_node_feats = torch.full(
+                        (num_link_nodes, feature_dim), 1.0, device=x.device
+                    )
+                    x_gnn_input = torch.cat(
+                        [x[i, :num_flow_nodes, :], link_node_feats], dim=0
+                    )
                 for gcn in self.gcn_layers:
                     x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 

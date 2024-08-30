@@ -126,22 +126,29 @@ class Inference:
         lengths_per_path = np.array([len(dict_tmp[key]) for key in sorted_keys])
         n_paths_per_batch = len(sorted_keys)
 
+        sizes = sizes[fid_period]
+        fats = fats[fid_period]
+        sldn_flowsim = sldn_flowsim[fid_period]
+        fsd = fsd[fid_period]
+        flag_from_last_period = flag_from_last_period[fid_period]
+
         fats_ia = fats - np.min(fats)
         n_links_passed = abs(fsd[:, 1] - fsd[:, 0]) + 2
 
         sizes = np.log2(sizes / 1000.0 + 1)
         fats_ia = np.log2(fats_ia / 10000.0 + 1)
         input_data = np.column_stack(
-            (sizes, fats_ia, sldn_flowsim, n_links_passed, flag_from_last_period)
-        )
+            (sldn_flowsim, sizes, fats_ia, n_links_passed, flag_from_last_period)
+        ).astype(np.float32)
 
         edge_index = self.compute_edge_index(fid_period, fsd, src_dst_to_links)
 
         return (
-            torch.tensor(input_data, dtype=torch.float32).to(self.device),
-            edge_index,
+            torch.tensor(input_data).to(self.device),
+            torch.tensor(edge_index, dtype=torch.long).to(self.device),
             np.array([lengths_per_path]),
             np.array([n_paths_per_batch]),
+            fid_period,
         )
 
     def postprocess(self, output):
@@ -200,11 +207,11 @@ class Inference:
         sorted_indices = np.argsort(edge_index[1, :])
         edge_index = edge_index[:, sorted_indices]
 
-        return edge_index
+        return np.array([edge_index])
 
     def infer(self, flows_info_active, src_dst_to_links):
-        data, edge_index, lengths_per_path, n_paths_per_batch = self.preprocess(
-            flows_info_active, src_dst_to_links
+        data, edge_index, lengths_per_path, n_paths_per_batch, fid_period = (
+            self.preprocess(flows_info_active, src_dst_to_links)
         )
         lengths = np.array([len(data)])
         edge_index_len = np.array([edge_index.shape[1]])
@@ -224,7 +231,7 @@ class Inference:
             else:
                 raise ValueError(f"Unsupported model name: {self.model_name}")
 
-        return self.postprocess(output)
+        return self.postprocess(output), fid_period
 
 
 class OnlineTrafficGenerator:
@@ -296,15 +303,15 @@ class OnlineTrafficGenerator:
 
     def get_flows_ml(self, subgraph_id, flow_completion_times):
         subgraph = self.active_graphs[subgraph_id]
-        flows = subgraph["flows_small"]
-        has_small_flows = len(flows) > 0
+        flows = subgraph["flows_small"].copy()
+        len_flows = len(flows)
         for flow_id in subgraph["flows_all"] - subgraph["flows_small"]:
             if (
                 flow_id not in subgraph["flows_completed"]
                 or flow_completion_times[flow_id] > subgraph["start_time"]
             ):
                 flows.add(flow_id)
-        return sorted(flows), has_small_flows
+        return np.array(sorted(flows)), len_flows
 
     def process_event(
         self, cur_time, event, flow_id, links, subgraph_id_completed=None
@@ -395,7 +402,7 @@ def interactive_inference_path(
         max_inflight_flows = 1000000
 
     # n_flows_total = len(size)
-    n_flows_total = 1000
+    n_flows_total = 100000
 
     flow_completion_times = {}
     flow_fct_sldn = {}
@@ -431,44 +438,40 @@ def interactive_inference_path(
                     flow_id: fcts_flowsim[idx] for idx, flow_id in enumerate(flows_all)
                 }
 
-                flows, has_small_flows = traffic_generator.get_flows_ml(
+                flows, len_flows = traffic_generator.get_flows_ml(
                     subgraph_id, flow_completion_times
                 )
-                # if has_small_flows:
-                flows_info_active = []
-                dict_tmp = defaultdict(list)
-                for i in flows:
-                    key = (fsd[i][0] - fsd[i][1], fsd[i][0])
-                    dict_tmp[key].append(i)
-                sorted_keys = sorted(dict_tmp.keys())
-                flow_id_info_active = np.concatenate(
-                    [dict_tmp[key] for key in sorted_keys]
-                )
-                for flow_id in flows:
-                    flows_info_active.append(
-                        [
-                            size[flow_id],
-                            fat[flow_id],
-                            (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
-                            / i_fcts_flowsim[flow_id],
-                            fsd[flow_id],
-                            fat[flow_id] < period_start_time,
-                        ]
+                if len_flows > 0:
+                    # if False:
+                    # if has_small_flows:
+                    flows_info_active = []
+                    for flow_id in flows:
+                        flows_info_active.append(
+                            [
+                                size[flow_id],
+                                fat[flow_id],
+                                (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
+                                / i_fcts_flowsim[flow_id],
+                                fsd[flow_id],
+                                fat[flow_id] < period_start_time,
+                            ]
+                        )
+
+                    predictions, flow_id_info_active_idx = inference.infer(
+                        flows_info_active, src_dst_to_links
                     )
+                    flow_id_info_active = flows[flow_id_info_active_idx]
+                    sldn_est = predictions[0, :, 0]
+                else:
+                    flow_id_info_active = []
+                    sldn_est = []
+                    for flow_id in flows:
+                        flow_id_info_active.append(flow_id)
+                        sldn_est.append(
+                            (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
+                            / i_fcts_flowsim[flow_id]
+                        )
 
-                predictions = inference.infer(flows_info_active, src_dst_to_links)
-                sldn_est = predictions[0, :, 0]
-                # else:
-                #     flow_id_info_active = []
-                #     sldn_est = []
-                #     for flow_id in flows:
-                #         flow_id_info_active.append(flow_id)
-                #         sldn_est.append(
-                #             (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
-                #             / i_fcts_flowsim[flow_id]
-                #         )
-
-                # sldn_est[sldn_est < 1.0] = 1.0
                 for idx, sldn_tmp in enumerate(sldn_est):
                     flow_id = flow_id_info_active[idx]
                     estimated_completion_time = (
@@ -556,7 +559,7 @@ def main():
         type=str,
         required=False,
         help="Path to the YAML configuration file",
-        default="./config/test_config_lstm_path.yaml",
+        default="./config/test_config_lstm_path_inference.yaml",
     )
     parser.add_argument(
         "--input",
@@ -584,11 +587,12 @@ def main():
     lr = data_config["lr"]
     flow_size_threshold = data_config["flow_size_threshold"]
 
-    args.checkpoint = f"{args.output}/path_{flow_size_threshold}_lstm_shard1000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last.ckpt"
+    args.checkpoint = f"{args.output}/bpath_{flow_size_threshold}_gnnlstm_shard1000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last.ckpt"
     inference = Inference(
         model_config, training_config, checkpoint_path=args.checkpoint, lr=lr
     )
     empirical_str = "_empirical"
+    # empirical_str = ""
     args.input += empirical_str
 
     print(f"Start inference with flow_size_threshold={flow_size_threshold}")
@@ -636,7 +640,7 @@ def main():
             f"Finished inference with {max_inflight_flows} inflight flows. fct shape: {fct.shape}, sldn shape: {sldn.shape}"
         )
         np.savez(
-            f"./res/inference_{max_inflight_flows}_t{flow_size_threshold}{empirical_str}.npz",
+            f"./res/inference_path_{max_inflight_flows}_t{flow_size_threshold}{empirical_str}.npz",
             fct=fct,
             sldn=sldn,
         )
