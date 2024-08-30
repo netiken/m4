@@ -1122,7 +1122,7 @@ class PathFctSldnSegment(Dataset):
                         n_hosts, fid_period, fsd, fats, fats + fcts
                     )
                 else:
-                    edge_index = self.compute_edge_index_linknode(n_hosts, fsd)
+                    edge_index = self.compute_edge_index_bipartite(n_hosts, fsd)
             else:
                 edge_index = None
             # np.savez(feat_path, input_data=input_data, output_data=output_data,edge_index=edge_index)
@@ -1214,7 +1214,7 @@ class PathFctSldnSegment(Dataset):
 
         return edge_index
 
-    def compute_edge_index_linknode(self, n_hosts, fsd_flowsim):
+    def compute_edge_index_bipartite(self, n_hosts, fsd_flowsim):
         edge_index = []
         n_flows = len(fsd_flowsim)
         link_to_node_id = {}
