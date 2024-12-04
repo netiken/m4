@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from util.model import FlowSimLstm, FlowSimTransformer
+from util.model import FlowSimLstm
 from util.consts import get_base_delay_link, get_base_delay_transmission
 import argparse
 import yaml

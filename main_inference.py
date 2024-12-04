@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from util.model import FlowSimLstm, FlowSimTransformer
+from util.model import FlowSimLstm
 from util.consts import MTU, HEADER_SIZE, BYTE_TO_BIT, DELAY_PROPAGATION_BASE
 import argparse
 import yaml
@@ -36,28 +36,6 @@ class Inference:
                 input_size=2,
                 output_size=1,
                 enable_bidirectional=model_config.get("enable_bidirectional", False),
-            )
-        elif self.model_name == "transformer":
-            model = FlowSimTransformer.load_from_checkpoint(
-                checkpoint_path, 
-                map_location=self.device,
-                n_layer=model_config["n_layer"],
-                n_head=model_config["n_head"],
-                n_embd=model_config["n_embd"],
-                block_size=model_config["block_size"],
-                vocab_size=model_config["vocab_size"],
-                output_dim=model_config["output_dim"],
-                dropout=model_config["dropout"],
-                compile=model_config["compile"],
-                loss_fn_type=model_config["loss_fn_type"],
-                weight_decay=training_config["weight_decay"],
-                learning_rate=training_config["learning_rate"],
-                betas=training_config["betas"],
-                batch_size=training_config["batch_size"],
-                enable_position=model_config["enable_position"],
-                enable_causal=model_config["enable_causal"],
-                enable_val=False,
-                enable_dist=False,
             )
         else:
             raise ValueError(f"Unsupported model name: {self.model_name}")

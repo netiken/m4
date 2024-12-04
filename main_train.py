@@ -8,7 +8,7 @@ from util.func import (
     fix_seed,
     create_logger,
 )
-from util.model import FlowSimLstm, FlowSimTransformer
+from util.model import FlowSimLstm
 from util.callback import OverrideEpochStepCallback
 import logging, os
 import torch
@@ -203,27 +203,6 @@ if __name__ == "__main__":
                     else "perflow"
                 ),
             )
-        elif model_name == "transformer":
-            model = FlowSimTransformer(
-                n_layer=model_config["n_layer"],
-                n_head=model_config["n_head"],
-                n_embd=model_config["n_embd"],
-                block_size=model_config["block_size"],
-                vocab_size=model_config["vocab_size"],
-                output_dim=model_config["output_dim"],
-                dropout=model_config["dropout"],
-                compile=model_config["compile"],
-                loss_fn_type=model_config["loss_fn_type"],
-                weight_decay=training_config["weight_decay"],
-                learning_rate=training_config["learning_rate"],
-                betas=training_config["betas"],
-                batch_size=training_config["batch_size"],
-                enable_position=model_config["enable_position"],
-                enable_causal=model_config["enable_causal"],
-                enable_val=enable_val,
-                enable_dist=enable_dist,
-            )
-        trainer.fit(model, datamodule=datamodule, ckpt_path=args.ckpt_path)
     else:
         DEVICE = torch.device(training_config["gpu"][0])
         dir_train = f"{dir_output}/{program_name}/version_{args.version_id}"
@@ -321,29 +300,6 @@ if __name__ == "__main__":
                     if dataset_config.get("sampling_method", "uniform") == "balanced"
                     else "perflow"
                 ),
-                save_dir=tb_logger.log_dir,
-            )
-        elif model_name == "transformer":
-            model = FlowSimTransformer.load_from_checkpoint(
-                f"{dir_train}/checkpoints/last.ckpt",
-                map_location=DEVICE,
-                n_layer=model_config["n_layer"],
-                n_head=model_config["n_head"],
-                n_embd=model_config["n_embd"],
-                block_size=model_config["block_size"],
-                vocab_size=model_config["vocab_size"],
-                output_dim=model_config["output_dim"],
-                dropout=model_config["dropout"],
-                compile=model_config["compile"],
-                loss_fn_type=model_config["loss_fn_type"],
-                weight_decay=training_config["weight_decay"],
-                learning_rate=training_config["learning_rate"],
-                betas=training_config["betas"],
-                batch_size=training_config["batch_size"],
-                enable_position=model_config["enable_position"],
-                enable_causal=model_config["enable_causal"],
-                enable_val=training_config["enable_val"],
-                enable_dist=training_config["enable_dist"],
                 save_dir=tb_logger.log_dir,
             )
         trainer.test(model, datamodule=datamodule)
