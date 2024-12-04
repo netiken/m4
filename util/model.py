@@ -6,14 +6,15 @@ import numpy as np
 import logging
 import struct
 import os
+from sortedcontainers import SortedSet
 
 from .model_llama import Transformer, ModelArgs
 
-# from torch_geometric.nn import GCNConv
-from torch_geometric.nn import SAGEConv, GATv2Conv, GraphConv
 import torch.nn.functional as F
 
-# from .consts import N_BACKGROUND
+from torch_geometric.nn import HeteroConv, MessagePassing, SAGEConv
+from torch_geometric.data import HeteroData, Batch, Data
+from typing import Tuple
 
 
 class ExpActivation(nn.Module):
@@ -29,46 +30,17 @@ class WeightedL1Loss(nn.Module):
     def __init__(self):
         super(WeightedL1Loss, self).__init__()
 
-    def forward(self, prediction, target, loss_average="perflow"):
-        if loss_average == "perflow":
-            elementwise_loss = torch.abs(prediction - target).sum()
-            weighted_loss = elementwise_loss / target.sum()
-        elif loss_average == "perperiod":
-            if prediction.dim() > 1:
-                sequencewise_loss = torch.abs(prediction - target).sum(
-                    dim=1
-                ) / target.sum(dim=1).to(prediction.device)
-            else:
-                sequencewise_loss = torch.abs(
-                    prediction - target
-                ).sum() / target.sum().to(prediction.device)
-            weighted_loss = torch.mean(sequencewise_loss)
+    def forward(self, prediction, target, batch_index):
+        n_batch = batch_index.max() + 1
+        elementwise_loss = 0
+        if n_batch == 1:
+            elementwise_loss = torch.abs(prediction - target).mean()
         else:
-            raise ValueError(f"Unsupported loss average type: {loss_average}")
-        return weighted_loss
-
-
-class WeightedMSELoss(nn.Module):
-    def __init__(self):
-        super(WeightedMSELoss, self).__init__()
-
-    def forward(self, prediction, target, loss_average="perflow"):
-        if loss_average == "perflow":
-            elementwise_loss = ((prediction - target) ** 2).sum()
-            weighted_loss = elementwise_loss / target.sum()
-        elif loss_average == "perperiod":
-            if prediction.dim() > 1:
-                sequencewise_loss = ((prediction - target) ** 2).sum(
-                    dim=1
-                ) / target.sum(dim=1).to(prediction.device)
-            else:
-                sequencewise_loss = (
-                    (prediction - target) ** 2
-                ).sum() / target.sum().to(prediction.device)
-            weighted_loss = torch.mean(sequencewise_loss)
-        else:
-            raise ValueError(f"Unsupported loss average type: {loss_average}")
-        return weighted_loss
+            for i in range(n_batch):
+                idx = batch_index == i
+                elementwise_loss += torch.abs(prediction[idx] - target[idx]).mean()
+            elementwise_loss /= n_batch
+        return elementwise_loss
 
 
 class TransformerBase(LightningModule):
@@ -294,267 +266,203 @@ class FlowSimTransformer(TransformerBase):
         return optimizer
 
 
-class Attention(nn.Module):
-    def __init__(self, hidden_size):
-        super(Attention, self).__init__()
-        self.hidden_size = hidden_size
-        self.attn = nn.Linear(hidden_size * 2, hidden_size)
-        self.v = nn.Parameter(torch.rand(hidden_size))
-
-    def forward(self, lstm_out):
-        seq_len = lstm_out.size(1)
-
-        # Repeat hidden state for each time step
-        hidden = lstm_out[:, -1, :].unsqueeze(1).repeat(1, seq_len, 1)
-
-        # Concatenate hidden state with LSTM output
-        energy = torch.tanh(self.attn(torch.cat((hidden, lstm_out), dim=2)))
-
-        # Compute attention scores
-        attn_weights = energy.matmul(self.v)  # [batch_size, seq_len]
-        attn_weights = torch.softmax(attn_weights, dim=1).unsqueeze(
-            -1
-        )  # [batch_size, seq_len, 1]
-
-        # Compute context vector
-        context = attn_weights * lstm_out  # [batch_size, seq_len, hidden_size]
-
-        return context, attn_weights
+def MLP(input_size, hidden_size, output_size, dropout):
+    return nn.Sequential(
+        nn.Linear(input_size, hidden_size),  # First layer
+        nn.Dropout(p=dropout),  # Dropout for regularization
+        nn.ReLU(),  # Non-linearity
+        nn.Linear(hidden_size, output_size),  # Second layer
+        nn.ReLU(),  # Non-linearity
+    )
 
 
-# class GRUConv(MessagePassing):
-#     def __init__(self, c_in, c_out):
-#         super(GRUConv, self).__init__(aggr="add")
-#         self.gru = nn.GRU(input_size=c_in, hidden_size=c_out, batch_first=True)
-#         self.fc = nn.Linear(c_out, c_out)
+class HomoGNNLayer(nn.Module):
+    def __init__(self, c_in, c_out, dropout=0.2):
+        super(HomoGNNLayer, self).__init__()
+        self.homogeneous_layer = HomoNetGNN(c_in=c_in, c_out=c_out, dropout=dropout)
+
+    def forward(self, x, edge_index):
+        # Combine type_a and type_b node features into a single homogeneous feature matrix
+        # Apply the homogeneous GNN layer
+        out_combined = self.homogeneous_layer(x, edge_index)
+
+        return out_combined
+
+
+# original
+class HomoNetGNN(nn.Module):
+    def __init__(self, c_in, c_out, dropout=0.2):
+        super(HomoNetGNN, self).__init__()
+        self.conv = SAGEConv(
+            c_in, c_out, aggr="sum", project=True
+        )  # project=True is default
+        # self.dropout = nn.Dropout(dropout)
+        self.norm = torch.nn.LayerNorm(c_out)
+        # self.final_lin = nn.Linear(c_out, c_out)
+        # self.final_lin = nn.Sequential(
+        #     nn.Linear(c_out, c_out),  # First layer
+        #     nn.ReLU(),  # Non-linearity
+        #     # nn.Dropout(p=dropout),
+        #     nn.Linear(c_out, c_out),  # Second layer
+        # )
+
+    def forward(self, x, edge_index):
+        # Apply the SAGEConv layer (includes residual connection)
+        out = self.conv(x, edge_index)
+        out = self.norm(out)  # Apply normalization
+
+        # Apply linear transformation, activation, and dropout
+        # out = F.relu(self.final_lin(out))
+        # out = self.dropout(out)
+
+        return out
+
+
+# v0
+# class HomoNetGNN(nn.Module):
+#     def __init__(self, c_in, c_out, dropout=0.2):
+#         super(HomoNetGNN, self).__init__()
+#         self.conv = SAGEConv(
+#             c_in, c_out, aggr="sum", project=False
+#         )  # project=True is default
+#         # self.dropout = nn.Dropout(dropout)
+#         self.norm = torch.nn.LayerNorm(c_out)
+
+#     def forward(self, x, edge_index):
+#         # Apply the SAGEConv layer (includes residual connection)
+#         out = self.conv(x, edge_index)
+#         out = self.norm(out)  # Apply normalization
+
+#         return out
+
+
+# v1
+# class HomoNetGNN(nn.Module):
+#     def __init__(self, c_in, c_out, dropout=0.2):
+#         super(HomoNetGNN, self).__init__()
+#         self.conv = SAGEConv(
+#             c_in, c_out, aggr="mean", project=True
+#         )  # project=True is default
+#         self.norm = torch.nn.LayerNorm(c_out)
+
+#     def forward(self, x, edge_index):
+#         # Apply the SAGEConv layer (includes residual connection)
+#         out = self.conv(x, edge_index)
+#         out = self.norm(out)  # Apply normalization
+
+#         return out
+
+
+# class HomoNetGNN(nn.Module):
+#     def __init__(self, c_in, c_out, dropout=0.2):
+#         super(HomoNetGNN, self).__init__()
+#         self.conv = SAGEConv(c_in, c_out, aggr="sum")
+#         self.dropout = nn.Dropout(dropout)
+#         self.norm = torch.nn.LayerNorm(c_out)
+#         # self.final_lin = nn.Linear(c_in + c_out, c_out)
+#         if c_in != c_out:
+#             self.lin_proj = nn.Linear(c_in, c_out)
+#         else:
+#             self.lin_proj = nn.Identity()
+#         self.final_lin = nn.Linear(c_out, c_out)
+
+#     def forward(self, x, edge_index):
+#         # Apply the GCNConv layer
+#         out = self.conv(x, edge_index)
+#         out = self.norm(out)  # Apply normalization
+#         # Concatenate original features with the aggregated ones
+#         # x = torch.cat([x, out], dim=-1)
+#         x_proj = self.lin_proj(x)
+#         x = x_proj + out
+
+#         # Apply linear transformation, activation, and dropout
+#         x = F.relu(self.final_lin(x))
+#         x = self.dropout(x)
+
+#         return x
+
+
+# class HeterGNNLayer(nn.Module):
+#     def __init__(
+#         self, c_in_type_a, c_in_type_b, c_out, dropout=0.2, enable_lstm_in_gnn=False
+#     ):
+#         super(HeterGNNLayer, self).__init__()
+#         self.c_in_type_a = c_in_type_a
+#         self.c_in_type_b = c_in_type_b
+#         self.c_out = c_out
+#         self.dropout = nn.Dropout(dropout)
+#         self.enable_lstm_in_gnn = enable_lstm_in_gnn
+
+#         # Define custom message passing layers
+#         self.conv_layers = HeteroConv(
+#             {
+#                 ("type_a", "a_to_b", "type_b"): HeterNetGNN(
+#                     c_in_type_a, c_out, dropout, enable_lstm_in_gnn
+#                 ),
+#                 ("type_b", "b_to_a", "type_a"): HeterNetGNN(
+#                     c_in_type_b, c_out, dropout, enable_lstm_in_gnn
+#                 ),
+#             },
+#             aggr="sum",
+#         )
+
+#         # Linear layers for combining original and aggregated features
+#         self.final_lin_type_a = nn.Linear(c_in_type_a + c_out, c_out)
+#         self.final_lin_type_b = nn.Linear(c_in_type_b + c_out, c_out)
+
+#     def forward(self, x_dict, edge_index_dict):
+#         x_type_a, x_type_b = x_dict["type_a"], x_dict["type_b"]
+#         # Edge index from type_a to type_b
+#         out_dict = self.conv_layers(x_dict, edge_index_dict)
+
+#         # Concatenate original and aggregated features
+#         x_type_a = torch.cat([x_type_a, out_dict["type_a"]], dim=-1)
+#         x_type_b = torch.cat([x_type_b, out_dict["type_b"]], dim=-1)
+
+#         # Apply final linear layers, activation, and dropout
+#         x_type_a = F.relu(self.final_lin_type_a(x_type_a))
+#         x_type_a = self.dropout(x_type_a)
+
+#         x_type_b = F.relu(self.final_lin_type_b(x_type_b))
+#         x_type_b = self.dropout(x_type_b)
+
+#         output_dict = {"type_a": x_type_a, "type_b": x_type_b}
+#         return output_dict
+
+
+# class HeterNetGNN(MessagePassing):
+#     def __init__(self, in_channels, out_channels, dropout, enable_lstm_in_gnn):
+#         super(HeterNetGNN, self).__init__(aggr="add")
+#         self.enable_lstm_in_gnn = enable_lstm_in_gnn
+
+#         if enable_lstm_in_gnn:
+#             self.message_func = nn.LSTM(in_channels, out_channels, batch_first=True)
+#         else:
+#             self.message_func = nn.Linear(in_channels, out_channels)
 
 #     def forward(self, x, edge_index):
 #         return self.propagate(edge_index, x=x)
 
 #     def message(self, x_j):
-#         return x_j
-
-#     def aggregate(self, inputs, index):
-#         # Group inputs by target node index
-#         unique_nodes, inverse_indices = torch.unique(
-#             index, sorted=True, return_inverse=True
-#         )
-#         num_nodes = unique_nodes.size(0)
-
-#         # Determine number of neighbors for each node
-#         counts = scatter(torch.ones_like(index), index, dim=0, reduce="sum").long()
-
-#         # Filter out nodes with no neighbors
-#         valid_node_mask = counts > 0
-#         if not valid_node_mask.any():
-#             # Handle the case where all nodes have no neighbors
-#             return torch.zeros((num_nodes, inputs.size(-1)), device=inputs.device)
-
-#         valid_counts = counts[valid_node_mask]
-#         valid_nodes = unique_nodes[valid_node_mask]
-
-#         max_neighbors = valid_counts.max().item()
-#         padded_seq = torch.zeros(
-#             (valid_nodes.size(0), max_neighbors, inputs.size(-1)), device=inputs.device
-#         )
-
-#         current_pos = torch.zeros(
-#             valid_nodes.size(0), dtype=torch.long, device=inputs.device
-#         )
-#         for i in range(inputs.size(0)):
-#             node_idx = inverse_indices[i]
-#             if valid_node_mask[node_idx]:
-#                 position = current_pos[valid_node_mask[node_idx]]
-#                 padded_seq[valid_node_mask[node_idx], position, :] = inputs[i]
-#                 current_pos[valid_node_mask[node_idx]] += 1
-
-#         # Pack the sequences for GRU
-#         packed_seq = nn.utils.rnn.pack_padded_sequence(
-#             padded_seq, valid_counts.cpu(), batch_first=True, enforce_sorted=False
-#         )
-
-#         # Apply GRU
-#         packed_out, _ = self.gru(packed_seq)
-#         out, _ = nn.utils.rnn.pad_packed_sequence(packed_out, batch_first=True)
-
-#         # Use the last hidden state for each valid node
-#         aggr_out = torch.zeros((num_nodes, out.size(-1)), device=inputs.device)
-#         aggr_out[valid_node_mask] = out[
-#             torch.arange(valid_nodes.size(0), device=inputs.device), valid_counts - 1
-#         ]
-
-#         return aggr_out
-
-#     def update(self, aggr_out):
-#         return self.fc(aggr_out)
-
-
-# GNN model
-class GNNLayer(nn.Module):
-    def __init__(self, c_in, c_out, dropout=0.2, enable_lstm=False):
-        super(GNNLayer, self).__init__()
-        # self.conv = GraphConv(c_in, c_out, aggr="mean")
-        self.conv = SAGEConv(c_in, c_out, aggr="lstm")  # using mean aggregation
-        # self.conv = GCNConv(c_in, c_out)
-        # self.conv = GRUConv(c_in, c_out)  # using GRU-based aggregation
-        self.dropout = nn.Dropout(p=dropout)
-
-    def forward(self, node_feats, edge_index):
-        # node_feats = self.conv(node_feats, edge_index[:2], edge_weight=edge_index[2])
-        node_feats = self.conv(node_feats, edge_index[:2])
-        # node_feats = F.relu(node_feats)
-        node_feats = self.dropout(node_feats)
-        return node_feats
-
-
-# class GNNLayer(nn.Module):
-#     def __init__(
-#         self, c_in, c_out, heads=4, concat=True, dropout=0.2, enable_lstm=False
-#     ):
-#         super(GNNLayer, self).__init__()
-#         # Initialize the GATConv layer
-#         self.enable_lstm = enable_lstm
-#         if enable_lstm:
-#             self.gat_conv = GATv2Conv(
-#                 c_in,
-#                 c_out // heads if concat else c_out,
-#                 heads=heads,
-#                 concat=concat,
-#                 dropout=dropout,
-#             )
+#         if self.enable_lstm_in_gnn:
+#             x_j, _ = self.message_func(x_j.unsqueeze(1))
+#             return x_j.squeeze(1)
 #         else:
-#             self.gat_conv = GATv2Conv(
-#                 c_in,
-#                 c_in // heads if concat else c_in,
-#                 heads=heads,
-#                 concat=concat,
-#                 dropout=dropout,
-#             )
-#             self.fc = nn.Linear(c_in, c_out)
-
-#     def forward(self, node_feats, edge_index):
-#         # Apply GAT convolution
-#         node_feats = self.gat_conv(node_feats, edge_index[:2])
-#         node_feats = F.relu(node_feats)
-#         if not self.enable_lstm:
-#             node_feats = self.fc(node_feats)
-#         return node_feats
+#             return self.message_func(x_j)
 
 
-# LSTM Model
-class LSTMModel(nn.Module):
-    def __init__(
-        self,
-        input_size,
-        hidden_size,
-        output_size,
-        num_layers,
-        dropout,
-        enable_bidirectional=False,
-        enable_positional_encoding=False,
-        enable_attention=False,
-        enable_lstm_on_path=False,
-    ):
-        super(LSTMModel, self).__init__()
+class SeqCell(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super(SeqCell, self).__init__()
         self.hidden_size = hidden_size
-        self.num_layers = num_layers
-        self.bidirectional = enable_bidirectional
-        self.num_directions = 2 if enable_bidirectional else 1
-        self.enable_attention = enable_attention
-        self.enable_lstm_on_path = enable_lstm_on_path
-        # Adjust the fully connected layer based on bidirectionality
-        self.lstm = nn.LSTM(
-            input_size * 2 if enable_positional_encoding else input_size,
-            hidden_size,
-            num_layers,
-            batch_first=True,
-            bidirectional=enable_bidirectional,
-            dropout=dropout,
-        )
-        if enable_attention:
-            logging.info("Attention enabled")
-            self.attention = Attention(hidden_size * self.num_directions)
-        self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
-        # self.layer_norm = nn.LayerNorm(hidden_size * self.num_directions)
+        self.input_size = input_size
+        # self.seq_cell = nn.LSTMCell(input_size, hidden_size)
+        self.seq_cell = nn.GRUCell(input_size, hidden_size)
 
-    def init_hidden(self, batch_size, device):
-        h_t = torch.zeros(
-            self.num_layers * self.num_directions, batch_size, self.hidden_size
-        ).to(device)
-        c_t = torch.zeros(
-            self.num_layers * self.num_directions, batch_size, self.hidden_size
-        ).to(device)
-        return h_t, c_t
-
-    def forward(self, x, lengths, lengths_per_path, n_paths_per_batch):
-        batch_size = x.size(0)
-        if self.enable_lstm_on_path:
-            n_feats = x.size(2)
-            n_longest_seq = np.max(lengths_per_path)
-            n_batches_total = np.sum(n_paths_per_batch)
-
-            x_adj = torch.zeros(
-                (n_batches_total, n_longest_seq, n_feats), device=x.device
-            )
-
-            n_batches = 0
-            for i in range(batch_size):
-                n_seq_accumulated = 0
-                for j in range(n_paths_per_batch[i]):
-                    seq_len = lengths_per_path[i][j]
-                    x_adj[n_batches, : lengths_per_path[i][j]] = x[
-                        i, n_seq_accumulated : n_seq_accumulated + seq_len
-                    ]
-                    n_seq_accumulated += seq_len
-                    n_batches += 1
-
-            lengths_per_path_new = np.concatenate(
-                [lengths_per_path[i, : n_paths_per_batch[i]] for i in range(batch_size)]
-            )
-
-            h_t, c_t = self.init_hidden(n_batches_total, x_adj.device)
-            # Pack the padded batch of sequences for LSTM
-            packed_input = nn.utils.rnn.pack_padded_sequence(
-                x_adj, lengths_per_path_new, batch_first=True, enforce_sorted=False
-            )
-        else:
-            h_t, c_t = self.init_hidden(batch_size, x.device)
-            packed_input = nn.utils.rnn.pack_padded_sequence(
-                x, lengths, batch_first=True, enforce_sorted=False
-            )
-        packed_output, (h_t, c_t) = self.lstm(packed_input, (h_t, c_t))
-
-        # Unpack the output sequence
-        lstm_out, _ = nn.utils.rnn.pad_packed_sequence(packed_output, batch_first=True)
-
-        # Apply Layer Normalization
-        # lstm_out = self.layer_norm(lstm_out)
-
-        # Apply attention
-        if self.enable_attention:
-            lstm_out, _ = self.attention(lstm_out)
-        # Apply the fully connected layer to each time step
-        out = self.fc(lstm_out)
-
-        if self.enable_lstm_on_path:
-            # Initialize the final output tensor with the same shape as x
-            out_final = torch.zeros(
-                (x.size(0), x.size(1), out.size(2)), device=out.device
-            )
-            n_batches = 0
-            for i in range(batch_size):
-                n_seq_accumulated = 0
-                for j in range(n_paths_per_batch[i]):
-                    seq_len = lengths_per_path[i][j]
-                    out_final[i, n_seq_accumulated : n_seq_accumulated + seq_len] = out[
-                        n_batches, :seq_len
-                    ]
-                    n_seq_accumulated += seq_len
-                    n_batches += 1
-        else:
-            out_final = out
-
-        return out_final, (h_t, c_t)
+    def forward(self, x, h_t):
+        # h_t, c_t = self.seq_cell(x, (h_t, c_t))
+        h_t = self.seq_cell(x, h_t)
+        return h_t
 
 
 class FlowSimLstm(LightningModule):
@@ -572,12 +480,18 @@ class FlowSimLstm(LightningModule):
         enable_val=True,
         output_size=1,
         input_size=2,
+        current_period_len_idx=None,
         enable_bidirectional=False,
         enable_positional_encoding=False,
         enable_gnn=False,
         enable_lstm=False,
+        enable_lstm_in_gnn=False,
+        enable_link_state=False,
+        enable_flowsim_diff=False,
+        enable_remainsize=False,
+        enable_log_norm=True,
         enable_path=False,
-        enable_lstm_on_path=False,
+        enable_topo=False,
         loss_average="perflow",  # perflow, perperiod
         save_dir=None,
     ):
@@ -587,43 +501,82 @@ class FlowSimLstm(LightningModule):
         self.loss_fn = self._get_loss_fn(loss_fn_type)
         self.enable_gnn = enable_gnn
         self.enable_lstm = enable_lstm
-        self.gcn_hidden_size = gcn_hidden_size
-        self.enable_path = enable_path
-        self.enable_lstm_on_path = enable_lstm_on_path
-        # input_size += N_BACKGROUND
+        self.current_period_len_idx = current_period_len_idx
+        self.hidden_size = hidden_size
+        self.enable_link_state = enable_link_state
+        self.enable_flowsim_diff = enable_flowsim_diff
+        self.enable_remainsize = enable_remainsize
+        self.enable_log_norm = enable_log_norm
+        if enable_path:
+            self.n_links = 12
+        elif enable_topo:
+            self.n_links = 96
+        else:
+            self.n_links = 1
         # GCN layers
         if enable_lstm and enable_gnn:
-            logging.info(f"GNN and LSTM enabled")
+            logging.info(
+                f"GNN and LSTM enabled, enable_lstm_in_gnn={enable_lstm_in_gnn}, enable_link_state={enable_link_state}, enable_flowsim_diff={enable_flowsim_diff}, enable_remainsize={enable_remainsize}"
+            )
+            # link_state_size = self.hidden_size if enable_link_state else 1
+            # link_state_size = self.hidden_size
+            # self.gcn_layers = nn.ModuleList(
+            #     [
+            #         HeterGNNLayer(
+            #             c_in_type_a=hidden_size,
+            #             c_in_type_b=link_state_size if i == 0 else hidden_size,
+            #             c_out=hidden_size,
+            #             dropout=dropout,
+            #             enable_lstm_in_gnn=enable_lstm_in_gnn,
+            #         )
+            #         for i in range(gcn_n_layer)
+            #     ]
+            # )
             self.gcn_layers = nn.ModuleList(
                 [
-                    GNNLayer(
-                        input_size - 1 if i == 0 else gcn_hidden_size,
-                        gcn_hidden_size if i != gcn_n_layer - 1 else input_size,
+                    HomoGNNLayer(
+                        c_in=hidden_size if i == 0 else gcn_hidden_size,
+                        c_out=hidden_size if i == gcn_n_layer - 1 else gcn_hidden_size,
                         dropout=dropout,
-                        enable_lstm=enable_lstm,
                     )
                     for i in range(gcn_n_layer)
                 ]
             )
-            self.model_lstm = LSTMModel(
-                input_size * 2,
-                hidden_size,
-                output_size,
-                n_layer,
-                dropout=dropout,
-                enable_bidirectional=enable_bidirectional,
-                enable_positional_encoding=enable_positional_encoding,
-                enable_lstm_on_path=enable_lstm_on_path,
+            # lstmcell_rate_extra = 0
+            lstmcell_rate_extra = 13
+            self.lstmcell_rate = SeqCell(
+                input_size=hidden_size + lstmcell_rate_extra, hidden_size=hidden_size
             )
+            self.lstmcell_time = SeqCell(input_size=1, hidden_size=hidden_size)
+
+            if self.enable_link_state:
+                self.lstmcell_rate_link = SeqCell(
+                    input_size=hidden_size, hidden_size=hidden_size
+                )
+                # self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
+            dim_flowsim = 16 if self.enable_flowsim_diff else 0
+            self.output_layer = nn.Sequential(
+                nn.Linear(hidden_size + dim_flowsim, hidden_size // 2),  # First layer
+                nn.ReLU(),  # Non-linearity
+                nn.Dropout(p=dropout),
+                nn.Linear(hidden_size // 2, output_size),  # Second layer
+            )
+            if self.enable_remainsize:
+                self.remain_size_layer = nn.Sequential(
+                    nn.Linear(hidden_size, hidden_size // 8),  # First layer
+                    nn.ReLU(),  # Non-linearity
+                    nn.Dropout(p=dropout),
+                    nn.Linear(hidden_size // 8, 1),  # Second layer
+                )
         elif enable_gnn:
             logging.info(f"GNN enabled")
             self.gcn_layers = nn.ModuleList(
                 [
-                    GNNLayer(
+                    HomoGNNLayer(
                         input_size if i == 0 else gcn_hidden_size,
                         (gcn_hidden_size if i != gcn_n_layer - 1 else output_size),
                         dropout=dropout,
-                        enable_lstm=enable_lstm,
+                        enable_lstm_in_gnn=enable_lstm_in_gnn,
                     )
                     for i in range(gcn_n_layer)
                 ]
@@ -638,7 +591,6 @@ class FlowSimLstm(LightningModule):
                 dropout=dropout,
                 enable_bidirectional=enable_bidirectional,
                 enable_positional_encoding=enable_positional_encoding,
-                enable_lstm_on_path=enable_lstm_on_path,
             )
         else:
             assert False, "Either GNN or LSTM must be enabled"
@@ -647,8 +599,9 @@ class FlowSimLstm(LightningModule):
         self.save_dir = save_dir
         self.loss_average = loss_average
         logging.info(
-            f"model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}, enable_lstm_on_path={enable_lstm_on_path}"
+            f"Call FlowSimLstm. model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_bidirectional: {enable_bidirectional}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}"
         )
+        self.rtt = 0
 
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":
@@ -662,113 +615,183 @@ class FlowSimLstm(LightningModule):
     def forward(
         self,
         x,
-        lengths,
-        edge_index,
-        edge_index_len,
-        lengths_per_path,
-        n_paths_per_batch,
+        batch_index,
+        remainsize_matrix,
+        flow_active_matrix,  # (n_flows,2)
+        time_delta_matrix,  # (batch,n_events)
+        edges_a_to_b,  # (2, n_edges)
     ):
+        loss_size = None
         if self.enable_gnn and self.enable_lstm:
-            batch_size = x.size(0)
-            feature_dim = x.size(2)
+            batch_size, n_events, _ = time_delta_matrix.size()
+            n_flows = x.shape[0]
+            batch_h_state = torch.zeros((n_flows, self.hidden_size), device=x.device)
 
-            batch_gnn_output = torch.zeros(
-                (batch_size, x.size(1), feature_dim), device=x.device
+            batch_h_state[:, 0] = 1.0
+            batch_h_state[:, 2] = x[:, 0]
+            batch_h_state[:, 3] = x[:, 2]
+            # batch_h_state[:, 3 : 1 + x.shape[1]] = x[:, 2:]
+
+            batch_h_state_link = torch.zeros(
+                (batch_size * self.n_links, self.hidden_size), device=x.device
             )
-            for i in range(batch_size):
-                num_flow_nodes = lengths[i]
-                edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
-                if self.enable_lstm_on_path:
-                    x_gnn_input = x[i, :num_flow_nodes, :-1]
-                else:
-                    max_node_index = edge_index_trimmed.max().item()
-                    num_link_nodes = max_node_index + 1 - num_flow_nodes
+            batch_h_state_link[:, 1] = 1.0
+            batch_h_state_link[:, 2] = 1.0
 
-                    link_node_feats = torch.full(
-                        (num_link_nodes, feature_dim - 1), 1.0, device=x.device
+            if self.enable_remainsize:
+                loss_size = torch.zeros((n_flows, 1), device=x.device)
+                loss_size_num = torch.ones_like(loss_size)
+
+            flow_start = flow_active_matrix[:, 0].unsqueeze(1)  # (n_flows, 1)
+            flow_end = flow_active_matrix[:, 1].unsqueeze(1)  # (n_flows, 1)
+            event_indices = torch.arange(n_events, device=x.device).unsqueeze(
+                0
+            )  # (1, n_events)
+
+            # Compute activity mask for all flows and events at once
+            flow_activity_mask = (flow_start <= event_indices) & (
+                flow_end > event_indices
+            )  # (n_flows, n_events)
+
+            time_deltas_full = time_delta_matrix[batch_index, :]  # (n_flows, n_events)
+
+            for j in range(n_events):
+                active_flow_mask = flow_activity_mask[:, j]  # (n_flows,)
+                if active_flow_mask.any():
+                    active_flow_idx = torch.where(active_flow_mask)[0]
+                    time_deltas = time_deltas_full[active_flow_idx, j]
+                    if (time_deltas > self.rtt).all():
+                        batch_h_state[active_flow_idx, :] = self.lstmcell_time(
+                            time_deltas, batch_h_state[active_flow_idx, :]
+                        )
+
+                    if self.enable_remainsize and len(remainsize_matrix[j]) == len(
+                        active_flow_idx
+                    ):
+                        remain_size_est = self.remain_size_layer(
+                            batch_h_state[active_flow_idx, :]
+                        )[:, 0]
+
+                        remain_size_gt = remainsize_matrix[j]
+
+                        loss_size[active_flow_idx, 0] += torch.abs(
+                            remain_size_est - remain_size_gt
+                        )
+                        # loss_size[active_flow_idx, 0] += torch.abs(
+                        #     1 - remain_size_est / remain_size_gt
+                        # )
+                        loss_size_num[active_flow_idx, 0] += 1
+
+                    edge_mask = active_flow_mask[edges_a_to_b[0]]
+                    edge_index_a_to_b = edges_a_to_b[:, edge_mask]
+
+                    n_flows_active = active_flow_idx.size(0)
+                    new_flow_indices = torch.searchsorted(
+                        active_flow_idx, edge_index_a_to_b[0]
                     )
-                    x_gnn_input = torch.cat(
-                        [x[i, :num_flow_nodes, :-1], link_node_feats], dim=0
+                    active_link_idx, new_link_indices = torch.unique(
+                        edge_index_a_to_b[1], return_inverse=True, sorted=False
                     )
 
-                for gcn in self.gcn_layers:
-                    x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
-
-                batch_gnn_output[i, :num_flow_nodes, :] = x_gnn_input[
-                    :num_flow_nodes, :
-                ]
-
-            x = torch.cat((x, batch_gnn_output), dim=-1)
-            res, _ = self.model_lstm(x, lengths, lengths_per_path, n_paths_per_batch)
-        elif self.enable_gnn:
-            batch_size = x.size(0)
-            feature_dim = x.size(2)
-
-            res = torch.zeros((batch_size, x.size(1), 1), device=x.device)
-            for i in range(batch_size):
-                num_flow_nodes = lengths[i]
-                edge_index_trimmed = edge_index[i, :, : edge_index_len[i]]
-
-                if self.enable_lstm_on_path:
-                    x_gnn_input = x[i, :num_flow_nodes, :]
-                else:
-                    max_node_index = edge_index_trimmed.max().item()
-                    num_link_nodes = max_node_index + 1 - num_flow_nodes
-
-                    link_node_feats = torch.full(
-                        (num_link_nodes, feature_dim), 1.0, device=x.device
+                    new_link_indices += n_flows_active
+                    edge_index_a_to_b = torch.stack(
+                        [new_flow_indices, new_link_indices], dim=0
                     )
-                    x_gnn_input = torch.cat(
-                        [x[i, :num_flow_nodes, :], link_node_feats], dim=0
-                    )
-                for gcn in self.gcn_layers:
-                    x_gnn_input = gcn(x_gnn_input, edge_index_trimmed)
 
-                res[i, :num_flow_nodes, :] = x_gnn_input[:num_flow_nodes, :]
+                    x_combined = torch.cat(
+                        [
+                            batch_h_state[active_flow_idx],
+                            batch_h_state_link[active_link_idx],
+                        ],
+                        dim=0,
+                    )
+
+                    edge_index_b_to_a = torch.stack(
+                        [edge_index_a_to_b[1], edge_index_a_to_b[0]], dim=0
+                    )
+                    edge_index = torch.cat(
+                        [edge_index_a_to_b, edge_index_b_to_a], dim=1
+                    )
+
+                    for gcn in self.gcn_layers:
+                        x_combined = gcn(x_combined, edge_index)
+
+                    z_t_tmp = x_combined[:n_flows_active]
+                    z_t_tmp_link = x_combined[n_flows_active:]
+
+                    z_t_tmp = torch.cat([z_t_tmp, x[active_flow_idx, 3:]], dim=1)
+                    batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
+                        z_t_tmp, batch_h_state[active_flow_idx, :]
+                    )
+                    if self.enable_link_state:
+
+                        batch_h_state_link[active_link_idx, :] = (
+                            self.lstmcell_rate_link(
+                                z_t_tmp_link,
+                                batch_h_state_link[active_link_idx, :],
+                            )
+                        )
+
+            if self.enable_flowsim_diff:
+                input_tmp = torch.cat([x, batch_h_state], dim=1)
+                res = self.output_layer(input_tmp)
+                # res = self.output_layer(batch_h_state) + x[:, 1:2]
+            else:
+                res = self.output_layer(batch_h_state) + 1.0
+            if self.enable_remainsize:
+                loss_size = torch.div(loss_size, loss_size_num)
+
         elif self.enable_lstm:
-            res, _ = self.model_lstm(x, lengths, lengths_per_path, n_paths_per_batch)
+            res, _ = self.model_lstm(x, lengths)
+            # res, _ = self.model_lstm(x[:, :, [0, 1]], lengths)
         else:
             assert False, "Either GNN or LSTM must be enabled"
-        return res
+        return res, loss_size
 
     def step(self, batch, batch_idx, tag=None):
         (
             input,
             output,
-            lengths,
+            batch_index,
             spec,
-            src_dst_pair_target_str,
-            edge_index,
-            edge_index_len,
-            lengths_per_path,
-            n_paths_per_batch,
+            remainsize_matrix,
+            flow_active_matrix,
+            time_delta_matrix,
+            edges_a_to_b_matrix,
         ) = batch
 
-        estimated = self(
+        estimated, loss_size = self(
             input,
-            lengths,
-            edge_index,
-            edge_index_len,
-            lengths_per_path,
-            n_paths_per_batch,
+            batch_index,
+            remainsize_matrix,
+            flow_active_matrix,
+            time_delta_matrix,
+            edges_a_to_b_matrix,
         )
 
         # Generate a mask based on lengths
-        attention_mask = output.squeeze() >= 1.0
 
         est = torch.div(estimated, output).squeeze()
         gt = torch.ones_like(est)
-        est = est.masked_fill(~attention_mask, 0.0)
-        gt = gt.masked_fill(~attention_mask, 0.0)
-        # Calculate the loss
-        loss = self.loss_fn(est, gt, self.loss_average)
 
+        # Calculate the loss
+        loss = self.loss_fn(est, gt, batch_index)
         self._log_loss(loss, tag)
-        # if estimated.size(0) == 1:
-        #     estimated[0, :, 0][~attention_mask] = input[0, :, 4][~attention_mask]
-        # else:
-        #     estimated[:, :, 0][~attention_mask] = input[:, :, 4][~attention_mask]
-        self._save_test_results(tag, spec, src_dst_pair_target_str, estimated, output)
+
+        if self.enable_remainsize:
+            # loss_size_mean = loss_size[loss_size > 0]
+            if loss_size.size(0) == 0:
+                loss_size_mean = 0
+            else:
+                loss_size_mean = 0
+                n_batch = batch_index.max() + 1
+                for i in range(n_batch):
+                    idx = batch_index == i
+                    loss_size_mean += loss_size[idx].nanmean()
+                loss_size_mean /= n_batch
+            self._log_loss(loss_size_mean, f"{tag}_size")
+            loss = loss + 0.1 * loss_size_mean
+        self._save_test_results(tag, spec, estimated, output)
 
         return loss
 
@@ -776,30 +799,20 @@ class FlowSimLstm(LightningModule):
         loss_tag = f"{tag}_loss"
         if self.enable_dist:
             loss_tag += "_sync"
-            self.log(
-                loss_tag,
-                loss,
-                sync_dist=True,
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-                batch_size=self.batch_size,
-            )
-        else:
-            self.log(
-                loss_tag,
-                loss,
-                on_step=True,
-                on_epoch=True,
-                logger=True,
-                prog_bar=True,
-                batch_size=self.batch_size,
-            )
+        self.log(
+            loss_tag,
+            loss,
+            sync_dist=self.enable_dist,
+            on_step=True,
+            on_epoch=True,
+            logger=True,
+            prog_bar=True,
+            batch_size=self.batch_size,
+        )
 
-    def _save_test_results(self, tag, spec, src_dst_pair_target_str, estimated, output):
+    def _save_test_results(self, tag, spec, estimated, output):
         if tag == "test":
-            test_dir = f"{self.save_dir}/{spec[0]}_{src_dst_pair_target_str[0]}"
+            test_dir = f"{self.save_dir}/{spec[0]}"
             os.makedirs(test_dir, exist_ok=True)
             np.savez(
                 f"{test_dir}/res.npz",
@@ -807,10 +820,56 @@ class FlowSimLstm(LightningModule):
                 output=output.cpu().numpy(),
             )
 
+    def _log_gradient_norms(self, tag):
+        # Compute and log gradient norms for GNN layers
+        if self.enable_gnn:
+            gnn_norms = []
+            for layer in self.gcn_layers:
+                for param in layer.parameters():
+                    if param.grad is not None:
+                        gnn_norms.append(param.grad.norm().item())
+            if gnn_norms:
+                avg_gnn_grad = sum(gnn_norms) / len(gnn_norms)
+                self.log(
+                    f"{tag}_gnn_grad_norm",
+                    avg_gnn_grad,
+                    on_step=True,
+                    on_epoch=True,
+                    logger=True,
+                    prog_bar=True,
+                    batch_size=self.batch_size,
+                    sync_dist=self.enable_dist,
+                )
+
+        # Compute and log gradient norms for LSTM layers
+        if self.enable_lstm:
+            lstm_norms = []
+            for param in self.lstmcell_rate.parameters():
+                if param.grad is not None:
+                    lstm_norms.append(param.grad.norm().item())
+            for param in self.lstmcell_time.parameters():
+                if param.grad is not None:
+                    lstm_norms.append(param.grad.norm().item())
+            if lstm_norms:
+                avg_lstm_grad = sum(lstm_norms) / len(lstm_norms)
+                self.log(
+                    f"{tag}_lstm_grad_norm",
+                    avg_lstm_grad,
+                    on_step=True,
+                    on_epoch=True,
+                    logger=True,
+                    prog_bar=True,
+                    batch_size=self.batch_size,
+                    sync_dist=self.enable_dist,
+                )
+
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, tag="train")
         # Gradient clipping
         # torch.nn.utils.clip_grad_norm_(self.model_lstm.parameters(), max_norm=1.0)
+        if self.enable_log_norm:
+            self._log_gradient_norms("train")
+
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -821,16 +880,26 @@ class FlowSimLstm(LightningModule):
         return self.step(batch, batch_idx, tag="test")
 
     def configure_optimizers(self):
-        # optimizer = torch.optim.Adam(
-        #     self.model_lstm.parameters(), lr=self.learning_rate
-        # )
-        # return optimizer
-        parameters = []
-        if self.enable_lstm:
-            parameters = list(self.model_lstm.parameters())
-        if self.enable_gnn:
+        if self.enable_lstm and self.enable_gnn:
+            parameters = (
+                list(self.lstmcell_rate.parameters())
+                + list(self.lstmcell_time.parameters())
+                + list(self.output_layer.parameters())
+            )
             for gcn_layer in self.gcn_layers:
                 parameters += list(gcn_layer.parameters())
+            if self.enable_link_state:
+                parameters += list(self.lstmcell_rate_link.parameters())
+                # parameters += list(self.lstmcell_time_link.parameters())
+            if self.enable_remainsize:
+                parameters += list(self.remain_size_layer.parameters())
+        else:
+            parameters = []
+            if self.enable_lstm:
+                parameters = list(self.model_lstm.parameters())
+            if self.enable_gnn:
+                for gcn_layer in self.gcn_layers:
+                    parameters += list(gcn_layer.parameters())
         optimizer = torch.optim.Adam(parameters, lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.2, patience=5, min_lr=1e-6
@@ -839,6 +908,8 @@ class FlowSimLstm(LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "val_loss_sync",  # Adjust according to the relevant metric
+                "monitor": (
+                    "val_loss_sync" if self.enable_dist else "val_loss"
+                ),  # Adjust according to the relevant metric
             },
         }

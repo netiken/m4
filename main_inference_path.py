@@ -5,6 +5,7 @@ from util.consts import get_base_delay_path, get_base_delay_transmission
 import argparse
 import yaml
 from ctypes import *
+import time
 from collections import defaultdict
 
 
@@ -20,6 +21,9 @@ class FCTStruct(Structure):
 def make_array(ctype, arr):
     return (ctype * len(arr))(*arr)
 
+
+# n_flows_total = 10
+n_flows_total = 40000
 
 C_LIB_PATH = "./clibs/get_fct_mmf.so"
 C_LIB = CDLL(C_LIB_PATH)
@@ -44,21 +48,79 @@ C_LIB.free_fctstruct.restype = None
 
 class Inference:
     def __init__(
-        self, model_config, training_config, checkpoint_path, lr, device="cuda:0"
+        self,
+        dataset_config,
+        model_config,
+        training_config,
+        checkpoint_path,
+        lr,
     ):
+        self.dataset_config = dataset_config
         self.model_config = model_config
         self.training_config = training_config
         self.lr = lr
-        self.device = torch.device(device)
+        self.device = torch.device(f"cuda:{training_config['gpu'][0]}")
+        # self.device = torch.device(f"cpu")
+        self.hidden_size = model_config["hidden_size"]
+        self.enable_flowsim_diff = dataset_config.get("enable_flowsim_diff", False)
         self.model_name = model_config["model_name"]
-        self.model = self.load_model(checkpoint_path)
-        self.model.to(self.device)
-        self.model.eval()
-        self.n_gnn_connection_limit = 100
+        (
+            gcn_layers_tmp,
+            self.lstmcell_rate,
+            self.lstmcell_time,
+            self.output_layer,
+        ) = self.load_model(checkpoint_path)
+        gcn_layers = []
+        for gcn in gcn_layers_tmp:
+            gcn = gcn.to(self.device)
+            gcn.eval()
+            gcn = torch.jit.script(gcn)
+            # gcn = torch.compile(gcn)
+            gcn_layers.append(gcn)
+        self.gcn_layers = gcn_layers
+
+        # self.lstmcell_rate = torch.compile(self.lstmcell_rate)
+        # self.lstmcell_time = torch.compile(self.lstmcell_time)
+        # self.output_layer = torch.compile(self.output_layer)
+
+        self.lstmcell_rate = torch.jit.script(self.lstmcell_rate)
+        self.lstmcell_time = torch.jit.script(self.lstmcell_time)
+        self.output_layer = torch.jit.script(self.output_layer)
+
+        # self.rtt = self.model.rtt
+        self.rtt = 0
+        self.z_t_link = torch.zeros((len([0]), self.hidden_size), device=self.device)
+        self.z_t_link[0, 0] = 1.0
+        self.one_hot_type_a = torch.tensor([1, 0], dtype=torch.float32).to(self.device)
+        self.one_hot_type_b = torch.tensor([0, 1], dtype=torch.float32).to(self.device)
+
+        self.save_models()
+
+    def save_models(self, directory="./inference/models_path"):
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        for idx, gcn_layer in enumerate(self.gcn_layers):
+            gcn_layer.save(f"{directory}/gnn_layer_{idx}.pt")
+            gcn_layer_fp16 = gcn_layer.to(dtype=torch.float16)
+            gcn_layer_fp16.save(f"{directory}/gnn_layer_{idx}_fp16.pt")
+
+        # Save LSTM/GRU cells and output layer
+        self.lstmcell_rate.save(f"{directory}/lstmcell_rate.pt")
+        self.lstmcell_time.save(f"{directory}/lstmcell_time.pt")
+        self.output_layer.save(f"{directory}/output_layer.pt")
+
+        lstmcell_rate_fp16 = self.lstmcell_rate.to(dtype=torch.float16)
+        lstmcell_rate_fp16.save(f"{directory}/lstmcell_rate_fp16.pt")
+        lstmcell_time_fp16 = self.lstmcell_time.to(dtype=torch.float16)
+        lstmcell_time_fp16.save(f"{directory}/lstmcell_time_fp16.pt")
+        output_layer_fp16 = self.output_layer.to(dtype=torch.float16)
+        output_layer_fp16.save(f"{directory}/output_layer_fp16.pt")
 
     def load_model(self, checkpoint_path):
         model_config = self.model_config
         training_config = self.training_config
+        dataset_config = self.dataset_config
         if self.model_name == "lstm":
             model = FlowSimLstm.load_from_checkpoint(
                 checkpoint_path,
@@ -81,280 +143,94 @@ class Inference:
                 ),
                 enable_gnn=model_config.get("enable_gnn", False),
                 enable_lstm=model_config.get("enable_lstm", False),
-                enable_path=True,
-                enable_lstm_on_path=model_config.get("enable_lstm_on_path", False),
-            )
-        elif self.model_name == "transformer":
-            model = FlowSimTransformer.load_from_checkpoint(
-                checkpoint_path,
-                map_location=self.device,
-                n_layer=model_config["n_layer"],
-                n_head=model_config["n_head"],
-                n_embd=model_config["n_embd"],
-                block_size=model_config["block_size"],
-                vocab_size=model_config["vocab_size"],
-                output_dim=model_config["output_dim"],
-                dropout=model_config["dropout"],
-                compile=model_config["compile"],
-                loss_fn_type=model_config["loss_fn_type"],
-                weight_decay=training_config["weight_decay"],
-                learning_rate=training_config["learning_rate"],
-                betas=training_config["betas"],
-                batch_size=training_config["batch_size"],
-                enable_position=model_config["enable_position"],
-                enable_causal=model_config["enable_causal"],
-                enable_val=training_config["enable_val"],
-                enable_dist=training_config["enable_dist"],
-                enable_path=True,
+                current_period_len_idx=dataset_config.get(
+                    "current_period_len_idx", None
+                ),
+                enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
+                enable_link_state=model_config.get("enable_link_state", False),
+                enable_flowsim_diff=dataset_config.get("enable_flowsim_diff", False),
+                enable_remainsize=dataset_config.get("enable_remainsize", False),
+                enable_path=dataset_config.get("enable_path", False),
+                enable_topo=dataset_config.get("enable_topo", False),
             )
         else:
             raise ValueError(f"Unsupported model name: {self.model_name}")
 
-        return model
-
-    def preprocess(self, flows_info_active, src_dst_to_links):
-        sizes, fats, sldn_flowsim, fsd, flag_from_last_period = map(
-            np.array, zip(*flows_info_active)
-        )
-        fid_period = np.arange(len(sizes))
-        dict_tmp = defaultdict(list)
-        for i in fid_period:
-            key = (fsd[i][0] - fsd[i][1], fsd[i][0])
-            dict_tmp[key].append(i)
-        sorted_keys = sorted(dict_tmp.keys())
-        fid_period = np.concatenate([dict_tmp[key] for key in sorted_keys])
-        lengths_per_path = np.array([len(dict_tmp[key]) for key in sorted_keys])
-        n_paths_per_batch = len(sorted_keys)
-
-        sizes = sizes[fid_period]
-        fats = fats[fid_period]
-        sldn_flowsim = sldn_flowsim[fid_period]
-        fsd = fsd[fid_period]
-        flag_from_last_period = flag_from_last_period[fid_period]
-
-        fats_ia = fats - np.min(fats)
-        n_links_passed = abs(fsd[:, 1] - fsd[:, 0]) + 2
-
-        sizes = np.log2(sizes / 1000.0 + 1)
-        fats_ia = np.log2(fats_ia / 10000.0 + 1)
-        input_data = np.column_stack(
-            (sldn_flowsim, sizes, fats_ia, n_links_passed, flag_from_last_period)
-        ).astype(np.float32)
-
-        edge_index = self.compute_edge_index(fid_period, fsd, src_dst_to_links)
-
+        gcn_layers = [gcn.to(self.device).eval() for gcn in model.gcn_layers]
+        model.lstmcell_rate.to(self.device).eval()
+        model.lstmcell_time.to(self.device).eval()
+        model.output_layer.to(self.device).eval()
         return (
-            torch.tensor(input_data).to(self.device),
-            torch.tensor(edge_index, dtype=torch.long).to(self.device),
-            np.array([lengths_per_path]),
-            np.array([n_paths_per_batch]),
-            fid_period,
+            gcn_layers,
+            model.lstmcell_rate,
+            model.lstmcell_time,
+            model.output_layer,
         )
 
-    def postprocess(self, output):
-        return output.cpu().detach().numpy()
-
-    def compute_edge_index(self, fid, fsd_flowsim, src_dst_to_links):
-        n_flows = len(fid)
-        edge_index = [[0, 0, 1]]
-
-        fid_idx = np.argsort(fid)
-        fsd_flowsim = fsd_flowsim[fid_idx]
-
-        for flow_node_idx in range(1, n_flows):
-            n_gnn_connection = 0
-            pair_target = (fsd_flowsim[flow_node_idx, 0], fsd_flowsim[flow_node_idx, 1])
-            link_sets_head = src_dst_to_links[pair_target]
-
-            other_flow_idx = flow_node_idx - 1
-            while (
-                other_flow_idx >= 0 and n_gnn_connection < self.n_gnn_connection_limit
-            ):
-
-                pair_other = (
-                    fsd_flowsim[other_flow_idx, 0],
-                    fsd_flowsim[other_flow_idx, 1],
-                )
-
-                # Check if other flow shares links with current flow
-                if pair_other == pair_target:
-                    break
-
-                link_sets_tail = src_dst_to_links[pair_other]
-                overlapping_links = len(link_sets_head.intersection(link_sets_tail))
-
-                # Only consider flows that interact within the timespan
-                if overlapping_links > 0:
-                    edge_index.append(
-                        [
-                            fid_idx[other_flow_idx],
-                            fid_idx[flow_node_idx],
-                            overlapping_links,
-                        ]
-                    )
-                    edge_index.append(
-                        [
-                            fid_idx[flow_node_idx],
-                            fid_idx[other_flow_idx],
-                            overlapping_links,
-                        ]
-                    )
-                    n_gnn_connection += 1
-                other_flow_idx -= 1
-        edge_index = np.array(edge_index).T
-
-        # Sort edge_index by destination node (second row)
-        sorted_indices = np.argsort(edge_index[1, :])
-        edge_index = edge_index[:, sorted_indices]
-
-        return np.array([edge_index])
-
-    def infer(self, flows_info_active, src_dst_to_links):
-        data, edge_index, lengths_per_path, n_paths_per_batch, fid_period = (
-            self.preprocess(flows_info_active, src_dst_to_links)
-        )
-        lengths = np.array([len(data)])
-        edge_index_len = np.array([edge_index.shape[1]])
+    def infer(self, h_vec):
         with torch.no_grad():
+            h_vec_res = self.output_layer(h_vec)
+        return h_vec_res
 
-            if self.model_name == "lstm":
-                output = self.model(
-                    data.unsqueeze(0),
-                    lengths,
-                    edge_index,
-                    edge_index_len,
-                    lengths_per_path,
-                    n_paths_per_batch,
-                )
-            elif self.model_name == "transformer":
-                output, _ = self.model(data.unsqueeze(0), lengths)
-            else:
-                raise ValueError(f"Unsupported model name: {self.model_name}")
+    def update_rate(self, h_vec, edges_a_to_b_active, active_links=[0]):
+        with torch.no_grad():
+            # Expand one-hot encodings for type_a and type_b
+            one_hot_a_expanded = self.one_hot_type_a.expand(h_vec.size(0), -1)
+            one_hot_b_expanded = self.one_hot_type_b.expand(self.z_t_link.size(0), -1)
 
-        return self.postprocess(output), fid_period
-
-
-class OnlineTrafficGenerator:
-    def __init__(self, nhosts, flow_size_threshold, sizes, fats):
-        self.nhosts = nhosts
-        self.flow_size_threshold = flow_size_threshold
-        self.active_graphs = {}
-        self.link_to_graph = {}
-
-        self.flow_to_size = sizes
-        self.flow_to_fat = fats
-        self.graph_id_new = 0
-
-    def _create_subgraph(self, cur_time):
-        subgraph_id = self.graph_id_new
-        self.graph_id_new += 1
-        self.active_graphs[subgraph_id] = {
-            "active_links": defaultdict(set),
-            "flows_small": set(),
-            "flows_all": set(),
-            "flows_completed": set(),
-            "start_time": cur_time,
-        }
-        return subgraph_id
-
-    def _assign_flow_to_subgraph(self, flow_id, links, cur_time):
-        involved_graph_ids = set()
-        for link in links:
-            if link in self.link_to_graph:
-                involved_graph_ids.add(self.link_to_graph[link])
-
-        if involved_graph_ids:
-            # Merge the involved subgraphs into one
-            subgraph_id = min(involved_graph_ids)
-            main_graph = self.active_graphs[subgraph_id]
-
-            for gid in involved_graph_ids:
-                if gid == subgraph_id:
-                    continue
-                # Merge other graphs into the main graph
-                other_graph = self.active_graphs.pop(gid)
-                main_graph["active_links"].update(other_graph["active_links"])
-                main_graph["flows_small"].update(other_graph["flows_small"])
-                main_graph["flows_all"].update(other_graph["flows_all"])
-                main_graph["flows_completed"].update(other_graph["flows_completed"])
-            for link in main_graph["active_links"]:
-                self.link_to_graph[link] = subgraph_id
-            if main_graph["flows_small"]:
-                flow_id_small_min = min(main_graph["flows_small"])
-                main_graph["start_time"] = self.flow_to_fat[flow_id_small_min]
-            else:
-                main_graph["start_time"] = 0
-        else:
-            # No overlap, create a new subgraph
-            subgraph_id = self._create_subgraph(
-                cur_time
-                if self.flow_to_size[flow_id] <= self.flow_size_threshold
-                else 0
+            # Append one-hot encodings to h_vec (type_a) and z_t_link (type_b)
+            x_combined = torch.cat(
+                [
+                    torch.cat([one_hot_a_expanded, h_vec], dim=-1),
+                    torch.cat([one_hot_b_expanded, self.z_t_link], dim=-1),
+                ],
+                dim=0,
             )
 
-        # Update the subgraph with the new flow
-        for link in links:
-            self.active_graphs[subgraph_id]["active_links"][link].add(flow_id)
-            self.link_to_graph[link] = subgraph_id
-        self.active_graphs[subgraph_id]["flows_all"].add(flow_id)
-        if self.flow_to_size[flow_id] <= self.flow_size_threshold:
-            self.active_graphs[subgraph_id]["flows_small"].add(flow_id)
-        return subgraph_id
+            # Number of type_a nodes
+            num_type_a = h_vec.size(0)
 
-    def get_flows_ml(self, subgraph_id, flow_completion_times):
-        subgraph = self.active_graphs[subgraph_id]
-        flows = subgraph["flows_small"].copy()
-        len_flows = len(flows)
-        for flow_id in subgraph["flows_all"] - subgraph["flows_small"]:
-            if (
-                flow_id not in subgraph["flows_completed"]
-                or flow_completion_times[flow_id] > subgraph["start_time"]
-            ):
-                flows.add(flow_id)
-        return np.array(sorted(flows)), len_flows
+            # Adjust the indices for bidirectional edges
+            edge_index_combined = torch.cat(
+                [
+                    torch.stack(
+                        [edges_a_to_b_active[0], edges_a_to_b_active[1] + num_type_a],
+                        dim=0,
+                    ),
+                    torch.stack(
+                        [
+                            edges_a_to_b_active[1] + h_vec.size(0),
+                            edges_a_to_b_active[0],
+                        ],
+                        dim=0,
+                    ),
+                ],
+                dim=1,
+            )
+            for gcn in self.gcn_layers:
+                x_combined = gcn(x_combined, edge_index_combined)
+            h_vec_res = self.lstmcell_rate(x_combined[:num_type_a], h_vec)
 
-    def process_event(
-        self, cur_time, event, flow_id, links, subgraph_id_completed=None
-    ):
-        if event == "start":
-            self._assign_flow_to_subgraph(flow_id, links, cur_time)
-        elif event == "end":
-            graph_id = subgraph_id_completed
-            if graph_id is not None:
-                graph = self.active_graphs[graph_id]
+        return h_vec_res
 
-                for link in links:
-                    if flow_id in graph["active_links"][link]:
-                        graph["active_links"][link].remove(flow_id)
-                        if not graph["active_links"][link]:
-                            del graph["active_links"][link]
-                            del self.link_to_graph[link]
-
-                graph["flows_completed"].add(flow_id)
-
-                if graph["flows_all"] == graph["flows_completed"]:
-                    del self.active_graphs[graph_id]
-                elif graph["flows_small"] <= graph["flows_completed"]:
-                    graph["flows_small"] = set()
-                    graph["start_time"] = 0
-
-    def get_subgraphs(self):
-        return self.active_graphs
-
-    def has_flows(self):
-        return bool(self.active_graphs)
+    def update_time(self, h_vec, time_deltas):
+        with torch.no_grad():
+            h_vec_res = self.lstmcell_time(
+                time_deltas,
+                h_vec,
+            )
+        return h_vec_res
 
 
-def run_flow_simulation(flows_info, nhosts=5, lr=10):
-    size, fat, fsd = map(np.array, zip(*flows_info))
+def run_flow_simulation(size, fat, fsd, nhosts=21, lr=10):
     nflows = len(size)
-
     fats_pt = make_array(c_double, fat)
     sizes_pt = make_array(c_double, size)
     src_pt = make_array(c_int, fsd[:, 0])
     dst_pt = make_array(c_int, fsd[:, 1])
     topo_pt = make_array(c_int, np.array([1, 1]))
 
+    # Run the flow simulation
     res = C_LIB.get_fct_mmf(
         nflows, fats_pt, sizes_pt, src_pt, dst_pt, nhosts, topo_pt, 1, 8, 2, lr
     )
@@ -364,23 +240,75 @@ def run_flow_simulation(flows_info, nhosts=5, lr=10):
     return estimated_fcts
 
 
+def get_flowsim_sldn(sizes, fct, lr):
+    n_links_passed = np.ones_like(fct) * 2
+    base_delay = get_base_delay_link(sizes, n_links_passed, lr)
+    i_fcts_flowsim = get_base_delay_transmission(sizes, lr) + base_delay
+    fcts_flowsim = fct + base_delay
+    sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
+    return sldn_flowsim
+
+
 def load_data(dir_input, spec, topo_type="_topo-pl-5_s0", lr=10, max_inflight_flows=0):
     topo_type += f"_i{max_inflight_flows}"
     dir_input_tmp = f"{dir_input}/{spec}"
 
     fid = np.load(f"{dir_input_tmp}/fid{topo_type}.npy")
-    assert np.all(fid[:-1] <= fid[1:]) and len(fid) % 10000 == 0
-
     size = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
     fat = np.load(f"{dir_input_tmp}/fat.npy")[fid]
     fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
-    fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
-    i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
-    n_links_passed = abs(fsd[:, 1] - fsd[:, 0]) + 2
-    base_delay = get_base_delay_path(size, n_links_passed, lr)
-    i_fcts_flowsim = get_base_delay_transmission(size, lr) + base_delay
+    assert np.all(fid[:-1] <= fid[1:]) and len(fid) % 10000 == 0
 
-    return size, fat, fsd, fcts, i_fcts, i_fcts_flowsim, base_delay
+    fct = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
+    i_fct = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
+
+    fat = fat - fat[0]
+    assert len(size) == len(fct)
+    return size, fat, fsd, fct, i_fct
+
+
+def interactive_inference_flowsim(
+    size,
+    fat,
+    fsd,
+    fct,
+    i_fct,
+    nhosts=21,
+    lr=10,
+):
+    time_start = time.time()
+    fcts_flowsim = run_flow_simulation(
+        size,
+        fat,
+        fsd,
+        nhosts,
+        lr,
+    )
+    sldn_flowsim = get_flowsim_sldn(size, fcts_flowsim, lr)
+    flow_metric = {}
+    for flowid in range(len(size)):
+        flow_metric[flowid] = [fcts_flowsim[flowid], sldn_flowsim[flowid]]
+    time_elapsed = time.time() - time_start
+    print(f"Time elapsed: {time_elapsed}")
+
+    data_dict = {}
+    for flow_id in flow_metric:
+        predicted_completion_time = flow_metric[flow_id][0]
+        actual_completion_time = fct[flow_id]
+        predicted_sldn = flow_metric[flow_id][1]
+        assert predicted_sldn != np.inf
+        actual_sldn = fct[flow_id] / i_fct[flow_id]
+        data_dict[flow_id] = [
+            predicted_completion_time,
+            actual_completion_time,
+            predicted_sldn,
+            actual_sldn,
+        ]
+
+    sorted_flow_ids = sorted(data_dict.keys())
+    res = np.array([data_dict[flow_id] for flow_id in sorted_flow_ids])
+
+    return sldn_flowsim, res[:, :2], res[:, 2:]
 
 
 def interactive_inference_path(
@@ -388,145 +316,151 @@ def interactive_inference_path(
     size,
     fat,
     fsd,
-    fcts,
-    i_fcts,
-    i_fcts_flowsim,
-    base_delay,
+    fct,
+    i_fct,
+    sldn_flowsim_total,
     nhosts=5,
-    flow_size_threshold=100000,
     lr=10,
-    max_inflight_flows=5,
+    n_flows_active_max=2000,
     src_dst_to_links=None,
 ):
-    if max_inflight_flows == 0:
-        max_inflight_flows = 1000000
-
     # n_flows_total = len(size)
-    n_flows_total = 100000
+    size = size[:n_flows_total]
+    fat = fat[:n_flows_total]
+    fsd = fsd[:n_flows_total]
+    fct = fct[:n_flows_total]
+    i_fct = i_fct[:n_flows_total]
 
-    flow_completion_times = {}
-    flow_fct_sldn = {}
+    sldn_flowsim_total = sldn_flowsim_total[:n_flows_total]
 
-    traffic_generator = OnlineTrafficGenerator(
-        nhosts, flow_size_threshold, sizes=size, fats=fat
+    flowid_active = {}
+
+    i_fct_tensor = torch.tensor(i_fct, dtype=torch.float32, device=inference.device)
+    fat_tensor = torch.tensor(fat, dtype=torch.float32, device=inference.device)
+    h_vec_dim = inference.hidden_size
+    h_vec = torch.zeros(
+        (n_flows_active_max, h_vec_dim),
+        dtype=torch.float32,
+        device=inference.device,
     )
-    current_time = 0
+    size_log = torch.tensor(
+        np.log2(size / 1000.0 + 1), dtype=torch.float32, device=inference.device
+    )
+    edges_a_to_b = torch.tensor(
+        [[i, 0] for i in range(n_flows_active_max)],
+        dtype=torch.long,
+        device=inference.device,
+    ).T
+    time_deltas = torch.zeros(
+        (n_flows_active_max, 1),
+        dtype=torch.float32,
+        device=inference.device,
+    )
+    sldn_flowsim_total = torch.tensor(
+        sldn_flowsim_total, dtype=torch.float32, device=inference.device
+    )
 
-    inflight_flows = 0
+    flow_metric = {}
+    time_last = 0  # Initialize the current time
+
     flow_id_in_prop = 0
-    while len(flow_completion_times) != n_flows_total:
+    flow_id_start = 0
+    time_clock = time.time()
+
+    while len(flow_metric) < n_flows_total:
         flow_arrival_time = float("inf")
         flow_completion_time = float("inf")
         completed_flow_id = None
 
         if flow_id_in_prop < n_flows_total:
-            if inflight_flows < max_inflight_flows:
-                flow_arrival_time = max(fat[flow_id_in_prop], current_time)
+            flow_arrival_time = fat[flow_id_in_prop]
 
-        # Process flow completions across all subgraphs
-        if traffic_generator.has_flows():
-            subgraphs = traffic_generator.get_subgraphs()
+        if flowid_active:
+            # [50, 51, 53]
+            flowid_active_list = np.array(list(flowid_active.keys()))
+            # [0, 1, 3]
+            flowidx_active_list = flowid_active_list - flow_id_start
 
-            for subgraph_id, subgraph in subgraphs.items():
-                period_start_time = subgraph["start_time"]
-                flows_all = sorted(list(subgraph["flows_all"]))
-                flows_info = [
-                    [size[flow_id], fat[flow_id], fsd[flow_id]] for flow_id in flows_all
-                ]
-                fcts_flowsim = run_flow_simulation(flows_info, nhosts, lr)
-                fcts_flowsim_dict = {
-                    flow_id: fcts_flowsim[idx] for idx, flow_id in enumerate(flows_all)
-                }
+            # start_time = time.time()
+            if inference.enable_flowsim_diff:
+                sldn_flowsim = sldn_flowsim_total[flowid_active_list]
+            # print(f"h_vec: {h_vec[flowidx_active_list]}")
+            predictions = inference.infer(h_vec[flowidx_active_list])
+            # print(f"predictions: {predictions}")
+            sldn_est = predictions[:, 0]
+            if inference.enable_flowsim_diff:
+                sldn_est = sldn_est + sldn_flowsim
+            else:
+                sldn_est = sldn_est + 1.0
 
-                flows, len_flows = traffic_generator.get_flows_ml(
-                    subgraph_id, flow_completion_times
-                )
-                if len_flows > 0:
-                    # if False:
-                    # if has_small_flows:
-                    flows_info_active = []
-                    for flow_id in flows:
-                        flows_info_active.append(
-                            [
-                                size[flow_id],
-                                fat[flow_id],
-                                (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
-                                / i_fcts_flowsim[flow_id],
-                                fsd[flow_id],
-                                fat[flow_id] < period_start_time,
-                            ]
-                        )
+            fct_stamp_est = (
+                fat_tensor[flowid_active_list]
+                + sldn_est * i_fct_tensor[flowid_active_list]
+            )
 
-                    predictions, flow_id_info_active_idx = inference.infer(
-                        flows_info_active, src_dst_to_links
-                    )
-                    flow_id_info_active = flows[flow_id_info_active_idx]
-                    sldn_est = predictions[0, :, 0]
-                else:
-                    flow_id_info_active = []
-                    sldn_est = []
-                    for flow_id in flows:
-                        flow_id_info_active.append(flow_id)
-                        sldn_est.append(
-                            (fcts_flowsim_dict[flow_id] + base_delay[flow_id])
-                            / i_fcts_flowsim[flow_id]
-                        )
+            min_idx = torch.argmin(fct_stamp_est, dim=0)
 
-                for idx, sldn_tmp in enumerate(sldn_est):
-                    flow_id = flow_id_info_active[idx]
-                    estimated_completion_time = (
-                        fat[flow_id] + sldn_tmp * i_fcts[flow_id]
-                    )
+            completed_flow_id = flowid_active_list[min_idx]
 
-                    if (
-                        flow_id not in flow_completion_times
-                        and estimated_completion_time < flow_completion_time
-                    ):
-                        flow_completion_time = estimated_completion_time
-                        completed_flow_id = flow_id
-                        sldn_min = sldn_tmp
-                        subgraph_id_completed = subgraph_id
+            fat_min = fat[completed_flow_id]
+            flow_completion_time = fct_stamp_est[min_idx].item()
+            sldn_min = sldn_est[min_idx].item()
 
-        # Determine the next event (either flow arrival or flow completion)
         if flow_arrival_time < flow_completion_time:
             # Next event is flow arrival
             links = src_dst_to_links[fsd[flow_id_in_prop][0], fsd[flow_id_in_prop][1]]
-            traffic_generator.process_event(
-                flow_arrival_time,
-                "start",
-                flow_id_in_prop,
-                links,
-            )
-            inflight_flows += 1
-            flow_id_in_prop += 1
-        elif completed_flow_id is not None:
-            # Next event is flow completion
-            flow_completion_times[completed_flow_id] = (
-                flow_completion_time - fat[completed_flow_id]
-            )
-            flow_fct_sldn[completed_flow_id] = sldn_min
+            h_vec[flow_id_in_prop - flow_id_start, 0] = size_log[flow_id_in_prop]
+            flowid_active[flow_id_in_prop] = None
+            time_delta = flow_arrival_time - time_last
+        else:
+            flow_metric[completed_flow_id] = [
+                flow_completion_time - fat_min,
+                sldn_min,
+            ]
 
             links = src_dst_to_links[
                 fsd[completed_flow_id][0], fsd[completed_flow_id][1]
             ]
-            traffic_generator.process_event(
-                flow_completion_time,
-                "end",
-                completed_flow_id,
-                links,
-                subgraph_id_completed,
+
+            del flowid_active[completed_flow_id]
+            time_delta = flow_completion_time - time_last
+
+        if not flowid_active:
+            h_vec.zero_()
+            flow_id_start = flow_id_in_prop
+        else:
+            flowidx_active_list = np.array(list(flowid_active.keys())) - flow_id_start
+
+            if time_delta >= inference.rtt:
+                time_deltas[: len(flowid_active)] = time_delta / 1000.0
+                h_vec[flowidx_active_list] = inference.update_time(
+                    h_vec[flowidx_active_list],
+                    time_deltas[: len(flowid_active)],
+                )
+            edges_a_to_b_active = edges_a_to_b[:, : len(flowidx_active_list)]
+            h_vec[flowidx_active_list] = inference.update_rate(
+                h_vec[flowidx_active_list], edges_a_to_b_active
             )
-            print(f"Flow {completed_flow_id} completed at {flow_completion_time}")
-            inflight_flows -= 1
 
+        if flow_arrival_time < flow_completion_time:
+            flow_id_in_prop += 1
+            time_last = flow_arrival_time
+        else:
+            time_last = flow_completion_time
+
+        # print(
+        #     f"Current time: {time_last}, Total flows: {len(flowid_total)}"
+        # )
+
+    time_elapsed = time.time() - time_clock
+    print(f"Time elapsed: {time_elapsed}")
     data_dict = {}
-    for flow_id in flow_completion_times:
-        predicted_completion_time = flow_completion_times[flow_id]
-        actual_completion_time = fcts[flow_id]
-        predicted_sldn = flow_fct_sldn[flow_id]
-
+    for flow_id in flow_metric:
+        predicted_completion_time = flow_metric[flow_id][0]
+        actual_completion_time = fct[flow_id]
+        predicted_sldn = flow_metric[flow_id][1]
         assert predicted_sldn != np.inf
-        actual_sldn = fcts[flow_id] / i_fcts[flow_id]
+        actual_sldn = fct[flow_id] / i_fct[flow_id]
         data_dict[flow_id] = [
             predicted_completion_time,
             actual_completion_time,
@@ -551,9 +485,7 @@ def load_routing_table(nhosts):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Interactive Inference Script for Path Scenario"
-    )
+    parser = argparse.ArgumentParser(description="Interactive Inference Script")
     parser.add_argument(
         "--config",
         type=str,
@@ -573,7 +505,13 @@ def main():
         type=str,
         required=False,
         help="Path to save the output predictions",
-        default="/data2/lichenni/output_perflow",
+        default="/data2/lichenni/output_perflow_1024",
+    )
+    parser.add_argument(
+        "--flowsim",
+        action="store_true",
+        help="If set, the simulation will run and output predictions",
+        default=False,
     )
 
     args = parser.parse_args()
@@ -585,65 +523,103 @@ def main():
         data_config = config_info["dataset"]
 
     lr = data_config["lr"]
-    flow_size_threshold = data_config["flow_size_threshold"]
 
-    args.checkpoint = f"{args.output}/bpath_{flow_size_threshold}_gnnlstm_shard1000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last.ckpt"
-    inference = Inference(
-        model_config, training_config, checkpoint_path=args.checkpoint, lr=lr
-    )
+    if not args.flowsim:
+        model_instance = "path"
+        args.checkpoint = f"{args.output}/{model_instance}_shard2000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last.ckpt"
+        inference = Inference(
+            data_config,
+            model_config,
+            training_config,
+            checkpoint_path=args.checkpoint,
+            lr=lr,
+        )
     empirical_str = "_empirical"
     # empirical_str = ""
     args.input += empirical_str
 
-    print(f"Start inference with flow_size_threshold={flow_size_threshold}")
+    if args.flowsim:
+        print("Running flow simulation")
+        model_instance = "flowsim"
+    else:
+        print("Running m4's inference")
 
     for max_inflight_flows in [0]:
-        fct, sldn = [], []
+        fct_list, sldn_list = [], []
         for shard in np.arange(0, 1):
             for nflows in [10000]:
                 for nhosts in [5]:
                     spec = f"shard{shard}_nflows{nflows}_nhosts{nhosts}_lr{lr}Gbps"
                     src_dst_to_links = load_routing_table(nhosts)
 
-                    size, fat, fsd, fcts, i_fcts, i_fcts_flowsim, base_delay = (
-                        load_data(
-                            args.input,
-                            spec=spec,
-                            lr=lr,
-                            max_inflight_flows=max_inflight_flows,
-                        )
-                    )
-
-                    fct_tmp, sldn_tmp = interactive_inference_path(
-                        inference,
-                        size,
-                        fat,
-                        fsd,
-                        fcts,
-                        i_fcts,
-                        i_fcts_flowsim,
-                        base_delay,
-                        nhosts=nhosts,
-                        flow_size_threshold=flow_size_threshold,
+                    size, fat, fsd, fct, i_fct = load_data(
+                        args.input,
+                        spec=spec,
                         lr=lr,
                         max_inflight_flows=max_inflight_flows,
-                        src_dst_to_links=src_dst_to_links,
                     )
-                    print(
-                        f"Finished workload={shard}. fct shape: {fct_tmp.shape}, sldn shape: {sldn_tmp.shape}"
-                    )
-                    fct.append(fct_tmp)
-                    sldn.append(sldn_tmp)
-        fct = np.array(fct)
-        sldn = np.array(sldn)
-        print(
-            f"Finished inference with {max_inflight_flows} inflight flows. fct shape: {fct.shape}, sldn shape: {sldn.shape}"
-        )
-        np.savez(
-            f"./res/inference_path_{max_inflight_flows}_t{flow_size_threshold}{empirical_str}.npz",
-            fct=fct,
-            sldn=sldn,
-        )
+
+                    # Perform interactive inference
+                    try:
+                        sldn_flowsim, res_fct, res_sldn = interactive_inference_flowsim(
+                            size,
+                            fat,
+                            fsd,
+                            fct,
+                            i_fct,
+                            nhosts=nhosts,
+                            lr=lr,
+                        )
+                        if not args.flowsim:
+                            res_fct, res_sldn = interactive_inference_path(
+                                inference,
+                                size,
+                                fat,
+                                fsd,
+                                fct,
+                                i_fct,
+                                sldn_flowsim,
+                                nhosts=nhosts,
+                                lr=lr,
+                                src_dst_to_links=src_dst_to_links,
+                            )
+                        print(
+                            f"Finished workload={shard}. fct shape: {res_fct.shape}, sldn shape: {res_sldn.shape}"
+                        )
+                        fct_list.append(res_fct)
+                        sldn_list.append(res_sldn)
+
+                        # Process and display the results
+                        print("First 10 FCT Results:")
+                        for i in range(min(n_flows_total, 10)):
+                            predicted_fct = res_fct[i, 0]
+                            actual_fct = res_fct[i, 1]
+                            print(
+                                f"Flow ID {i}: Predicted FCT = {predicted_fct}, Actual FCT = {actual_fct}"
+                            )
+
+                        print("\nFirst 10 SLDN Results:")
+                        for i in range(min(n_flows_total, 10)):
+                            predicted_sldn = res_sldn[i, 0]
+                            actual_sldn = res_sldn[i, 1]
+                            print(
+                                f"Flow ID {i}: Predicted SLDN = {predicted_sldn}, Actual SLDN = {actual_sldn}"
+                            )
+
+                    except Exception as e:
+                        print(f"Error: {e}")
+                        traceback.print_exc()  # This prints the full traceback of the exception
+                        continue
+            fct_arr = np.array(fct_list)
+            sldn_arr = np.array(sldn_list)
+            print(
+                f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
+            )
+            np.savez(
+                f"./res/path_{model_instance}{empirical_str}.npz",
+                fct=fct_arr,
+                sldn=sldn_arr,
+            )
 
 
 if __name__ == "__main__":

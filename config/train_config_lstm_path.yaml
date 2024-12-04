@@ -12,34 +12,40 @@ dataset:
   topo_type: "_topo-pl-x_"
   output_type: "fctSldn" # fctSldn, queueLen
   enable_segmentation: True
-  segments_per_seq: 100
+  segments_per_seq: 2
   sampling_method: "balanced" # weighted, uniform, balanced
   enable_path: True
-  flow_size_threshold: 1000000
+  enable_abstime: False
+  flow_size_threshold: 100000000
+  enable_flowsim_gt: False
+  enable_flowsim_diff: False
+  enable_remainsize: False
+  # current_period_len_idx: 0
 
 # Model parameters
 model:
   model_name: "lstm"
-  input_size: 5
+  input_size: 2
   n_layer: 2
-  gcn_n_layer: 4
+  gcn_n_layer: 2
   loss_fn_type: "l1"
   hidden_size: 256
   gcn_hidden_size: 64
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
-  enable_gnn: False
+  enable_gnn: True
   enable_lstm: True
-  enable_lstm_on_path: True
+  enable_lstm_in_gnn: False
+  enable_link_state: False
 
 # Training parameters
 training:
-  gpu: [0,0,1,1]
-  # gpu: [0,1,2,3]
-  n_epochs: 1000
-  batch_size: 32
+  # gpu: [0,0,1,1]
+  gpu: [3]
+  n_epochs: 10000
+  batch_size: 16
   learning_rate: 0.0001
-  num_workers: 16
+  num_workers: 32
   enable_val: True
   enable_dist: True
