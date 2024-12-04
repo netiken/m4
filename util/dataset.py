@@ -16,85 +16,6 @@ from .consts import (
 from collections import defaultdict
 
 
-class GroupedBatchSampler(BatchSampler):
-    def __init__(self, sampler, batch_size, group_value_index=4, drop_last=True):
-        """
-        Custom sampler that groups elements by bin ranges using precomputed bin indices.
-
-        :param sampler: Base sampler (e.g., RandomSampler, SequentialSampler, or DistributedSampler).
-        :param batch_size: Number of items in each batch.
-        :param group_value_index: Index of the element to group by.
-        :param drop_last: Whether to drop the last incomplete batch.
-        """
-        self.sampler = sampler
-        self.batch_size = batch_size
-        self.group_value_index = group_value_index
-        self.drop_last = drop_last
-        self.bins = balance_len_bins  # Ensure this variable is defined in scope
-
-        # Access the dataset from the sampler
-        if hasattr(sampler, "dataset"):
-            self.dataset = sampler.dataset
-        elif hasattr(sampler, "data_source"):
-            self.dataset = sampler.data_source
-        else:
-            raise AttributeError(
-                "Sampler does not have 'dataset' or 'data_source' attribute."
-            )
-
-        # Precompute bin indices for all items in the dataset
-        self.values = [item[self.group_value_index] for item in self.dataset.data_list]
-        self.bin_indices = np.digitize(self.values, self.bins) - 1
-
-    def __iter__(self):
-        # Get indices from the sampler for the current epoch
-        indices = list(self.sampler)
-
-        # Group indices by bin index
-        grouped_indices = defaultdict(list)
-        for idx in indices:
-            bin_index = self.bin_indices[idx]
-            grouped_indices[bin_index].append(idx)
-
-        # Create batches from each group
-        batches = []
-        for group_indices in grouped_indices.values():
-            # Shuffle group indices to ensure randomness within the group
-            np.random.shuffle(group_indices)
-            for i in range(0, len(group_indices), self.batch_size):
-                batch = group_indices[i : i + self.batch_size]
-                if len(batch) == self.batch_size or not self.drop_last:
-                    batches.append(batch)
-
-        # Shuffle the list of batches to mix batches from different groups
-        np.random.shuffle(batches)
-
-        for batch in batches:
-            yield batch
-
-    def __len__(self):
-        # Recompute grouped indices similarly to __iter__
-        indices = list(self.sampler)
-
-        # Group indices by bin index
-        grouped_indices = defaultdict(list)
-        for idx in indices:
-            bin_index = self.bin_indices[idx]
-            grouped_indices[bin_index].append(idx)
-
-        # Calculate the number of batches
-        if self.drop_last:
-            total_batches = sum(
-                len(group) // self.batch_size for group in grouped_indices.values()
-            )
-        else:
-            total_batches = sum(
-                (len(group) + self.batch_size - 1) // self.batch_size
-                for group in grouped_indices.values()
-            )
-        return total_batches
-
-
 def collate_fn(batch):
     (
         inputs,
@@ -861,15 +782,8 @@ class DataModulePerFlow(LightningDataModule):
         :return: A PyTorch DataLoader object.
         :rtype: torch.utils.data.DataLoader
         """
-        # base_sampler = RandomSampler(self.train)
-        # batch_sampler = GroupedBatchSampler(
-        #     sampler=base_sampler,
-        #     batch_size=self.batch_size,
-        #     group_value_index=4,
-        # )
         return DataLoader(
             self.train,
-            # batch_sampler=batch_sampler,
             batch_size=self.batch_size,
             shuffle=True,
             num_workers=self.num_workers,
@@ -883,15 +797,8 @@ class DataModulePerFlow(LightningDataModule):
 
         :return: A PyTorch DataLoader object.
         """
-        # base_sampler = RandomSampler(self.val)
-        # batch_sampler = GroupedBatchSampler(
-        #     sampler=base_sampler,
-        #     batch_size=self.batch_size,
-        #     group_value_index=4,
-        # )
         return DataLoader(
             self.val,
-            # batch_sampler=batch_sampler,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,
@@ -906,15 +813,8 @@ class DataModulePerFlow(LightningDataModule):
         :return: DataLoader object with test dataset
         :rtype: torch.utils.data.DataLoader
         """
-        # base_sampler = RandomSampler(self.test)
-        # batch_sampler = GroupedBatchSampler(
-        #     sampler=base_sampler,
-        #     batch_size=self.batch_size,
-        #     group_value_index=4,
-        # )
         return DataLoader(
             self.test,
-            # batch_sampler=batch_sampler,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
             pin_memory=True,

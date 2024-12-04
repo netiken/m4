@@ -37,7 +37,7 @@ python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=
 
 python main_train.py --train_config=./config/train_config_lstm_topo_empirical.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --note topo_512_flowsim_input_empirical_remainsize
 
-python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train_new --dir_output=/data2/lichenni/output_perflow --note topo_remainsize_feat
+python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note topo_remainsize_feat
 
 python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_train --note=topo_256_flowsim
 
@@ -88,9 +88,9 @@ python traffic_gen_synthetic_dist.py --output /data1/lichenni/projects/per-flow-
 
 ## step-1: 
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec
-dhall-to-json --file cluster_1_to_1_m4.dhall > cluster_1_to_1_m4.json
-dhall-to-json --file cluster_2_to_1_m4.dhall > cluster_2_to_1_m4.json
-dhall-to-json --file cluster_4_to_1_m4.dhall > cluster_4_to_1_m4.json
+dhall-to-json --file cluster_1_to_1_eval_train.dhall > cluster_1_to_1_eval_train.json
+dhall-to-json --file cluster_2_to_1_eval_train.dhall > cluster_2_to_1_eval_train.json
+dhall-to-json --file cluster_4_to_1_eval_train.dhall > cluster_4_to_1_eval_train.json
 
 dhall-to-json --file cluster_1_to_1_eval.dhall > cluster_1_to_1_eval.json
 dhall-to-json --file cluster_2_to_1_eval.dhall > cluster_2_to_1_eval.json
@@ -102,7 +102,7 @@ dhall-to-json --file cluster_4_to_1_eval_large.dhall > cluster_4_to_1_eval_large
 
 ## step-2: 
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/src/bin
-cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec/cluster_4_to_1_m4.json
+cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec/cluster_4_to_1_eval_train.json
 
 cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec/cluster_1_to_1_eval.json
 
@@ -146,10 +146,8 @@ cargo run --release -- --root=./data_eval --mixes spec/dctcp_eval.mix.json ns3
 cargo run --release -- --root=./data_eval_large --mixes spec/dctcp_eval_large.mix.json ns3
 cargo run --release -- --root=./data_test_config --mixes spec/test_config.mix.json ns3
 cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
-cargo run --release -- --root=./eval_train_new --mixes spec/eval_train_new.mix.json ns3
+cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
-cargo run --release -- --root=./eval_test_new --mixes spec/eval_test_new.mix.json ns3
-cargo run --release -- --root=./eval_test_new_large --mixes spec/eval_test_new_large.mix.json ns3
 cargo run --release -- --root=./data_test_config --mixes spec/0.mix.json ns3
 
 # run exps fig 7
