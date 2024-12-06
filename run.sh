@@ -37,7 +37,7 @@ python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=
 
 python main_train.py --train_config=./config/train_config_lstm_topo_empirical.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --note topo_512_flowsim_input_empirical_remainsize
 
-python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note topo_remainsize_feat
+python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note final_gnn4
 
 python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_train --note=topo_256_flowsim
 

@@ -5,7 +5,7 @@ dataset:
   n_flows_list: [2000]
   n_hosts_list: [32]
   shard: 0
-  shard_list: [0,2000,2000] # [start, end, num]
+  shard_list: [0,4000,20] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
@@ -18,7 +18,7 @@ dataset:
   flow_size_threshold: 100000000
   enable_flowsim_gt: False
   enable_flowsim_diff: True
-  enable_remainsize: False
+  enable_remainsize: True
   # current_period_len_idx: 0
 
 # Model parameters
@@ -40,7 +40,7 @@ model:
 
 # Training parameters
 training:
-  gpu: [0]
+  gpu: [1]
   n_epochs: 4
   batch_size: 2
   learning_rate: 0.0001
