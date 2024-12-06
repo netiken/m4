@@ -532,10 +532,8 @@ def main():
         # ("_eval", 100, 30000),
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
-        # ("eval_test", 100, 30000),
-        # ("eval_test_new", 10, 30000),
-        ("eval_test_new_large_8k", 100, 80000),
-        ("eval_test_new_large", 100, 60000),
+        # ("eval_test_8k", 100, 80000),
+        ("eval_test", 100, 60000),
     ]
     model_list = [
         # ("topo_512_flowsim_input", 24, 2000),

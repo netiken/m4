@@ -8,8 +8,6 @@ import struct
 import os
 from sortedcontainers import SortedSet
 
-from .model_llama import Transformer, ModelArgs
-
 import torch.nn.functional as F
 
 from torch_geometric.nn import HeteroConv, MessagePassing, SAGEConv
@@ -50,8 +48,6 @@ class HomoGNNLayer(nn.Module):
         self.homogeneous_layer = HomoNetGNN(c_in=c_in, c_out=c_out, dropout=dropout)
 
     def forward(self, x, edge_index):
-        # Combine type_a and type_b node features into a single homogeneous feature matrix
-        # Apply the homogeneous GNN layer
         out_combined = self.homogeneous_layer(x, edge_index)
 
         return out_combined
@@ -148,7 +144,6 @@ class FlowSimLstm(LightningModule):
             self.n_links = 96
         else:
             self.n_links = 1
-        # GCN layers
         if enable_lstm and enable_gnn:
             logging.info(
                 f"GNN and LSTM enabled, enable_lstm_in_gnn={enable_lstm_in_gnn}, enable_link_state={enable_link_state}, enable_flowsim_diff={enable_flowsim_diff}, enable_remainsize={enable_remainsize}"
@@ -299,9 +294,6 @@ class FlowSimLstm(LightningModule):
                         loss_size[active_flow_idx, 0] += torch.abs(
                             remain_size_est - remain_size_gt
                         )
-                        # loss_size[active_flow_idx, 0] += torch.abs(
-                        #     1 - remain_size_est / remain_size_gt
-                        # )
                         loss_size_num[active_flow_idx, 0] += 1
 
                     edge_mask = active_flow_mask[edges_a_to_b[0]]

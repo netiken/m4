@@ -219,8 +219,8 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
     flowid_to_linkid = [flowid_to_linkid[i] for i in flowid_to_linkid]
 
     param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
-    param_data[6:] = param_data[6:] / 10.0
-    param_data[:2] = param_data[:2] / 10.0
+    # param_data[6:] = param_data[6:] / 10.0
+    # param_data[:2] = param_data[:2] / 10.0
     param_data_repeat = np.repeat(param_data[:, np.newaxis], len(fid), axis=1).T
     return (
         size,
@@ -533,8 +533,8 @@ def main():
     model_list = [
         # ("topo_featrate", 7, 4000),
         # ("final", 7, 4000),
-        # ("final_param", 6, 4000),
-        ("final_large", 5, 4000),
+        ("final_param", 6, 4000),
+        # ("final_large", 5, 4000),
         # ("topo_remainsize_large_data", 7, 4000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
         # ("topo_512_flowsim_input_empirical", 94, 100),
