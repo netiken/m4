@@ -1347,7 +1347,6 @@ class TopoFctSldnSegment(Dataset):
             "_".join([str(x) for x in src_dst_pair_target]) + f"_seg{segment_id}"
         )
 
-        # load data
         dir_input_tmp = f"{self.dir_input}/{spec}"
 
         busy_periods = np.load(
