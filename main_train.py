@@ -203,6 +203,7 @@ if __name__ == "__main__":
                     else "perflow"
                 ),
             )
+        trainer.fit(model, datamodule=datamodule, ckpt_path=args.ckpt_path)
     else:
         DEVICE = torch.device(training_config["gpu"][0])
         dir_train = f"{dir_output}/{program_name}/version_{args.version_id}"
