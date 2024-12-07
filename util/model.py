@@ -55,51 +55,51 @@ class HomoGNNLayer(nn.Module):
 
 
 # original
-# class HomoNetGNN(nn.Module):
-#     def __init__(self, c_in, c_out, dropout=0.2):
-#         super(HomoNetGNN, self).__init__()
-#         self.conv = SAGEConv(
-#             c_in, c_out, aggr="sum", project=True
-#         )  # project=True is default
-#         # self.dropout = nn.Dropout(dropout)
-#         self.norm = torch.nn.LayerNorm(c_out)
-#         # self.final_lin = nn.Linear(c_out, c_out)
-#         # self.final_lin = nn.Sequential(
-#         #     nn.Linear(c_out, c_out),  # First layer
-#         #     nn.ReLU(),  # Non-linearity
-#         #     # nn.Dropout(p=dropout),
-#         #     nn.Linear(c_out, c_out),  # Second layer
-#         # )
-
-#     def forward(self, x, edge_index):
-#         # Apply the SAGEConv layer (includes residual connection)
-#         out = self.conv(x, edge_index)
-#         out = self.norm(out)  # Apply normalization
-
-#         # Apply linear transformation, activation, and dropout
-#         # out = F.relu(self.final_lin(out))
-#         # out = self.dropout(out)
-
-#         return out
-
-
 class HomoNetGNN(nn.Module):
     def __init__(self, c_in, c_out, dropout=0.2):
         super(HomoNetGNN, self).__init__()
-        self.conv = SAGEConv(c_in + 1, c_out, aggr="mean", project=True)
+        self.conv = SAGEConv(
+            c_in, c_out, aggr="sum", project=True
+        )  # project=True is default
+        # self.dropout = nn.Dropout(dropout)
         self.norm = torch.nn.LayerNorm(c_out)
+        # self.final_lin = nn.Linear(c_out, c_out)
+        # self.final_lin = nn.Sequential(
+        #     nn.Linear(c_out, c_out),  # First layer
+        #     nn.ReLU(),  # Non-linearity
+        #     # nn.Dropout(p=dropout),
+        #     nn.Linear(c_out, c_out),  # Second layer
+        # )
 
     def forward(self, x, edge_index):
-        row, col = edge_index
-        deg = degree(row, num_nodes=x.size(0), dtype=x.dtype)
-        deg = deg.view(-1, 1)  # Reshape to (num_nodes, 1)
-        x = torch.cat([x, deg], dim=1)  # Concatenate degree to the feature matrix
-
         # Apply the SAGEConv layer (includes residual connection)
         out = self.conv(x, edge_index)
         out = self.norm(out)  # Apply normalization
 
+        # Apply linear transformation, activation, and dropout
+        # out = F.relu(self.final_lin(out))
+        # out = self.dropout(out)
+
         return out
+
+
+# class HomoNetGNN(nn.Module):
+#     def __init__(self, c_in, c_out, dropout=0.2):
+#         super(HomoNetGNN, self).__init__()
+#         self.conv = SAGEConv(c_in + 1, c_out, aggr="mean", project=True)
+#         self.norm = torch.nn.LayerNorm(c_out)
+
+#     def forward(self, x, edge_index):
+#         row, col = edge_index
+#         deg = degree(row, num_nodes=x.size(0), dtype=x.dtype)
+#         deg = deg.view(-1, 1)  # Reshape to (num_nodes, 1)
+#         x = torch.cat([x, deg], dim=1)  # Concatenate degree to the feature matrix
+
+#         # Apply the SAGEConv layer (includes residual connection)
+#         out = self.conv(x, edge_index)
+#         out = self.norm(out)  # Apply normalization
+
+#         return out
 
 
 class SeqCell(nn.Module):
