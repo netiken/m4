@@ -39,7 +39,10 @@ class Inference:
         ) = self.load_model(checkpoint_path)
 
         self.gcn_layers = [
-            torch.jit.script(gcn.to(self.device)) for gcn in gcn_layers_tmp
+            torch.jit.script(gcn.to(self.device))
+            for gcn in gcn_layers_tmp
+            # gcn.to(self.device)
+            # for gcn in gcn_layers_tmp
         ]
         self.lstmcell_rate = torch.jit.script(self.lstmcell_rate.to(self.device))
         self.lstmcell_time = torch.jit.script(self.lstmcell_time.to(self.device))
@@ -533,19 +536,41 @@ def main():
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
         # ("eval_test_8k", 100, 80000),
-        ("eval_test", 100, 60000),
+        ("eval_test", 5, 60000),
     ]
     model_list = [
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
         # ("topo_512_flowsim_input_empirical", 94, 100),
         # ("topo_512_flowsim_input_dropout", 39, 2000),
-        # ("topo_reprod", 44, 2000),
-        # ("topo_reprod", 49, 2000),
-        # ("topo_reprod", 54, 2000),
-        # ("topo_reprod", 59, 2000),
+        # ("final_gnn4", 27, 4000),
+        # ("final_gnn4", 25, 4000),
+        # ("final_gnn4", 23, 4000),
+        # ("final_gnn4", 21, 4000),
+        # ("final_gnn4", 19, 4000),
+        # ("final_gnn4", 17, 4000),
+        ("final_gnn4", 15, 4000),
+        ("final_gnn4", 13, 4000),
+        ("final_gnn4", 11, 4000),
+        ("final_gnn4", 9, 4000),
+        ("final_gnn4", 7, 4000),
+        ("final_gnn4", 5, 4000),
+        # ("final_gnnmean", 31, 4000),
+        # ("final_gnnmean", 29, 4000),
+        # ("final_gnnmean", 27, 4000),
+        # ("final_gnnmean", 25, 4000),
+        # ("final_gnnmean", 23, 4000),
+        # ("final_gnnmean", 21, 4000),
+        # ("final_gnnmean", 19, 4000),
+        # ("final_gnnmean", 17, 4000),
+        # ("final_gnnmean", 15, 4000),
+        # ("final_gnnmean", 13, 4000),
+        # ("final_gnnmean", 11, 4000),
+        # ("final_gnnmean", 9, 4000),
+        # ("final_gnnmean", 7, 4000),
+        # ("final_gnnmean", 5, 4000),
         # new
-        ("final_param", 6, 4000),
+        # ("final_param", 6, 4000),
         # ("final_large", 5, 4000),
         # best
         # ("topo_remainsize_small", 12, 2000),
