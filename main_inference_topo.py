@@ -553,8 +553,8 @@ def main():
         # new
         # ("final_param", 6, 4000),
         # ("final_large", 5, 4000),
-        ("final_gnn4", 7, 4000),
-        # ("final_gnn4", 6, 4000),
+        # ("final_gnn4", 7, 4000),
+        ("final_gnn4", 6, 4000),
         # best
         # ("topo_remainsize_small", 12, 2000),
         # ("topo_remainsize_large", 15, 2000),
