@@ -54,7 +54,6 @@ class HomoGNNLayer(nn.Module):
         return out_combined
 
 
-# original
 class HomoNetGNN(nn.Module):
     def __init__(self, c_in, c_out, dropout=0.2):
         super(HomoNetGNN, self).__init__()
