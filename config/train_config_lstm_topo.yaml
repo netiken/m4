@@ -26,7 +26,7 @@ model:
   model_name: "lstm"
   input_size: 2
   n_layer: 2
-  gcn_n_layer: 2
+  gcn_n_layer: 4
   loss_fn_type: "l1"
   hidden_size: 300
   gcn_hidden_size: 300
@@ -40,8 +40,8 @@ model:
 
 # Training parameters
 training:
-  gpu: [1]
-  n_epochs: 10000
+  gpu: [2]
+  n_epochs: 11
   batch_size: 2
   learning_rate: 0.0001
   num_workers: 2
