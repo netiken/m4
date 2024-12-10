@@ -5,73 +5,67 @@ from collections import defaultdict
 
 def process_events_and_compute_neighbors(all_events, max_hops=3):
     """
-    Optimized processing of flow events to compute neighbor counts up to max_hops.
+    Process flow arrival and completion events, calculating neighbor counts up to max_hops
+    for all affected flows at each event, and returning a list of snapshots with these counts.
 
     Parameters:
     - all_events (list): List of tuples (event_time, flow_change, links, flow_id).
-      Each tuple represents an event:
+      Each tuple is:
         event_time: The timestamp of the event
         flow_change: +1 for arrival, -1 for completion
         links: A set or iterable of link IDs involved in this event
-        flow_id: The ID of the flow arriving or completing
-
+        flow_id: The ID of the arriving or completing flow
     - max_hops (int): Maximum number of hops to calculate neighbors.
 
     Returns:
-    - neighbor_counts_by_flow (dict): Dictionary where keys are flow IDs and values are lists of neighbor counts per hop.
-      For each flow:
-        - hop_counts: A list of integers, each representing the number of neighbors at that hop level.
-        - If a flow has no neighbors at any hop, it defaults to [0].
+    - res_snapshots (list): A list of dictionaries, one for each event processed.
+      Each dictionary maps:
+         flow_id -> hop_counts (list of integers)
+      If a flow has no neighbors at any hop, hop_counts defaults to [0].
     """
     link_to_flows = defaultdict(set)  # Map each link to active flows
     flow_neighbors = defaultdict(set)  # Map each flow to its neighbors
-    neighbor_counts_by_flow = defaultdict(
-        list
-    )  # Store neighbor counts per hop for each flow
+    res_snapshots = []  # Store a snapshot of neighbor counts for each event
 
     for event_time, flow_change, links, flow_id in all_events:
         affected_flows = set()
 
         if flow_change == 1:  # Flow arrival
-            # For each link involved, add the new flow, then update neighbors for all flows on that link
+            # For each link, add the new flow and update neighbors just for flows on that link
             for link in links:
-                # Add the arriving flow to this link's active flows
                 link_to_flows[link].add(flow_id)
                 flows_on_link = link_to_flows[link].copy()
 
-                # Update neighbors for flows on this link: each flow on this link becomes neighbors with all others on the same link
+                # Update neighbors for flows on this link
                 for f in flows_on_link:
                     flow_neighbors[f].update(flows_on_link)
-                    flow_neighbors[f].discard(f)  # Remove self to avoid loops
-
-                # All flows on this link are affected by the arrival of the new flow
+                    flow_neighbors[f].discard(f)  # Remove self
                 affected_flows.update(flows_on_link)
 
         elif flow_change == -1:  # Flow completion
-            # Remove the completed flow from each link
+            # Remove the completed flow from its links
             for link in links:
                 link_to_flows[link].discard(flow_id)
 
-            # If the completed flow was known in flow_neighbors, remove it and update affected flows
+            # If we know about this flow, remove it and adjust neighbors
             if flow_id in flow_neighbors:
                 old_neighbors = flow_neighbors[flow_id]
                 flow_neighbors.pop(flow_id, None)
-                # Remove the completed flow from all its neighbors
                 for neighbor in old_neighbors:
                     if flow_id in flow_neighbors[neighbor]:
                         flow_neighbors[neighbor].discard(flow_id)
                         affected_flows.add(neighbor)
-                # The completed flow itself is considered affected for this event
                 affected_flows.add(flow_id)
 
-        # Now calculate neighbor counts for all affected flows
+        # Compute neighbor counts for all affected flows at this event
+        event_counts = {}
         for flow in affected_flows:
             neighbors = flow_neighbors.get(flow, set())
             visited = {flow}
             current_hop = neighbors.copy()
             hop_counts = []
 
-            # Perform a BFS-like multi-hop neighbor exploration
+            # BFS-like multi-hop neighbor exploration
             for _ in range(max_hops):
                 if not current_hop:
                     break
@@ -85,34 +79,49 @@ def process_events_and_compute_neighbors(all_events, max_hops=3):
                 visited.update(current_hop)
                 current_hop = next_hop
 
-            # If no neighbors at any hop, default to [0]
-            neighbor_counts_by_flow[flow] = hop_counts if hop_counts else [0]
+            # Default to [0] if no neighbors found
+            hop_counts = hop_counts if hop_counts else [0]
+            event_counts[flow] = hop_counts
 
-    return neighbor_counts_by_flow
+        # Record the snapshot for this event
+        res_snapshots.append(event_counts)
+
+    return res_snapshots
 
 
 def plot_cdf_for_hops(res_total, max_hops=3, dataset_labels=None):
+    """
+    Plot the per-hop neighbors for all datasets from the snapshots returned by process_events_and_compute_neighbors.
+
+    Parameters:
+    - res_total (list): A list of datasets, where each dataset is a list of "event_counts".
+      Each "event_counts" is a list of snapshot dictionaries.
+      Each snapshot dictionary: {flow_id: [hop_counts]}.
+    - max_hops (int): Number of hop levels to plot.
+    - dataset_labels (list): Labels for each dataset.
+    """
     if dataset_labels is None:
         dataset_labels = [f"Dataset {i+1}" for i in range(len(res_total))]
 
     for hop_idx in range(max_hops):
         plt.figure(figsize=(6, 4))
         for dataset_idx, scenario_data in enumerate(res_total):
-            # scenario_data is a list of dictionaries
-            # each dictionary: {flow_id: [hop_counts]}
+            # scenario_data: a list of event_counts
+            # event_counts: a list of snapshot dicts
+            # snapshot_dict: {flow_id: [hop_counts]}
+
             hop_values = []
-            for neighbor_counts_by_flow in scenario_data:
-                # neighbor_counts_by_flow is a dict {flow_id: [hop_counts]}
-                for hop_counts in neighbor_counts_by_flow.values():
-                    # hop_counts is a list of integers
-                    # Check if hop_idx < len(hop_counts)
-                    if hop_idx < len(hop_counts):
-                        hop_values.append(hop_counts[hop_idx])
-                    else:
-                        hop_values.append(0)
+            for event_counts in scenario_data:
+                # event_counts is a list of dictionaries
+                for snapshot_dict in event_counts:
+                    # snapshot_dict: {flow_id: hop_counts}
+                    for hop_counts_array in snapshot_dict.values():
+                        if hop_idx < len(hop_counts_array):
+                            hop_values.append(hop_counts_array[hop_idx])
+                        else:
+                            hop_values.append(0)
 
             if len(hop_values) == 0:
-                # No data for this hop, skip plotting
                 continue
 
             sorted_values = np.sort(hop_values)
@@ -171,7 +180,7 @@ for spec_idx, (spec, src_dst_pair_target, topo_type) in enumerate(data_list):
 res_total.append(res_n_flows_active)
 
 # Scenario Labels
-scenario_labels = [f"Scenario {i+1}" for i in range(len(res_total))]
+dataset_labels = ["Train", "Test", "m4-train"]
 
 # Plot Results
-plot_per_hop_neighbors(res_total, max_hops=3, scenario_labels=scenario_labels)
+plot_cdf_for_hops(res_total, max_hops=3, dataset_labels=dataset_labels)
