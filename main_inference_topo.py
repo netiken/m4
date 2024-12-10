@@ -558,7 +558,6 @@ def main():
         # ("final_gnn_layer3", 6, 4000),
         # ("final_gnn_layer3", 5, 4000),
         ("final_gnn_layer4", 4, 4000),
-        # ("final_gnn_layer3", 5, 4000),
         # best
         # ("topo_remainsize_small", 12, 2000),
         # ("topo_remainsize_large", 15, 2000),

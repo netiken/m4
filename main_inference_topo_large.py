@@ -533,7 +533,9 @@ def main():
     model_list = [
         # ("topo_featrate", 7, 4000),
         # ("final", 7, 4000),
-        ("final_param", 6, 4000),
+        # ("final_param", 6, 4000),
+        # ("final_gnn_layer3", 6, 4000),
+        ("final_gnn_layer4", 4, 4000),
         # ("final_large", 5, 4000),
         # ("topo_remainsize_large_data", 7, 4000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
