@@ -6,7 +6,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Optimization flags for maximum performance
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fPIC -march=native -mtune=native -ffast-math -funroll-loops -fopenmp -fno-exceptions -fno-plt -floop-parallelize-all -DNDEBUG")
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fPIC -march=native -mtune=native -ffast-math -funroll-loops -fopenmp -fno-exceptions -fno-plt -floop-parallelize-all -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O0 -g")
+
 
 # Use CONDA_PREFIX to dynamically locate the LibTorch path
 if(DEFINED ENV{CONDA_PREFIX})
@@ -29,8 +31,31 @@ include_directories(${TORCH_INCLUDE_DIRS})
 #add_library(inference_shared SHARED src/inference.cpp)
 #add_library(flowsim SHARED main.cpp)
 
+set(SOURCES
+    main.cpp
+    Device.h
+    Device.cpp
+    Chunk.h
+    Chunk.cpp
+    Event.h
+    Event.cpp
+    EventList.h
+    EventList.cpp
+    EventQueue.h 
+    EventQueue.cpp 
+    Link.h 
+    Link.cpp 
+    TopologyBuilder.h 
+    TopologyBuilder.cpp 
+    Topology.h 
+    Topology.cpp 
+    Type.h
+)
+
+set(CMAKE_BUILD_TYPE Debug)
+
 # Add executable target (only main.cpp)
-add_executable(flowsim main.cpp)
+add_executable(flowsim ${SOURCES})
 
 # Link the Torch library and inference_shared to inference_executable
 target_link_libraries(flowsim "${TORCH_LIBRARIES}")
