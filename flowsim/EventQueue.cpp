@@ -1,10 +1,14 @@
 #include "EventQueue.h"
 #include <cassert>
-#include <iostream> 
+#include <iostream>
+#include <limits>
 
 EventQueue::EventQueue() noexcept : current_time(0), next_event_id(0) {
   // Create empty event queue
-  event_queue = std::list<EventList>();
+  //event_queue = std::list<EventList>();
+  //event_queue = std::vector<EventEntry>();
+    next_arrival = nullptr;
+    next_completion = nullptr;
 }
 
 EventTime EventQueue::get_current_time() const noexcept {
@@ -14,7 +18,11 @@ EventTime EventQueue::get_current_time() const noexcept {
 bool EventQueue::finished() const noexcept {
   // Check whether event queue is empty
   // std::cerr << "Checking if event queue is empty" << std::endl;
-  return event_queue.empty();
+  //return event_queue.empty();
+    if (next_arrival == nullptr && next_completion == nullptr) {
+        return true;
+    }
+    return false;
 }
 
 void EventQueue::proceed() noexcept {
@@ -22,31 +30,102 @@ void EventQueue::proceed() noexcept {
   assert(!finished());
 
   // Proceed to the next event time
-  auto& current_event_list = event_queue.front();
+  //auto& current_event_list = event_queue.front();
+    EventTime arrival_time = std::numeric_limits<uint64_t>::max();
+    EventTime completion_time = std::numeric_limits<uint64_t>::max();
+
+    if (next_arrival != nullptr) {
+        arrival_time = next_arrival->get_time();
+    }
+
+    if (next_completion != nullptr) {
+        completion_time = next_completion->get_time();
+    }
+
+    if (arrival_time < completion_time) {
+        assert(next_arrival != nullptr);
+        Event arrival = *next_arrival;
+        delete next_arrival;
+        next_arrival = nullptr;
+        current_time = arrival_time;
+        arrival.invoke_event();
+    } else {
+        assert(next_completion != nullptr);
+        Event completion = *next_completion;
+        delete next_completion;
+        next_completion = nullptr;
+        current_time = completion_time;
+        completion.invoke_event();
+    }
+
+  /*
+  auto& current_event = event_queue.front();
+
+  assert(current_event.get_time() > current_time);
+  current_time = current_event.get_time()
+
+  current_event.invoke_event();
+  */
 
   // Check the validity and update current time
-  assert(current_event_list.get_event_time() > current_time);
-  current_time = current_event_list.get_event_time();
+  //assert(current_event_list.get_event_time() > current_time);
+  //current_time = current_event_list.get_event_time();
 
   // Invoke events
-  while (!current_event_list.empty()) {
-    current_event_list.invoke_event();
-  }
+  //while (!current_event_list.empty()) {
+  //  current_event_list.invoke_event();
+  //}
   //current_event_list.invoke_events();
 
   // Drop processed event list
-  event_queue.pop_front();
+  //event_queue.pop_front();
 }
 
+/*
 void EventQueue::log_events() {
     std::cout << "Event lists: " << event_queue.size();
     int eventCount = 0;
     for (auto it = event_queue.begin(); it != event_queue.end(); it++) {
-        eventCount += it->num_events();
+        eventCount += 1; //it->num_events();
     }
     std::cout << " " << eventCount << "\n";
 }
+*/
 
+void EventQueue::log_events() {
+    std::cout << "Event logs\n";
+}
+
+void EventQueue::schedule_arrival(
+    const EventTime arrival_time,
+    const Callback callback,
+    const CallbackArg callback_arg) noexcept {
+
+    assert(arrival_time >= current_time);
+
+    delete next_arrival;
+
+    next_arrival = new Event(arrival_time, callback, callback_arg);
+}
+
+void EventQueue::schedule_completion(
+    const EventTime completion_time,
+    const Callback callback,
+    const CallbackArg callback_arg) noexcept {
+
+    assert(completion_time >= current_time);
+
+    delete next_completion;
+    next_completion = new Event(completion_time, callback, callback_arg);
+
+}
+
+void EventQueue::cancel_completion() {
+    //delete next_completion;
+    //next_completion = nullptr;
+}
+
+/*
 EventId EventQueue::schedule_event(
     const EventTime event_time,
     const Callback callback,
@@ -54,6 +133,8 @@ EventId EventQueue::schedule_event(
   // Time should be at least larger than current time
   // std::cerr << "Scheduling event time: " << event_time << ", Current time: " << current_time << std::endl;
   assert(event_time >= current_time);
+
+  Event new_event = new Event(
 
   // Find the entry to insert the event
   auto event_list_it = event_queue.begin();
@@ -88,6 +169,9 @@ EventId EventQueue::schedule_event(
   // std::cerr << "Event scheduled at time " << event_time << " with ID " << event_id << std::endl;
   return event_id;
 }
+*/
+
+/*
 
 void EventQueue::cancel_event(EventId event_id) noexcept {
   // std::cerr << "Cancelling event with ID " << event_id << std::endl;
@@ -98,3 +182,5 @@ void EventQueue::cancel_event(EventId event_id) noexcept {
     event_map.erase(it);
   }
 }
+
+*/

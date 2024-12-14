@@ -159,6 +159,7 @@ void Topology::reschedule_active_chunks() {
     //std::cerr << "Debug: Rescheduling num active chunks: " << active_chunks.size() << std::endl;
     //Chunk* next_chunk = nullptr;
     std::vector<Chunk*> next_chunks;
+    double rate;
     for (Chunk* chunk : active_chunks) {
         //if(chunk->get_completion_event_id() == 0){
             double remaining_size = chunk->get_remaining_size();
@@ -174,6 +175,7 @@ void Topology::reschedule_active_chunks() {
                 next_chunks.clear();
                 min = current_time + new_completion_time;
                 next_chunks.push_back(chunk);
+                rate = rate;
             } else if (min == current_time + new_completion_time) {
                 next_chunks.push_back(chunk);
             }
@@ -182,9 +184,10 @@ void Topology::reschedule_active_chunks() {
     //std::cout << "min " << min << "\n";
     for (Chunk* chunk : next_chunks) {
         auto* chunk_ptr = static_cast<void*>(chunk);
-        //std::cout << "dumping completion time " << min << " " << current_time << " " << completion_time << " " << new_rate_k << " " << remaining_size_k << "\n";
-        int new_event_id = event_queue->schedule_event(min, chunk_completion_callback, chunk_ptr);
-        chunk->set_completion_event_id(new_event_id);
+        //std::cout << "completion time " << min << " " << chunk->get_size() << " " << rate << "\n";
+        event_queue->schedule_completion(min, chunk_completion_callback, chunk_ptr);
+        break;
+        //chunk->set_completion_event_id(new_event_id);
     }
 }
 
@@ -241,6 +244,16 @@ void Topology::chunk_completion_callback(void* arg) noexcept {
 
 void Topology::cancel_all_events() noexcept {
     const auto current_time = event_queue->get_current_time();
+    event_queue->cancel_completion();
+
+    for (Chunk *chunk: active_chunks) {
+        double elapsed_time = current_time - chunk->get_transmission_start_time();
+        double transmitted_size = elapsed_time * chunk->get_rate();
+        chunk->update_remaining_size(transmitted_size);
+    }
+
+    /*
+    const auto current_time = event_queue->get_current_time();
     // std::cerr << "Debug: Cancelling num of events: " << active_chunks.size() << std::endl;
     for (Chunk* chunk : active_chunks) {
         //if (chunk->get_completion_event_id() != 0) {
@@ -254,4 +267,5 @@ void Topology::cancel_all_events() noexcept {
             //}
         //}
     }
+    */
 }
