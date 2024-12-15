@@ -16,7 +16,7 @@ Topology::Topology(int devices_count, int npus_count) noexcept : npus_count(-1),
     this->devices_count = devices_count;
     this->npus_count = npus_count;
     for (int i = 0; i < devices_count; ++i) {
-        devices.push_back(std::make_shared<Device>(i));
+        devices.push_back(std::make_shared<Node>(i));
     }
 }
 int Topology::get_devices_count() const noexcept {
@@ -94,7 +94,7 @@ void Topology::connect(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency
 //    }
 //}
 
-std::shared_ptr<Device> Topology::get_device(int index) {
+std::shared_ptr<Node> Topology::get_device(int index) {
     return this->devices.at(index);
 }
 

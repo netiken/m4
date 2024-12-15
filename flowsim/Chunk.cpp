@@ -12,11 +12,11 @@ Chunk::Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg c
 
       }
 
-std::shared_ptr<Device> Chunk::current_device() const noexcept {
+std::shared_ptr<Node> Chunk::current_device() const noexcept {
     return route.front();
 }
 
-std::shared_ptr<Device> Chunk::next_device() const noexcept {
+std::shared_ptr<Node> Chunk::next_device() const noexcept {
     auto it = route.begin();
     std::advance(it, 1); // Move iterator to the second element
     return *it;
@@ -94,6 +94,6 @@ void Chunk::set_topology(Topology* topology) noexcept {
     this->topology = topology;
 }
 
-std::shared_ptr<Device> Chunk::get_dest_device() const noexcept {
+std::shared_ptr<Node> Chunk::get_dest_device() const noexcept {
     return route.back();
 }

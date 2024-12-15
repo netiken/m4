@@ -6,14 +6,14 @@
  * Device class represents a single device in the network.
  * Device is usually an NPU or a switch.
  */
-class Device {
+class Node {
  public:
   /**
    * Constructor.
    *
    * @param id id of the device
    */
-  explicit Device(DeviceId id) noexcept;
+  explicit Node(DeviceId id) noexcept;
 
   /**
    * Get id of the device.
