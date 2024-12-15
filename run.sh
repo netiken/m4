@@ -33,6 +33,8 @@ CUDA_VISIBLE_DEVICES=0,1 python main_train.py --train_config=./config/train_conf
 CUDA_VISIBLE_DEVICES=0,1 python main_train.py --train_config=./config/train_config_lstm_path.yaml --mode=train --dir_input=/data2/lichenni/perflow_path --dir_output=/data2/lichenni/output_perflow --note path_1000000_gat
 
 # topo
+python main_train.py --train_config=./config/train_config_lstm_topo_debug.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train_test --dir_output=/data2/lichenni/output_perflow --note debug
+
 python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --note topo_gnn
 
 python main_train.py --train_config=./config/train_config_lstm_topo_empirical.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --note topo_512_flowsim_input_empirical_remainsize
@@ -146,9 +148,10 @@ cargo run --release -- --root=./data_eval --mixes spec/dctcp_eval.mix.json ns3
 cargo run --release -- --root=./data_eval_large --mixes spec/dctcp_eval_large.mix.json ns3
 cargo run --release -- --root=./data_test_config --mixes spec/test_config.mix.json ns3
 cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
-cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
+cargo run --release -- --root=./eval_train_test --mixes spec/eval_train_test.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
 cargo run --release -- --root=./data_test_config --mixes spec/0.mix.json ns3
+cargo run --release -- --root=./test --mixes spec/0.mix.json ns3
 
 # run exps fig 7
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_7

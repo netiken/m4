@@ -5,7 +5,7 @@ dataset:
   n_flows_list: [2000]
   n_hosts_list: [32]
   shard: 0
-  shard_list: [0,4000,20] # [start, end, num]
+  shard_list: [0,40,40] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
@@ -36,7 +36,7 @@ model:
   enable_gnn: True
   enable_lstm: True
   enable_lstm_in_gnn: False
-  enable_link_state: False
+  enable_link_state: True
 
 # Training parameters
 training:

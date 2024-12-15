@@ -22,6 +22,8 @@ def collate_fn(batch):
         outputs,
         specs,
         remainsize_matrix,
+        queuelen_matrix,
+        queuelen_link_matrix,
         flow_active_matrix,
         time_delta_matrix,
         edge_index_matrix,
@@ -33,7 +35,8 @@ def collate_fn(batch):
     batch_size = len(n_flows)
     inputs = np.concatenate(inputs)
     outputs = np.concatenate(outputs)
-    flow_active_matrix = np.concatenate(flow_active_matrix)
+    n_flows_accu = np.cumsum(n_flows)
+    n_links_accu = np.cumsum(n_links_list)
 
     num_events = np.array([x.shape[0] for x in time_delta_matrix])
     max_len = max(num_events)
@@ -44,9 +47,35 @@ def collate_fn(batch):
     for i, time_delta_list in enumerate(time_delta_matrix):
         padded_time_delta_matrix[i, : time_delta_list.shape[0], 0] = time_delta_list
 
+    if queuelen_matrix[0] is not None:
+        padded_queuelen_matrix = []
+        padded_queuelen_link_matrix = []
+        for i in range(max_len):
+            tmp = []
+            tmp_link = []
+            for j in range(batch_size):
+                for k in range(flow_active_matrix[j].shape[0]):
+                    if (
+                        flow_active_matrix[j][k, 0] == i
+                        and (queuelen_matrix[j][k]).any()
+                    ):
+                        tmp.append(queuelen_matrix[j][k])
+                        link_idx = queuelen_link_matrix[j][k]
+                        if j > 0:
+                            link_idx += n_links_accu[j - 1]
+                        tmp_link.append(link_idx)
+            if len(tmp) != 0:
+                tmp = torch.tensor(np.concatenate(tmp))
+                tmp_link = torch.tensor(np.concatenate(tmp_link))
+            padded_queuelen_matrix.append(tmp)
+            padded_queuelen_link_matrix.append(tmp_link)
+    else:
+        padded_queuelen_matrix = queuelen_matrix
+        padded_queuelen_link_matrix = queuelen_link_matrix
+
+    flow_active_matrix = np.concatenate(flow_active_matrix)
+
     batch_index = np.zeros(flow_active_matrix.shape[0], dtype=np.int32)
-    n_flows_accu = np.cumsum(n_flows)
-    n_links_accu = np.cumsum(n_links_list)
     for i in range(1, batch_size):
         batch_index[n_flows_accu[i - 1] : n_flows_accu[i]] = i
         edge_index_matrix[i][0] += n_flows_accu[i - 1]
@@ -72,6 +101,8 @@ def collate_fn(batch):
         torch.tensor(batch_index),
         specs,
         padded_remainsize_matrix,
+        padded_queuelen_matrix,
+        padded_queuelen_link_matrix,
         torch.tensor(flow_active_matrix),
         torch.tensor(padded_time_delta_matrix),
         torch.tensor(edge_index_matrix),
@@ -1370,11 +1401,11 @@ class TopoFctSldnSegment(Dataset):
             f"{dir_input_tmp}/flow_to_path.npy",
             allow_pickle=True,
         )
-        link_info = [link_info[i] for i in fid]
+        link_info = [[link_dict[link] for link in link_info[i]] for i in fid]
 
         fcts_flowsim_path = f"{dir_input_tmp}/flowsim_fct.npy"
         if os.path.exists(fcts_flowsim_path):
-            n_links_passed = np.array([len(link) for link in link_info])
+            n_links_passed = np.array([len(path) for path in link_info])
             base_delay = get_base_delay_path(
                 sizes=sizes,
                 n_links_passed=n_links_passed,
@@ -1421,6 +1452,12 @@ class TopoFctSldnSegment(Dataset):
         ]
 
         if self.enable_remainsize:
+            queuelen_list_total = np.load(
+                f"{dir_input_tmp}/qlen{topo_type}.npy",
+                allow_pickle=True,
+            ).item()
+            queuelen_list = [np.array(queuelen_list_total[i]) for i in fid]
+            queuelen_link_list = link_info
             busy_periods_remainsize = np.load(
                 f"{dir_input_tmp}/period_remainsize{topo_type}_t{self.flow_size_threshold}.npy",
                 allow_pickle=True,
@@ -1448,6 +1485,8 @@ class TopoFctSldnSegment(Dataset):
                     remainsize_list.append([])
         else:
             remainsize_list = None
+            queuelen_list = None
+            queuelen_link_list = None
 
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
@@ -1475,7 +1514,7 @@ class TopoFctSldnSegment(Dataset):
 
         # Compute the adjacency matrix for the bipartite graph
         if self.enable_gnn:
-            edge_index = self.compute_edge_index(link_info, link_dict)
+            edge_index = self.compute_edge_index(link_info)
         else:
             edge_index = None
 
@@ -1484,18 +1523,20 @@ class TopoFctSldnSegment(Dataset):
             output_data,  # (n_flows,1)
             spec + topo_type + "_" + src_dst_pair_target_str,
             remainsize_list,
+            queuelen_list,
+            queuelen_link_list,
             flow_active_list,  # (n_flows,2)
             time_delta_list,  # (n_events,1)
             edge_index,  # (2, n_edges)
             self.n_links,
         )
 
-    def compute_edge_index(self, link_info, link_dict):
+    def compute_edge_index(self, link_info):
         edge_index = []
         n_flows = len(link_info)
         for flow_node_idx in range(n_flows):
-            for link in link_info[flow_node_idx]:
-                edge_index.append([flow_node_idx, link_dict[link]])
+            for link_idx in link_info[flow_node_idx]:
+                edge_index.append([flow_node_idx, link_idx])
 
         edge_index = np.array(edge_index).T
         # Sort edge_index by destination node (second row)

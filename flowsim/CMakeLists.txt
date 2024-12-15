@@ -32,7 +32,7 @@ include_directories(${TORCH_INCLUDE_DIRS})
 #add_library(flowsim SHARED main.cpp)
 
 set(SOURCES
-    main.cpp
+    main_m4.cpp
     Device.h
     Device.cpp
     Chunk.h
