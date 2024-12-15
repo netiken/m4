@@ -1,0 +1,7 @@
+g++ -O0 -g main.cpp TopologyBuilder.cpp Topology.cpp Device.cpp Link.cpp Chunk.cpp Event.cpp EventQueue.cpp EventList.cpp -o main
+g++ -O3 main_m4.cpp TopologyBuilder.cpp Topology.cpp Device.cpp Link.cpp Chunk.cpp Event.cpp EventQueue.cpp EventList.cpp -o main_m4
+main_m4.cpp:8:10: fatal error: torch/torch.h: No such file or directory
+    8 | #include <torch/torch.h>
+      |          ^~~~~~~~~~~~~~~
+compilation terminated.
+make: *** [Makefile:7: main_m4] Error 1

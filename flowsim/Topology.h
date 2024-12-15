@@ -38,14 +38,14 @@ class Topology {
   [[nodiscard]] std::vector<int> get_npus_count_per_dim() const noexcept;
   [[nodiscard]] std::vector<Bandwidth> get_bandwidth_per_dim() const noexcept;
   void connect(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency latency, bool bidirectional = true) noexcept;
-  std::shared_ptr<Device> get_device(int index);
+  std::shared_ptr<Node> get_device(int index);
 
  protected:
   int devices_count;
   int npus_count;
   int dims_count;
   std::vector<int> npus_count_per_dim;
-  std::vector<std::shared_ptr<Device>> devices;
+  std::vector<std::shared_ptr<Node>> devices;
   std::vector<Bandwidth> bandwidth_per_dim;
 
   static std::shared_ptr<EventQueue> event_queue;

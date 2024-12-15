@@ -1,7 +1,0 @@
-all: main main_m4
-
-main: main.cpp
-	g++ -O0 -g main.cpp TopologyBuilder.cpp Topology.cpp Device.cpp Link.cpp Chunk.cpp Event.cpp EventQueue.cpp EventList.cpp -o main
-
-main_m4: main_m4.cpp
-	g++ -O3 main_m4.cpp TopologyBuilder.cpp Topology.cpp Device.cpp Link.cpp Chunk.cpp Event.cpp EventQueue.cpp EventList.cpp -o main_m4

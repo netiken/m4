@@ -29,7 +29,7 @@ model:
   model_name: "lstm"
   input_size: 2
   n_layer: 2
-  gcn_n_layer: 4
+  gcn_n_layer: 3
   loss_fn_type: "l1"
   hidden_size: 300
   gcn_hidden_size: 300
@@ -39,11 +39,11 @@ model:
   enable_gnn: True
   enable_lstm: True
   enable_lstm_in_gnn: False
-  enable_link_state: False
+  enable_link_state: True
 
 # Training parameters
 training:
-  gpu: [3]
+  gpu: [0]
   n_epochs: 5
   batch_size: 1
   learning_rate: 0.0001

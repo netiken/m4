@@ -31,11 +31,11 @@ using EventId = uint64_t;
 
 class Chunk;
 class Link;
-class Device;
+class Node;
 class Topology;
 
 
-using Route = std::list<std::shared_ptr<Device>>;
+using Route = std::list<std::shared_ptr<Node>>;
 
 /// Basic multi-dimensional topology building blocks
 enum class TopologyBuildingBlock { Undefined, Ring, FullyConnected, Switch };

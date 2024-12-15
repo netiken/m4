@@ -39,8 +39,6 @@ set(SOURCES
     Chunk.cpp
     Event.h
     Event.cpp
-    EventList.h
-    EventList.cpp
     EventQueue.h 
     EventQueue.cpp 
     Link.h 

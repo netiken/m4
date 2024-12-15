@@ -75,19 +75,9 @@ class EventQueue {
   /// next event ID to be assigned
   EventId next_event_id;
 
-  /// list of EventLists
-  //std::list<EventList> event_queue;
-
-  //std::vector<Event> event_queue;
-  //std::priority_queue<Event> event_queue;
-
+  // Storage for next events
   Event* next_arrival;
-
   Event* next_completion;
-
-
-  /// map of event IDs to their corresponding event list iterator
-  //std::unordered_map<EventId, std::list<EventList>::iterator> event_map;
 };
 
 #endif // _EVENTQUEUE_
