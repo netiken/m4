@@ -173,13 +173,13 @@ class Inference:
         return h_vec_res
 
 
-def get_flowsim_sldn(sizes, fct, lr):
-    n_links_passed = np.ones_like(fct) * 2
-    base_delay = get_base_delay_link(sizes, n_links_passed, lr)
-    i_fcts_flowsim = get_base_delay_transmission(sizes, lr) + base_delay
-    fcts_flowsim = fct + base_delay
-    sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
-    return sldn_flowsim
+# def get_flowsim_sldn(sizes, fct, lr):
+#     n_links_passed = np.ones_like(fct) * 2
+#     base_delay = get_base_delay_link(sizes, n_links_passed, lr)
+#     i_fcts_flowsim = get_base_delay_transmission(sizes, lr) + base_delay
+#     fcts_flowsim = fct + base_delay
+#     sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
+#     return sldn_flowsim
 
 
 def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
@@ -200,18 +200,18 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
         f"{dir_input_tmp}/flow_to_path.npy",
         allow_pickle=True,
     )
-    link_info = [link_info[i] for i in fid]
+    link_info = [[link_dict[link] for link in link_info[i]] for i in fid]
 
     flowid_to_linkid = defaultdict(list)
     edges_list = []
     for flow_idx in range(len(fid)):
-        for link_pair in link_info[flow_idx]:
-            edges_list.append([flow_idx, link_dict[link_pair]])
-            flowid_to_linkid[flow_idx].append(link_dict[link_pair])
+        for link_idx in link_info[flow_idx]:
+            edges_list.append([flow_idx, link_idx])
+            flowid_to_linkid[flow_idx].append(link_idx)
     edges_list = np.array(edges_list).T
     assert len(size) == len(fct)
 
-    n_links_passed = np.array([len(link) for link in link_info])
+    n_links_passed = np.array([len(path) for path in link_info])
     base_delay = get_base_delay_path(size, n_links_passed, lr)
     i_fcts_flowsim = get_base_delay_transmission(size, lr) + base_delay
     fcts_flowsim = np.load(f"{dir_input_tmp}/flowsim_fct.npy") + base_delay
@@ -334,12 +334,8 @@ def interactive_inference(
                     ),
                     dim=1,
                 )
-                # input_tensor = h_vec[flowid_active_list]
                 predictions = inference.infer(input_tensor)
                 sldn_est = predictions[:, 0]
-                # fct_est = predictions[:, 0]
-                # fct_est = (torch.exp2(fct_est) - 1) * 1000.0
-                # sldn_est += sldn_flowsim_tensor[flowid_active_list]
             else:
                 predictions = inference.infer(h_vec[flowid_active_list])
                 sldn_est = predictions[:, 0]
@@ -350,12 +346,10 @@ def interactive_inference(
                 fat_tensor[flowid_active_list]
                 + sldn_est * i_fct_tensor[flowid_active_list]
             )
-            # fct_stamp_est = fat_tensor[flowid_active_list] + fct_est
             min_idx = torch.argmin(fct_stamp_est)
             flow_completion_time = fct_stamp_est[min_idx]
             completed_flow_id = flowid_active_list[min_idx].item()
             sldn_min = sldn_est[min_idx]
-            # sldn_min = fct_est[min_idx] / i_fct_tensor[completed_flow_id]
 
         if flow_arrival_time < flow_completion_time:
             # New flow arrives
@@ -417,9 +411,10 @@ def interactive_inference(
             no_flow_links = linkid_list[link_to_nflows[linkid_list] == 0]
             link_to_graph_id[no_flow_links] = -1
 
-            # inference.z_t_link[no_flow_links] = 0.0
-            # inference.z_t_link[no_flow_links, 1] = 1.0
-            # inference.z_t_link[no_flow_links, 2] = 1.0
+            if inference.enable_link_state:
+                inference.z_t_link[no_flow_links] = 0.0
+                inference.z_t_link[no_flow_links, 1] = 1.0
+                inference.z_t_link[no_flow_links, 2] = 1.0
 
         flowid_active_mask_cur = torch.logical_and(
             flowid_active_mask, flow_to_graph_id == graph_id_cur
@@ -536,6 +531,14 @@ def main():
         ("eval_test", 100, 60000),
     ]
     model_list = [
+        ("m4_loss01_large", 14, 4000),
+        ("m4_loss01_large", 12, 4000),
+        ("m4_loss01_large", 10, 4000),
+        ("m4_loss01_large", 8, 4000),
+        ("m4_loss01_large", 6, 4000),
+        ("m4_loss01_large", 4, 4000),
+        ("m4_loss01_large", 2, 4000),
+        # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
         # ("topo_512_flowsim_input_empirical", 94, 100),
@@ -555,9 +558,6 @@ def main():
         # ("final_large", 5, 4000),
         # ("final_gnn4", 7, 4000),
         # ("final_gnn4", 6, 4000),
-        # ("final_gnn_layer3", 6, 4000),
-        # ("final_gnn_layer3", 5, 4000),
-        ("final_gnn_layer4", 4, 4000),
         # best
         # ("topo_remainsize_small", 12, 2000),
         # ("topo_remainsize_large", 15, 2000),
@@ -566,6 +566,9 @@ def main():
         # ("topo_remainsize", 13, 3000),
         # ("topo_remainsize_large_data", 7, 4000),
         # ("topo_featrate", 7, 4000),
+        # ("final_gnn_layer3", 6, 4000),
+        # ("final_gnn_layer3", 5, 4000),
+        ("final_gnn_layer4", 4, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
