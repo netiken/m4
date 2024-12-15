@@ -204,6 +204,12 @@ class FlowSimLstm(LightningModule):
                     nn.Dropout(p=dropout),
                     nn.Linear(hidden_size // 8, 1),  # Second layer
                 )
+                self.queue_len_layer = nn.Sequential(
+                    nn.Linear(hidden_size, hidden_size // 8),  # First layer
+                    nn.ReLU(),  # Non-linearity
+                    nn.Dropout(p=dropout),
+                    nn.Linear(hidden_size // 8, 1),  # Second layer
+                )
         elif enable_gnn:
             logging.info(f"GNN enabled")
             self.gcn_layers = nn.ModuleList(
@@ -253,11 +259,14 @@ class FlowSimLstm(LightningModule):
         x,
         batch_index,
         remainsize_matrix,
+        queuelen_matrix,
+        queuelen_link_matrix,
         flow_active_matrix,  # (n_flows,2)
         time_delta_matrix,  # (batch,n_events)
         edges_a_to_b,  # (2, n_edges)
     ):
         loss_size = None
+        loss_queue = None
         if self.enable_gnn and self.enable_lstm:
             batch_size, n_events, _ = time_delta_matrix.size()
             n_flows = x.shape[0]
@@ -277,6 +286,10 @@ class FlowSimLstm(LightningModule):
             if self.enable_remainsize:
                 loss_size = torch.zeros((n_flows, 1), device=x.device)
                 loss_size_num = torch.ones_like(loss_size)
+                loss_queue = torch.zeros(
+                    (batch_size * self.n_links, 1), device=x.device
+                )
+                loss_queue_num = torch.ones_like(loss_queue)
 
             flow_start = flow_active_matrix[:, 0].unsqueeze(1)  # (n_flows, 1)
             flow_end = flow_active_matrix[:, 1].unsqueeze(1)  # (n_flows, 1)
@@ -364,6 +377,19 @@ class FlowSimLstm(LightningModule):
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
+                        if self.enable_remainsize:
+                            queue_link_idx = queuelen_link_matrix[j]
+                            if len(queue_link_idx) > 0:
+                                queue_len_est = self.queue_len_layer(
+                                    batch_h_state_link[queue_link_idx, :]
+                                )[:, 0]
+
+                                queue_len_gt = queuelen_matrix[j]
+
+                                loss_queue[queue_link_idx, 0] += torch.abs(
+                                    queue_len_est - queue_len_gt
+                                )
+                                loss_queue_num[queue_link_idx, 0] += 1
 
             if self.enable_flowsim_diff:
                 input_tmp = torch.cat([x, batch_h_state], dim=1)
@@ -373,13 +399,14 @@ class FlowSimLstm(LightningModule):
                 res = self.output_layer(batch_h_state) + 1.0
             if self.enable_remainsize:
                 loss_size = torch.div(loss_size, loss_size_num)
+                loss_queue = torch.div(loss_queue, loss_queue_num)
 
         elif self.enable_lstm:
             res, _ = self.model_lstm(x, lengths)
             # res, _ = self.model_lstm(x[:, :, [0, 1]], lengths)
         else:
             assert False, "Either GNN or LSTM must be enabled"
-        return res, loss_size
+        return res, loss_size, loss_queue
 
     def step(self, batch, batch_idx, tag=None):
         (
@@ -388,15 +415,19 @@ class FlowSimLstm(LightningModule):
             batch_index,
             spec,
             remainsize_matrix,
+            queuelen_matrix,
+            queuelen_link_matrix,
             flow_active_matrix,
             time_delta_matrix,
             edges_a_to_b_matrix,
         ) = batch
 
-        estimated, loss_size = self(
+        estimated, loss_size, loss_queue = self(
             input,
             batch_index,
             remainsize_matrix,
+            queuelen_matrix,
+            queuelen_link_matrix,
             flow_active_matrix,
             time_delta_matrix,
             edges_a_to_b_matrix,
@@ -412,18 +443,18 @@ class FlowSimLstm(LightningModule):
         self._log_loss(loss, tag)
 
         if self.enable_remainsize:
-            # loss_size_mean = loss_size[loss_size > 0]
-            if loss_size.size(0) == 0:
-                loss_size_mean = 0
-            else:
-                loss_size_mean = 0
+            loss_size_mean = 0
+            loss_queue_mean = 0
+            if loss_size.size(0) != 0:
                 n_batch = batch_index.max() + 1
                 for i in range(n_batch):
                     idx = batch_index == i
                     loss_size_mean += loss_size[idx].nanmean()
                 loss_size_mean /= n_batch
+                loss_queue_mean = loss_queue.nanmean()
             self._log_loss(loss_size_mean, f"{tag}_size")
-            loss = loss + 0.1 * loss_size_mean
+            self._log_loss(loss_queue_mean, f"{tag}_queue")
+            loss = loss + loss_size_mean + loss_queue_mean
         self._save_test_results(tag, spec, estimated, output)
 
         return loss
