@@ -531,13 +531,7 @@ def main():
         ("eval_test", 100, 60000),
     ]
     model_list = [
-        ("m4_loss01_large", 14, 4000),
-        ("m4_loss01_large", 12, 4000),
-        ("m4_loss01_large", 10, 4000),
-        ("m4_loss01_large", 8, 4000),
-        ("m4_loss01_large", 6, 4000),
-        ("m4_loss01_large", 4, 4000),
-        ("m4_loss01_large", 2, 4000),
+        ("m4", 14, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
@@ -568,7 +562,7 @@ def main():
         # ("topo_featrate", 7, 4000),
         # ("final_gnn_layer3", 6, 4000),
         # ("final_gnn_layer3", 5, 4000),
-        ("final_gnn_layer4", 4, 4000),
+        # ("final_gnn_layer4", 4, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
