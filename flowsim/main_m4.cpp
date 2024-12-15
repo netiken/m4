@@ -21,6 +21,8 @@ uint64_t limit;
 
 std::vector<int32_t> flowid_to_linkid_flat;
 std::vector<int32_t> flowid_to_linkid_offsets;
+std::vector<int32_t> edges_flow_ids;
+std::vector<int32_t> edges_links_ids;
 
 
 // m4 model
@@ -163,8 +165,8 @@ void setup_m4_tensors(torch::Device device, int n_edges, int n_links) {
     flowid_to_nlinks_tensor = flowid_to_linkid_offsets_tensor.slice(0, 1, n_flows+1) - flowid_to_linkid_offsets_tensor.slice(0, 0, n_flows);
     
     // Convert edges_flow_ids and edges_link_ids to tensors
-    edges_flow_ids_tensor = torch::from_blob(edges_flow_ids, {n_edges}, options_int32).to(device);
-    edges_link_ids_tensor = torch::from_blob(edges_link_ids, {n_edges}, options_int32).to(device);
+    edges_flow_ids_tensor = torch::from_blob(edges_flow_ids.data(), {n_edges}, options_int32).to(device);
+    edges_link_ids_tensor = torch::from_blob(edges_link_ids.data(), {n_edges}, options_int32).to(device);
 
     // Construct edge_index tensor [2, 2 * n_edges] for bidirectional edges
     edge_index = torch::stack({edges_flow_ids_tensor, edges_link_ids_tensor}, 0); // [2, n_edges]
@@ -448,7 +450,8 @@ int main(int argc, char *argv[]) {
     cwd = std::filesystem::current_path() / flow_link_path;
     infile(cwd);
     int num_links;
-    int32_t offset;
+    int32_t offset = 0;
+    int32_t flow_id = 0;
     while (infile >> num_links) {
         std::vector<int> hops;
         flowid_to_linkid_offsets.push_back(offset);
@@ -456,10 +459,16 @@ int main(int argc, char *argv[]) {
             int32_t link;
             infile >> link;
             flow_id_to_linkid_flat.push_back(link);
-            offset++; 
+            offset++;
+
+            edges_flow_ids.push_back(flow_id);
+            edges_link_ids.push_back(link);
         }
+        flow_id++;
     }
     flowid_to_linkid_offsets.push_back(offset);
+
+
 
     /*
     int32_t current_ofset = 0;
