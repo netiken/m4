@@ -157,6 +157,8 @@ class FlowSimLstm(LightningModule):
         self.enable_flowsim_diff = enable_flowsim_diff
         self.enable_remainsize = enable_remainsize
         self.enable_log_norm = enable_log_norm
+        self.loss_efficiency_size = 1.0
+        self.loss_efficiency_queue = 1.0
         if enable_path:
             self.n_links = 12
         elif enable_topo:
@@ -454,7 +456,11 @@ class FlowSimLstm(LightningModule):
                 loss_queue_mean = loss_queue.nanmean()
             self._log_loss(loss_size_mean, f"{tag}_size")
             self._log_loss(loss_queue_mean, f"{tag}_queue")
-            loss = loss + loss_size_mean + loss_queue_mean
+            loss = (
+                loss
+                + loss_size_mean * self.loss_efficiency_size
+                + loss_queue_mean * self.loss_efficiency_queue
+            )
         self._save_test_results(tag, spec, estimated, output)
 
         return loss
@@ -557,6 +563,7 @@ class FlowSimLstm(LightningModule):
                 # parameters += list(self.lstmcell_time_link.parameters())
             if self.enable_remainsize:
                 parameters += list(self.remain_size_layer.parameters())
+                parameters += list(self.queue_len_layer.parameters())
         else:
             parameters = []
             if self.enable_lstm:

@@ -27,7 +27,7 @@ include_directories(${TORCH_INCLUDE_DIRS})
 
 # Add shared library target
 #add_library(inference_shared SHARED src/inference.cpp)
-add_library(inference_shared SHARED src/cuda_inference.cpp)
+add_library(inference_shared SHARED src/inference.cpp)
 
 # Add executable target (only main.cpp)
 add_executable(inference_executable src/manual_cudagraph.cpp)
