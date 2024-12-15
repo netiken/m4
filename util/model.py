@@ -157,8 +157,10 @@ class FlowSimLstm(LightningModule):
         self.enable_flowsim_diff = enable_flowsim_diff
         self.enable_remainsize = enable_remainsize
         self.enable_log_norm = enable_log_norm
-        self.loss_efficiency_size = 1.0
-        self.loss_efficiency_queue = 1.0
+        # self.loss_efficiency_size = 1.0
+        # self.loss_efficiency_queue = 1.0
+        self.loss_efficiency_size = 0.1
+        self.loss_efficiency_queue = 0.1
         if enable_path:
             self.n_links = 12
         elif enable_topo:
@@ -387,11 +389,15 @@ class FlowSimLstm(LightningModule):
                                 )[:, 0]
 
                                 queue_len_gt = queuelen_matrix[j]
-
-                                loss_queue[queue_link_idx, 0] += torch.abs(
-                                    queue_len_est - queue_len_gt
-                                )
-                                loss_queue_num[queue_link_idx, 0] += 1
+                                if (
+                                    len(queue_len_gt)
+                                    == len(queue_len_est)
+                                    == len(queue_link_idx)
+                                ):
+                                    loss_queue[queue_link_idx, 0] += torch.abs(
+                                        queue_len_est - queue_len_gt
+                                    )
+                                    loss_queue_num[queue_link_idx, 0] += 1
 
             if self.enable_flowsim_diff:
                 input_tmp = torch.cat([x, batch_h_state], dim=1)
