@@ -6,8 +6,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Optimization flags for maximum performance
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fPIC -march=native -mtune=native -ffast-math -funroll-loops -fopenmp -fno-exceptions -fno-plt -floop-parallelize-all -DNDEBUG")
-#set(CMAKE_CXX_FLAGS_RELEASE "-O0 -g")
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fPIC -march=native -mtune=native -ffast-math -funroll-loops -fopenmp -fno-exceptions -fno-plt -floop-parallelize-all -DNDEBUG")
+set(CMAKE_CXX_FLAGS_RELEASE "-O0 -g")
 
 
 # Use CONDA_PREFIX to dynamically locate the LibTorch path
@@ -18,7 +18,7 @@ else()
 endif()
 
 # Adjust the Python version in the path if necessary
-set(CMAKE_PREFIX_PATH "${CONDA_PREFIX}/lib/python3.12/site-packages/torch/share/cmake/Torch")
+set(CMAKE_PREFIX_PATH "${CONDA_PREFIX}/lib/python3.10/site-packages/torch/share/cmake/Torch")
 
 # Find the Torch package
 find_package(Torch REQUIRED)
@@ -26,6 +26,7 @@ find_package(Torch REQUIRED)
 # Include directories
 include_directories("${CONDA_PREFIX}/include")
 include_directories(${TORCH_INCLUDE_DIRS})
+#include_directories("/data1/lichenni/projects/per-flow-sim/flowsim/yaml-cpp/build")
 
 # Add shared library target
 #add_library(inference_shared SHARED src/inference.cpp)
@@ -58,8 +59,18 @@ add_executable(flowsim ${SOURCES})
 # Link the Torch library and inference_shared to inference_executable
 target_link_libraries(flowsim "${TORCH_LIBRARIES}")
 
+#add_subdirectory(rapidyaml/ext/c4core)
+add_subdirectory(rapidyaml)
+
+target_include_directories(flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
+target_link_libraries(flowsim ryml)
+
+#link_directories("/data1/lichenni/projects/per-flow-sim/flowsim/yaml-cpp/src/")
+#target_include_directories(flowsim PUBLIC "/data1/lichenni/projects/per-flow-sim/flowsim/yaml-cpp/include")
+#target_link_libraries(flowsim yaml-cpp)
+
 # Link the Torch library to inference_shared
-target_link_libraries(flowsim "${TORCH_LIBRARIES}")
+#target_link_libraries(flowsim "${TORCH_LIBRARIES}")
 
 # Enable link-time optimization
 #set_property(TARGET inference_shared PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
