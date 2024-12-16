@@ -7,6 +7,11 @@
 #include <filesystem>
 #include <torch/torch.h>
 #include <torch/script.h>
+//#include "yaml-cpp/node/node.h"
+//#include "yaml-cpp/node/parse.h"
+#include <ryml_std.hpp>
+#include <ryml.hpp>
+
 
 // flowsim parameters
 std::shared_ptr<EventQueue> event_queue;
@@ -22,7 +27,10 @@ uint64_t limit;
 std::vector<int32_t> flowid_to_linkid_flat;
 std::vector<int32_t> flowid_to_linkid_offsets;
 std::vector<int32_t> edges_flow_ids;
-std::vector<int32_t> edges_links_ids;
+std::vector<int32_t> edges_link_ids;
+
+std::vector<float> res_fct;
+std::vector<float> res_sldn;
 
 
 // m4 model
@@ -137,7 +145,7 @@ void setup_m4(torch::Device device) {
     }
 }
 
-void setup_m4_tensors(torch::Device device, int n_edges, int n_links) {
+void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, int32_t h_vec_dim) {
     // Define tensor options
     auto options_int64 = torch::TensorOptions().dtype(torch::kInt64);
     auto options_float = torch::TensorOptions().dtype(torch::kFloat32);
@@ -195,8 +203,8 @@ void setup_m4_tensors(torch::Device device, int n_edges, int n_links) {
     flowid_active_mask = torch::zeros({n_flows}, options_bool).to(device);
 
     // Initialize result tensors
-    res_fct_tensor = torch::from_blob(res_fct, {n_flows, 2}, options_float).to(device);
-    res_sldn_tensor = torch::from_blob(res_sldn, {n_flows, 2}, options_float).to(device);
+    res_fct_tensor = torch::from_blob(res_fct.data(), {n_flows, 2}, options_float).to(device);
+    res_sldn_tensor = torch::from_blob(res_sldn.data(), {n_flows, 2}, options_float).to(device);
 
     // Initialize counters
     int flow_id_in_prop = 0;
@@ -416,7 +424,8 @@ int main(int argc, char *argv[]) {
     const std::string fct_path = argv[5];
     const std::string fct_i_path = argv[6];
     const std::string flow_link_path = argv[7];
-    const std::string write_path = argv[8];
+    const std::string config_path = argv[8];
+    const std::string write_path = argv[9];
     const bool use_m4 = true;
  
     npy::npy_data d_fat = npy::read_npy<int64_t>(fat_path);
@@ -442,13 +451,14 @@ int main(int argc, char *argv[]) {
     }
 
     npy::npy_data d_fct = npy::read_npy<int64_t>(fct_path);
-    fct = d_fat.data;
+    fct = d_fct.data;
 
     npy::npy_data d_fct_i = npy::read_npy<int64_t>(fct_i_path);
-    fct = fct_i.data;
+    fct = d_fct_i.data;
 
+    infile.close();
     cwd = std::filesystem::current_path() / flow_link_path;
-    infile(cwd);
+    infile.open(cwd);
     int num_links;
     int32_t offset = 0;
     int32_t flow_id = 0;
@@ -458,7 +468,7 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < num_links; i++) {
             int32_t link;
             infile >> link;
-            flow_id_to_linkid_flat.push_back(link);
+            flowid_to_linkid_flat.push_back(link);
             offset++;
 
             edges_flow_ids.push_back(flow_id);
@@ -468,29 +478,26 @@ int main(int argc, char *argv[]) {
     }
     flowid_to_linkid_offsets.push_back(offset);
 
-
-
-    /*
-    int32_t current_ofset = 0;
-    for (int32_t i = 0; i < fsize.size(); i++) {
-        flowid_to_linkid_offsets.push_back(current_offset);
-        links = flowid_to_linkid.get(flow_+)
-        flow_id_to_linkid_flat.extend(links);
-        current_offset += 
-    }
-    flowid_to_linkid_offsets.push_back(current_offset);
-    */
-
-
-    current_offset = 0
-    for flow_id in range(n_flows):
-        flowid_to_linkid_offsets[flow_id] = current_offset
-        links = flowid_to_linkid.get(flow_id, [])
-        flowid_to_linkid_flat.extend(links)
-        current_offset += len(links)
-    flowid_to_linkid_offsets[n_flows] = current_offset
+    uint32_t n_edges = flowid_to_linkid_flat.size();
 
     limit = arrival_times.size();
+
+    infile.close();
+    infile.open(config_path);
+    std::ostringstream contents;
+    contents << infile.rdbuf();
+    std::string config_contents = contents.str();
+    ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
+    ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
+    //int32_t hidden_size = c4:atoi(hidden_size_node.val());
+    int32_t hidden_size;
+    hidden_size << hidden_size_node;
+    ryml::NodeRef n_links_node = config["model"]["n_links_max"];
+    //int32_t n_links = c4:atoi(n_links_node.val());
+    int32_t n_links;
+    n_links << n_links_node.val();
+    //YAML::Node config = YAML::LoadFile(config_path);
+    //int32_t hidden_size = (config["model"]["hidden_size"]).as<int32_t>();
 
     if (use_m4) {
         int gpu_id = 1;
@@ -499,6 +506,7 @@ int main(int argc, char *argv[]) {
         //setup_m4_tensors(device);
     }
 
+    /*
 
     event_queue = std::make_shared<EventQueue>();
     topology->set_event_queue(event_queue);
@@ -528,6 +536,7 @@ int main(int argc, char *argv[]) {
     d.fortran_order = false;
 
     npy::write_npy(write_path, d);
+    */
 
 }
 
