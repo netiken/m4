@@ -527,7 +527,7 @@ def main():
         # ("_eval", 100, 30000),
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
-        ("eval_test_8k", 100, 80000),
+        # ("eval_test_8k", 100, 80000),
         ("eval_test", 100, 60000),
     ]
     model_list = [
