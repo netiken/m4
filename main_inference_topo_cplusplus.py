@@ -137,7 +137,9 @@ class Inference:
             h_vec_res = self.output_layer(h_vec)
         return h_vec_res
 
-    def update_rate(self, h_vec, edge_index_a_to_b, h_vec_link, n_flows):
+    def update_rate(
+        self, h_vec, edge_index_a_to_b, h_vec_link, n_flows, param_data=None
+    ):
         with torch.no_grad():
             x_combined = torch.cat([h_vec, h_vec_link], dim=0)
 
@@ -152,7 +154,10 @@ class Inference:
 
             for gcn in self.gcn_layers:
                 x_combined = gcn(x_combined, edge_index_combined)
-            h_vec_res = self.lstmcell_rate(x_combined[:n_flows], h_vec)
+            z_tmp = x_combined[:n_flows]
+            z_tmp = torch.cat([z_tmp, param_data], dim=1)
+
+            h_vec_res = self.lstmcell_rate(z_tmp, h_vec)
 
             if self.enable_link_state:
                 h_vec_link_res = self.lstmcell_rate_link(
@@ -168,13 +173,13 @@ class Inference:
         return h_vec_res
 
 
-def get_flowsim_sldn(sizes, fct, lr):
-    n_links_passed = np.ones_like(fct) * 2
-    base_delay = get_base_delay_link(sizes, n_links_passed, lr)
-    i_fcts_flowsim = get_base_delay_transmission(sizes, lr) + base_delay
-    fcts_flowsim = fct + base_delay
-    sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
-    return sldn_flowsim
+# def get_flowsim_sldn(sizes, fct, lr):
+#     n_links_passed = np.ones_like(fct) * 2
+#     base_delay = get_base_delay_link(sizes, n_links_passed, lr)
+#     i_fcts_flowsim = get_base_delay_transmission(sizes, lr) + base_delay
+#     fcts_flowsim = fct + base_delay
+#     sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
+#     return sldn_flowsim
 
 
 def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
@@ -195,24 +200,38 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
         f"{dir_input_tmp}/flow_to_path.npy",
         allow_pickle=True,
     )
-    link_info = [link_info[i] for i in fid]
+    link_info = [[link_dict[link] for link in link_info[i]] for i in fid]
 
     flowid_to_linkid = defaultdict(list)
     edges_list = []
     for flow_idx in range(len(fid)):
-        for link_pair in link_info[flow_idx]:
-            edges_list.append([flow_idx, link_dict[link_pair]])
-            flowid_to_linkid[flow_idx].append(link_dict[link_pair])
+        for link_idx in link_info[flow_idx]:
+            edges_list.append([flow_idx, link_idx])
+            flowid_to_linkid[flow_idx].append(link_idx)
     edges_list = np.array(edges_list).T
     assert len(size) == len(fct)
 
-    n_links_passed = np.array([len(link) for link in link_info])
+    n_links_passed = np.array([len(path) for path in link_info])
     base_delay = get_base_delay_path(size, n_links_passed, lr)
     i_fcts_flowsim = get_base_delay_transmission(size, lr) + base_delay
     fcts_flowsim = np.load(f"{dir_input_tmp}/flowsim_fct.npy") + base_delay
     sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
     flowid_to_linkid = [flowid_to_linkid[i] for i in flowid_to_linkid]
-    return size, fat, fct, i_fct, edges_list, sldn_flowsim, flowid_to_linkid
+
+    param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
+    # param_data[6:] = param_data[6:] / 10.0
+    # param_data[:2] = param_data[:2] / 10.0
+    param_data_repeat = np.repeat(param_data[:, np.newaxis], len(fid), axis=1).T
+    return (
+        size,
+        fat,
+        fct,
+        i_fct,
+        edges_list,
+        sldn_flowsim,
+        flowid_to_linkid,
+        param_data_repeat,
+    )
 
 
 def interactive_inference(
@@ -222,6 +241,7 @@ def interactive_inference(
     fct,
     i_fct,
     sldn_flowsim,
+    param_data,
     lr=10,
     n_flows_active_max=10000,
     edges_list=None,
@@ -250,6 +270,8 @@ def interactive_inference(
         np.log2(size / 1000.0 + 1), dtype=torch.float32, device=device
     )
     sldn_flowsim_tensor = torch.tensor(sldn_flowsim, dtype=torch.float32, device=device)
+    param_data_tensor = torch.tensor(param_data, dtype=torch.float32, device=device)
+
     edges_list = torch.tensor(edges_list, dtype=torch.long, device=device)
 
     link_to_graph_id = -torch.ones(n_links, dtype=torch.int64, device=device)
@@ -271,6 +293,7 @@ def interactive_inference(
     h_vec[:, 0] = 1.0
     h_vec[:, 2] = size_tensor
     h_vec[:, 3] = flowid_to_nlinks
+    # h_vec[:, 4 : param_data_tensor.size(1) + 4] = param_data_tensor
 
     time_last = torch.zeros((n_flows_active_max, 1), dtype=torch.float32, device=device)
 
@@ -282,7 +305,15 @@ def interactive_inference(
     time_clock = time.time()
     n_flows_active = 0
     n_flows_completed = 0
-
+    data_extra = torch.cat(
+        (
+            size_tensor.unsqueeze(1),
+            sldn_flowsim_tensor.unsqueeze(1),
+            flowid_to_nlinks.unsqueeze(1),
+            param_data_tensor,
+        ),
+        dim=1,
+    )
     while n_flows_completed < n_flows_total_min:
         # print(f"Flow ID: {flow_id_in_prop}")
         flow_arrival_time = (
@@ -298,17 +329,13 @@ def interactive_inference(
             if inference.enable_flowsim_diff:
                 input_tensor = torch.cat(
                     (
-                        size_tensor[flowid_active_list].unsqueeze(1),
-                        sldn_flowsim_tensor[flowid_active_list].unsqueeze(1),
-                        flowid_to_nlinks[flowid_active_list].unsqueeze(1),
+                        data_extra[flowid_active_list],
                         h_vec[flowid_active_list],
                     ),
                     dim=1,
                 )
-                # input_tensor = h_vec[flowid_active_list]
                 predictions = inference.infer(input_tensor)
                 sldn_est = predictions[:, 0]
-                # sldn_est += sldn_flowsim_tensor[flowid_active_list]
             else:
                 predictions = inference.infer(h_vec[flowid_active_list])
                 sldn_est = predictions[:, 0]
@@ -384,17 +411,18 @@ def interactive_inference(
             no_flow_links = linkid_list[link_to_nflows[linkid_list] == 0]
             link_to_graph_id[no_flow_links] = -1
 
-            # inference.z_t_link[no_flow_links] = 0.0
-            # inference.z_t_link[no_flow_links, 1] = 1.0
-            # inference.z_t_link[no_flow_links, 2] = 1.0
+            if inference.enable_link_state:
+                inference.z_t_link[no_flow_links] = 0.0
+                inference.z_t_link[no_flow_links, 1] = 1.0
+                inference.z_t_link[no_flow_links, 2] = 1.0
 
         flowid_active_mask_cur = torch.logical_and(
             flowid_active_mask, flow_to_graph_id == graph_id_cur
         )
         flowid_active_list_cur = torch.where(flowid_active_mask_cur)[0]
-        print(
-            f"n_active_flows: {flowid_active_list_cur.numel()}, graph_id_cur: {graph_id_cur}, fat: {flow_arrival_time/1000.0}, fct: {flow_completion_time/1000.0}"
-        )
+        # print(
+        #     f"n_active_flows: {flowid_active_list_cur.numel()}, graph_id_cur: {graph_id_cur}, fat: {flow_arrival_time/1000.0}, fct: {flow_completion_time/1000.0}"
+        # )
         if flowid_active_list_cur is not None and flowid_active_list_cur.numel() > 0:
             time_deltas = time_cur - time_last[flowid_active_list_cur]
             if time_deltas.max() > 0:
@@ -426,6 +454,7 @@ def interactive_inference(
                 edges_list_active,
                 inference.z_t_link[active_link_idx],
                 n_flows_active_cur,
+                param_data_tensor[flowid_active_list_cur],
             )
             h_vec[flowid_active_list_cur] = h_vec_updated
             if inference.enable_link_state:
@@ -459,14 +488,14 @@ def main():
         type=str,
         required=False,
         help="Path to the input data directory",
-        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data",
+        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train",
     )
     parser.add_argument(
         "--output",
         type=str,
         required=False,
         help="Path to save the output predictions",
-        default="/data2/lichenni/output_perflow_1125",
+        default="/data2/lichenni/output_perflow",
     )
     parser.add_argument(
         "--flowsim",
@@ -483,24 +512,20 @@ def main():
         training_config = config_info["training"]
         data_config = config_info["dataset"]
 
-    empirical_str = "_empirical"
-    # empirical_str = "_eval_small"
-    # empirical_str = ""
-    args.input += empirical_str
-    # n_flows_total = data_config.get("n_flows_list", [5000])[0]
     n_flows_total = 10
+    input_dir = args.input
     if args.flowsim:
         print("Running flow simulation")
         model_instance = "flowsim"
     else:
         print("Running m4's inference")
-        model_instance = "topo_512_flowsim_input_empirical"
-        args.checkpoint = f"{args.output}/{model_instance}_shard100_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last.ckpt"
+        model_instance = "m4"
+        checkpoint = f"{args.output}/{model_instance}_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=015.ckpt"
         inference = Inference(
             data_config,
             model_config,
             training_config,
-            checkpoint_path=args.checkpoint,
+            checkpoint_path=checkpoint,
         )
 
     for max_inflight_flows in [0]:
@@ -518,8 +543,9 @@ def main():
                             edges_list,
                             sldn_flowsim,
                             flowid_to_linkid,
+                            param_data,
                         ) = load_data(
-                            args.input,
+                            input_dir,
                             topo_type=data_config["topo_type"],
                             spec=spec,
                             lr=data_config["lr"],
@@ -533,6 +559,7 @@ def main():
                                 fct,
                                 i_fct,
                                 sldn_flowsim,
+                                param_data,
                                 lr=data_config["lr"],
                                 n_flows_active_max=n_flows_total,
                                 edges_list=edges_list,
