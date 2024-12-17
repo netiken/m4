@@ -152,7 +152,7 @@ double Topology::calculate_bottleneck_rate(const std::pair<DeviceId, DeviceId>& 
 }
 
 void Topology::reschedule_active_chunks() {
-    const auto current_time = event_queue->get_current_time();
+    //const auto current_time = event_queue->get_current_time();
     //std::cerr << "Debug: Rescheduling num active chunks: " << active_chunks.size() << std::endl;
     uint64_t min = -1;
     double completion_time;
@@ -165,6 +165,7 @@ void Topology::reschedule_active_chunks() {
             double remaining_size = chunk->get_remaining_size();
             double new_rate = chunk->get_rate();
             double new_completion_time = std::max(1.0, (remaining_size / new_rate));
+            completion_time_map[chunk->get_id()] = new_completion_time;
             //double new_completion_time = remaining_size / new_rate;
             chunk->set_transmission_start_time(current_time);  // Update transmission start time
             chunk->set_remaining_size(remaining_size);  // Update remaining size
@@ -185,10 +186,32 @@ void Topology::reschedule_active_chunks() {
     for (Chunk* chunk : next_chunks) {
         auto* chunk_ptr = static_cast<void*>(chunk);
         //std::cout << "completion time " << min << " " << chunk->get_size() << " " << rate << "\n";
-        event_queue->schedule_completion(min, chunk_completion_callback, chunk_ptr);
+        next_completion_time = min;
+        next_completion_id = chunk->get_id();
+        //event_queue->schedule_completion(min, chunk_completion_callback, chunk_ptr);
         break;
         //chunk->set_completion_event_id(new_event_id);
     }
+}
+
+void Topology::set_time(EventTime time) {
+    current_time = time;
+}
+
+EventTime Topology::get_current_time() {
+    return current_time;
+}
+
+bool Topology::has_completion_time() {
+    return active_chunks.size() > 0;
+}
+
+EventTime Topology::get_next_completion_time() {
+    return next_completion_time;
+}
+
+int Topology::get_next_completion() {
+    return next_completion_id;
 }
 
 void Topology::add_chunk_to_links(Chunk* chunk) {
@@ -221,8 +244,16 @@ void Topology::remove_chunk_from_links(Chunk* chunk) {
     }
 }
 
-void Topology::chunk_completion_callback(void* arg) noexcept {
-    Chunk* chunk = static_cast<Chunk*>(arg);
+//void Topology::chunk_completion_callback(void* arg) noexcept {
+void Topology::chunk_completion(int chunk_id) {
+    Chunk *chunk;
+    for (Chunk *cand_chunk : active_chunks) {
+        if (cand_chunk->get_id() == chunk_id) {
+            chunk = cand_chunk;
+            break;
+        }
+    }
+    //Chunk* chunk = static_cast<Chunk*>(arg);
     Topology* topology = chunk->get_topology();
 
     // Cancel all events
@@ -242,9 +273,20 @@ void Topology::chunk_completion_callback(void* arg) noexcept {
     chunk->invoke_callback();
 }
 
+bool Topology::contains_chunk(int id) {
+    if (completion_time_map.count(id)) {
+        return true;
+    }
+    return false;
+}
+
+double Topology::chunk_time(int id) {
+    return completion_time_map[id];
+}
+
 void Topology::cancel_all_events() noexcept {
-    const auto current_time = event_queue->get_current_time();
-    event_queue->cancel_completion();
+    //const auto current_time = event_queue->get_current_time();
+    //event_queue->cancel_completion();
 
     for (Chunk *chunk: active_chunks) {
         double elapsed_time = current_time - chunk->get_transmission_start_time();

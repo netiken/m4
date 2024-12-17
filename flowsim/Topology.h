@@ -39,6 +39,19 @@ class Topology {
   [[nodiscard]] std::vector<Bandwidth> get_bandwidth_per_dim() const noexcept;
   void connect(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency latency, bool bidirectional = true) noexcept;
   std::shared_ptr<Node> get_device(int index);
+  bool contains_chunk(int id);
+  double chunk_time(int id);
+
+  bool has_completion_time();
+  int get_next_completion();
+  EventTime get_next_completion_time();
+
+  void chunk_completion(int chunk_id);
+
+  void set_time(EventTime time);
+  EventTime get_current_time();
+
+
 
  protected:
   int devices_count;
@@ -54,6 +67,12 @@ class Topology {
   std::unordered_set<std::pair<DeviceId, DeviceId>, pair_hash> active_links;
   std::list<Chunk*> active_chunks;
   std::vector<std::unique_ptr<Chunk>> active_chunks_ptrs; // Store unique pointers to chunks
+  std::unordered_map<int, double> completion_time_map;
+
+  int next_completion_id;
+  EventTime next_completion_time;
+
+  EventTime current_time;
 
   //void instantiate_devices() noexcept;
   void update_link_states();
@@ -61,7 +80,7 @@ class Topology {
   void reschedule_active_chunks();
   void add_chunk_to_links(Chunk* chunk);
   void remove_chunk_from_links(Chunk* chunk);
-  static void chunk_completion_callback(void* arg) noexcept;
+  //static void chunk_completion_callback(void* arg) noexcept;
   void cancel_all_events() noexcept;
 };
 
