@@ -531,7 +531,6 @@ def main():
         ("eval_test", 100, 60000),
     ]
     model_list = [
-        ("m4", 14, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
@@ -563,6 +562,8 @@ def main():
         # ("final_gnn_layer3", 6, 4000),
         # ("final_gnn_layer3", 5, 4000),
         # ("final_gnn_layer4", 4, 4000),
+        # ("m4", 14, 4000),
+        ("m4", 15, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")

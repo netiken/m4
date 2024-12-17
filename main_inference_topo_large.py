@@ -535,11 +535,12 @@ def main():
         # ("final_gnn_layer3", 6, 4000),
         # ("final_gnn_layer3", 5, 4000),
         # ("final_gnn_layer4", 4, 4000),
-        # ("m4_loss01_large", 14, 4000),
-        # ("m4_loss01_large", 11, 4000),
-        # ("m4_loss01_large", 10, 4000),
-        ("m4_loss01_large", 7, 4000),
-        ("m4_loss01", 14, 4000),
+        # ("m4", 14, 4000),
+        # ("m4_data200", 19, 4000),
+        # ("m4_data200", 9, 4000),
+        # ("m4_queue1", 15, 4000),
+        # ("m4", 14, 4000),
+        ("m4", 15, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")

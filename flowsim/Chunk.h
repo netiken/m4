@@ -22,11 +22,13 @@ class Chunk {
    * @param callback_arg: argument of the callback
    */
   Chunk(
+      int id,
       ChunkSize chunk_size,
       Route route,
       Callback callback,
       CallbackArg callback_arg) noexcept;
 
+  int get_id();
   [[nodiscard]] std::shared_ptr<Node> current_device() const noexcept;
   [[nodiscard]] std::shared_ptr<Node> next_device() const noexcept;
   void mark_arrived_next_device() noexcept;
@@ -48,6 +50,7 @@ class Chunk {
   [[nodiscard]] std::shared_ptr<Node> get_dest_device() const noexcept; // New method
 
  private:
+  int id;
   ChunkSize chunk_size;
   ChunkSize remaining_size;
   Route route;

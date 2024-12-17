@@ -2,8 +2,8 @@
 #include <iostream>
 #include <cassert>
 
-Chunk::Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg) noexcept
-    : chunk_size(chunk_size), remaining_size(chunk_size), route(std::move(route)),
+Chunk::Chunk(int id, ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg) noexcept
+    : id(id), chunk_size(chunk_size), remaining_size(chunk_size), route(std::move(route)),
       callback(callback), callback_arg(callback_arg), transmission_start_time(0), rate(0), completion_event_id_(0), topology(nullptr) {
         
         assert(chunk_size > 0);
@@ -11,6 +11,10 @@ Chunk::Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg c
         assert(callback != nullptr);
 
       }
+
+int Chunk::get_id() {
+    return this->id;
+}
 
 std::shared_ptr<Node> Chunk::current_device() const noexcept {
     return route.front();
