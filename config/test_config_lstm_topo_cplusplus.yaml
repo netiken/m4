@@ -3,14 +3,16 @@
 # Dataset parameters
 dataset:
   n_flows_list: [2000]
-  n_links_max: 96
-  n_hosts_list: [16]
+  # n_links_max: 96
+  # n_links_max: 768
+  n_links_max: 16896
+  n_hosts_list: [32]
   shard: 0
-  shard_list: [0,1000,1000] # [start, end, num]
+  shard_list: [0,4000,4000] # [start, end, num]
   sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
-  topo_type: "_topology_flows_dctcp"
+  topo_type: "_topology_flows"
   enable_segmentation: True
   segments_per_seq: 1
   sampling_method: "balanced" # weighted, uniform, balanced
@@ -19,7 +21,7 @@ dataset:
   flow_size_threshold: 100000000
   enable_flowsim_gt: False
   enable_flowsim_diff: True
-  enable_remainsize: False
+  enable_remainsize: True
   # current_period_len_idx: 0
 
 # Model parameters
@@ -27,17 +29,17 @@ model:
   model_name: "lstm"
   input_size: 2
   n_layer: 2
-  gcn_n_layer: 2
+  gcn_n_layer: 3
   loss_fn_type: "l1"
-  hidden_size: 512
-  gcn_hidden_size: 512
+  hidden_size: 300
+  gcn_hidden_size: 300
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
   enable_gnn: True
   enable_lstm: True
   enable_lstm_in_gnn: False
-  enable_link_state: False
+  enable_link_state: True
 
 # Training parameters
 training:
