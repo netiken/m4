@@ -21,7 +21,7 @@ using ChunkSize = uint64_t;
 using Bandwidth = double;
 
 /// Latency in ns
-using Latency = double;
+using Latency = float;
 
 /// Event time in ns
 using EventTime = uint64_t;

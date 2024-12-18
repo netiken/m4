@@ -51,6 +51,9 @@ class Topology {
   void set_time(EventTime time);
   EventTime get_current_time();
 
+  float get_latency();
+  float latency;
+
 
 
  protected:

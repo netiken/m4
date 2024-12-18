@@ -26,6 +26,10 @@ class Link {
     return bandwidth;
   }
 
+  Latency get_latency() {
+    return latency;
+  }
+
   std::list<Chunk*> active_chunks;
 
  private:
