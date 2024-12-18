@@ -1,37 +1,65 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-fat = np.load("87/ns3/fsize.npy")
-print(fat[0], fat[1])
-real = np.load("87/ns3/fct_topology_flows_dctcp.npy")
-ideal = np.load("87/ns3/fct_i_topology_flows_dctcp.npy")
+fsize = np.load("0/ns3/fsize.npy")
+real = np.load("0/ns3/fct_topology_flows_dctcp.npy")
+ideal = np.load("0/ns3/fct_i_topology_flows_dctcp.npy")
 
-flowsim = np.load("87/ns3/flowsim_fct.npy")
+flowsim = np.load("flowsim.npy")
 new_flowsim = np.load("out.npy")
+
 
 #print(real[:10])
 #print(ideal[:10])
-print(real[:10])
+#print(real[:10])
 #print(flowsim[:10])
-print(new_flowsim[:10])
+#print(flowsim[:10])
+#print(new_flowsim[:10])
 
-count = 0
-#for i in range(0, len(ideal)):
-    #if abs(real[i] - new_flowsim[i]) > 10000:
-        #count += 1
+kb = []
+fifkb = []
+twokb = []
+mb = []
 
-for i in range(len(new_flowsim)):
-    if abs(new_flowsim[i] - real[i]) > 10000:
-        count += 1
-#    if new_flowsim[i] < 0:
-#        count += 1
-
-print(count)
+for i in range(len(fsize)):
+    size = fsize[i]
+    if i <= 1000:
+        kb.append(i)
+    elif i <= 50000:
+        fifkb.append(i)
+    elif i <= 200000:
+        twokb.append(i)
+    else:
+        mb.append(i)
 
 _, ax = plt.subplots()
 
-ax.ecdf(new_flowsim, label="m4+flowsim")
-ax.ecdf(real, label="ns3")
+m4_slowdown = new_flowsim / ideal
+real_slowdown = real / ideal
+flowsim_slowdown = flowsim / ideal
+
+print(len(kb))
+
+baseline = np.load("baseline.npy")
+new = np.load("new.npy")
+
+ax.ecdf(m4_slowdown, label="m4+flowsim")
+ax.ecdf(real_slowdown, label="ns3")
+ax.ecdf(flowsim_slowdown, label="flowsim")
+ax.ecdf(baseline / ideal, linestyle="dashed", label="m4")
+ax.ecdf(new / ideal, label="flowsim into m4")
 plt.legend()
 
-plt.savefig("results.png")
+plt.savefig("results_kb.png")
+plt.clf()
+
+_, ax = plt.subplots()
+print(len(fifkb))
+
+ax.ecdf(m4_slowdown[fifkb], label="m4+flowsim")
+ax.ecdf(real_slowdown[fifkb], label="ns3")
+ax.ecdf(flowsim_slowdown[fifkb], label="flowsim")
+plt.legend()
+
+plt.savefig("results_fifkb.png")
+
