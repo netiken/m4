@@ -168,7 +168,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
     auto options_float = torch::TensorOptions().dtype(torch::kFloat32);
     auto options_int32 = torch::TensorOptions().dtype(torch::kInt32);
     auto options_bool = torch::TensorOptions().dtype(torch::kBool);
-    n_flows = fsize.size();
+    //n_flows = fsize.size();
 
     // Clone tensors to ensure ownership
     //auto size_tensor = torch::from_blob(size, {n_flows}, options_float).to(device);
@@ -247,48 +247,17 @@ void update_times_m4() {
         auto flowid_active_indices = torch::nonzero(flowid_active_mask).flatten();
         auto h_vec_active = h_vec.index_select(0, flowid_active_indices);
 
-        //if (enable_flowsim) {
-            // Prepare input tensor by concatenating size and sldn_flowsim
-            auto size_cur = size_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
-            auto sldn_flowsim_cur = sldn_flowsim_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
-            auto nlinks_cur = flowid_to_nlinks_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
-            auto input_tensor = torch::cat({size_cur, sldn_flowsim_cur, nlinks_cur, h_vec_active}, 1); // [n_active, 3 + h_vec_dim]
+        auto size_cur = size_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
+        auto sldn_flowsim_cur = sldn_flowsim_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
+        auto nlinks_cur = flowid_to_nlinks_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
+        auto input_tensor = torch::cat({size_cur, sldn_flowsim_cur, nlinks_cur, h_vec_active}, 1); // [n_active, 3 + h_vec_dim]
 
-            // Perform inference
-            sldn_est = output_layer.forward({ input_tensor }).toTensor().view(-1);; // [n_active]
-        //}
-        //else {
-            // Perform inference directly on h_vec
-        //    sldn_est = output_layer.forward({ h_vec_active }).toTensor().view(-1) + 1.0f; // [n_active]
-        //}
+        // Perform inference
+        sldn_est = output_layer.forward({ input_tensor }).toTensor().view(-1);; // [n_active]
+
         sldn_est = torch::clamp(sldn_est, 1.0f, std::numeric_limits<float>::infinity());
 
         auto fct_stamp_est = fat_tensor.index_select(0, flowid_active_indices) + sldn_est * i_fct_tensor.index_select(0, flowid_active_indices); // [n_active]
-
-        int i;
-        bool found = false;
-        for (i = 0; i < flowid_active_indices.sizes()[0]; i++) {
-            if (flowid_active_indices[i].item<int>() == 1) {
-                found = true;
-                break;
-            }
-        }
-        float slowdown = -1.0;
-        float real_slowdown = -1.0;
-        float size = -1.0;
-        float flowsim_slowdown = -1.0;
-        float n_links = -1.0;
-
-        if (found) {
-            slowdown = fct_stamp_est[i].item<float>();
-            real_slowdown = sldn_est[i].item<float>();
-            size = size_cur[i].item<float>();
-            flowsim_slowdown = sldn_flowsim_cur[i].item<float>();
-            n_links = nlinks_cur[i].item<int32_t>();
-        }
-        //if (n_active > 1) {
-        //    float min_slowdown = sldn_est[1].item<float>();
-        //}
 
         // Find the flow with the minimum estimated completion time
         min_idx = torch::argmin(fct_stamp_est).item<int>();
@@ -490,6 +459,7 @@ int main(int argc, char *argv[]) {
     std::vector<int64_t> flow_sizes = d_fsize.data;
 
     limit = arrival_times.size();
+    n_flows = arrival_times.size();
 
     for (int i = 0; i < arrival_times.size() & i < limit; i++) {
         int64_t flow_size = flow_sizes.at(i);
@@ -559,7 +529,7 @@ int main(int argc, char *argv[]) {
     int gpu_id = 1;
     torch::Device device(torch::kCUDA, gpu_id);
 
-    if (use_m4) {
+    if (true || use_m4) {
         setup_m4(device);
         setup_m4_tensors(device, n_edges, n_links, hidden_size);
     }
@@ -650,24 +620,43 @@ int main(int argc, char *argv[]) {
                     times.push_back(1.0);
                 }
             }
-            //if (fct_map.count(1)) {
-            //std::cout << times.at(1) << " " << fct_map[1] << " " << fct_i.at(1) <<  "\n";
-            //}
-            float slowdown = times.at(1);
             sldn_flowsim_tensor = torch::from_blob(times.data(), {n_flows}, options_float).to(device);
             step_m4();
         }
     }
 
-    std::vector<float> fct_vector;
-    for (int i = 0; i < res_fct_tensor.sizes()[0]; i++) {
-        fct_vector.push_back(res_fct_tensor[i][0].item<float>());
+    if (true) {
+        std::vector<float> times;
+            for (int i = 0; i < n_flows; i++) {
+                    float prop_delay = (float) routing.at(i).size() * (float) latency;
+                    times.push_back(std::max((prop_delay + (float) fct_map[i]) / (float) fct_i.at(i), (float) 1.0));
+            }
+            sldn_flowsim_tensor = torch::from_blob(times.data(), {n_flows}, options_float).to(device);
+        flow_index = 0;
+        flows_completed = 0;
+        while (flow_index < n_flows || flows_completed < n_flows) {
+            update_times_m4();
+            if (flow_arrival_time < flow_completion_time) {
+                flow_index++;
+            } else {
+                flows_completed++;
+            }
+            step_m4();
+        }
     }
-    //for (int i = 0; i < arrival_times.size() & i < limit; i++) {
-        //int64_t prop_delay = (int64_t) routing.at(i).size() * (int64_t) latency;
-        //fct_vector.push_back(fct_map[i]);
+
+    std::vector<float> fct_vector;
+    if (true || use_m4) {
+        for (int i = 0; i < res_fct_tensor.sizes()[0]; i++) {
+            fct_vector.push_back(res_fct_tensor[i][0].item<float>());
+        }
+    } else {
+        for (int i = 0; i < arrival_times.size() & i < limit; i++) {
+            int64_t prop_delay = (int64_t) routing.at(i).size() * (int64_t) latency;
+            fct_vector.push_back(fct_map[i]);
     //    fct_vector.push_back(sldn_est[i].item<float>());
-    //}
+        }
+    }
 
     npy::npy_data<float> d;
     d.data = fct_vector;
