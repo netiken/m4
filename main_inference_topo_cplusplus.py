@@ -56,7 +56,7 @@ class Inference:
         self.z_t_link[:, 2] = 1.0
         self.save_models()
 
-    def save_models(self, directory="./inference/models_topo"):
+    def save_models(self, directory="./inference/models_eval"):
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -255,6 +255,7 @@ def interactive_inference(
     fct = fct[:n_flows_total_min]
     i_fct = i_fct[:n_flows_total_min]
     sldn_flowsim = sldn_flowsim[:n_flows_total_min]
+    param_data = param_data[:n_flows_total_min]
     flowid_to_linkid = [flowid_to_linkid[i] for i in range(n_flows_total_min)]
     edge_mask = edges_list[0] < n_flows_total_min
     edges_list = edges_list[:, edge_mask]
@@ -488,14 +489,14 @@ def main():
         type=str,
         required=False,
         help="Path to the input data directory",
-        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train",
+        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_test_8k",
     )
     parser.add_argument(
         "--output",
         type=str,
         required=False,
         help="Path to save the output predictions",
-        default="/data2/lichenni/output_perflow",
+        default="/data2/lichenni/output_perflow_anton",
     )
     parser.add_argument(
         "--flowsim",

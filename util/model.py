@@ -194,7 +194,7 @@ class FlowSimLstm(LightningModule):
                     input_size=hidden_size, hidden_size=hidden_size
                 )
                 # self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
-            dim_flowsim = 15 if self.enable_flowsim_diff else 0
+            dim_flowsim = 16 if self.enable_flowsim_diff else 0
             self.output_layer = nn.Sequential(
                 nn.Linear(hidden_size + dim_flowsim, hidden_size // 2),  # First layer
                 nn.ReLU(),  # Non-linearity
@@ -278,7 +278,7 @@ class FlowSimLstm(LightningModule):
 
             batch_h_state[:, 0] = 1.0
             batch_h_state[:, 2] = x[:, 0]
-            batch_h_state[:, 3] = x[:, 1]
+            batch_h_state[:, 3] = x[:, 2]
             # batch_h_state[:, 3 : 1 + x.shape[1]] = x[:, 2:]
 
             batch_h_state_link = torch.zeros(
@@ -369,7 +369,7 @@ class FlowSimLstm(LightningModule):
                     z_t_tmp = x_combined[:n_flows_active]
                     z_t_tmp_link = x_combined[n_flows_active:]
 
-                    z_t_tmp = torch.cat([z_t_tmp, x[active_flow_idx, 2:]], dim=1)
+                    z_t_tmp = torch.cat([z_t_tmp, x[active_flow_idx, 3:]], dim=1)
                     batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
                         z_t_tmp, batch_h_state[active_flow_idx, :]
                     )

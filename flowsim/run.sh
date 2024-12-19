@@ -1,1 +1,1 @@
-build/flowsim 0/ns3/fat.npy 0/ns3/fsize.npy 0/ns3/topology.txt 0/ns3/flow_to_path.txt 0/ns3/fct_topology_flows_dctcp.npy 0/ns3/fct_i_topology_flows_dctcp.npy 0/ns3/flow_to_links.txt /data1/lichenni/projects/per-flow-sim/flowsim/config.yaml new.npy 0
+build/flowsim 0/ns3/fat.npy 0/ns3/fsize.npy 0/ns3/topology.txt 0/ns3/flow_to_path.txt 0/ns3/fct_topology_flows_dctcp.npy 0/ns3/fct_i_topology_flows_dctcp.npy 0/ns3/flow_to_links.txt /data1/lichenni/projects/per-flow-sim/flowsim/config.yaml out.npy 1

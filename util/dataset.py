@@ -1507,24 +1507,24 @@ class TopoFctSldnSegment(Dataset):
         # param_data[6:] = param_data[6:] / 10.0
         # param_data[:2] = param_data[:2] / 10.0
         param_data_repeat = np.repeat(param_data[:, np.newaxis], n_flows, axis=1).T
-        # if not self.enable_flowsim_gt:
-        #     input_data = np.column_stack(
-        #         (
-        #             sizes[:, np.newaxis],
-        #             sldn_flowsim[:, np.newaxis],
-        #             n_links_passed[:, np.newaxis],
-        #             param_data_repeat,
-        #         )
-        #     ).astype(np.float32)
-        # else:
-        input_data = np.column_stack(
-            (
-                sizes[:, np.newaxis],
-                # np.zeros_like(sizes)[:, np.newaxis],
-                n_links_passed[:, np.newaxis],
-                param_data_repeat,
-            )
-        ).astype(np.float32)
+        if not self.enable_flowsim_gt:
+            input_data = np.column_stack(
+                (
+                    sizes[:, np.newaxis],
+                    sldn_flowsim[:, np.newaxis],
+                    n_links_passed[:, np.newaxis],
+                    param_data_repeat,
+                )
+            ).astype(np.float32)
+        else:
+            input_data = np.column_stack(
+                (
+                    sizes[:, np.newaxis],
+                    np.zeros_like(sizes)[:, np.newaxis],
+                    n_links_passed[:, np.newaxis],
+                    param_data_repeat,
+                )
+            ).astype(np.float32)
 
         # Compute the adjacency matrix for the bipartite graph
         if self.enable_gnn:
