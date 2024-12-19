@@ -305,10 +305,12 @@ def interactive_inference(
     time_clock = time.time()
     n_flows_active = 0
     n_flows_completed = 0
+    zeros_tensor = torch.zeros_like(size_tensor)
     data_extra = torch.cat(
         (
             size_tensor.unsqueeze(1),
-            sldn_flowsim_tensor.unsqueeze(1),
+            # sldn_flowsim_tensor.unsqueeze(1),
+            zeros_tensor.unsqueeze(1),
             flowid_to_nlinks.unsqueeze(1),
             param_data_tensor,
         ),
@@ -540,7 +542,16 @@ def main():
         # ("m4_data200", 9, 4000),
         # ("m4_queue1", 15, 4000),
         # ("m4", 14, 4000),
-        ("m4", 15, 4000),
+        # ("m4", 15, 4000),
+        # ("m4_large", 7, 4000),
+        # ("m4_gnn4", 14, 4000),
+        # ("m4_gnn4", 8, 4000),
+        # ("m4_small", 11, 4000),
+        # ("m4_small", 9, 4000),
+        # ("m4_small", 8, 4000),
+        # ("m4_noflowsim", 19, 4000),
+        # ("m4_noflowsim", 7, 4000),
+        ("m4_noflowsim", 6, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
