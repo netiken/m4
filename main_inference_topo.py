@@ -305,11 +305,11 @@ def interactive_inference(
     time_clock = time.time()
     n_flows_active = 0
     n_flows_completed = 0
-    zeros_tensor = torch.zeros_like(sldn_flowsim_tensor)
+    # zeros_tensor = torch.zeros_like(sldn_flowsim_tensor)
     data_extra = torch.cat(
         (
             size_tensor.unsqueeze(1),
-            zeros_tensor.unsqueeze(1),
+            # zeros_tensor.unsqueeze(1),
             flowid_to_nlinks.unsqueeze(1),
             param_data_tensor,
         ),
@@ -528,9 +528,9 @@ def main():
         # ("_eval", 100, 30000),
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
-        ("eval_test_8k", 100, 80000),
+        # ("eval_test_8k", 100, 80000),
         # ("eval_test", 100, 60000),
-        # ("eval_test", 5, 60000),
+        ("eval_test", 5, 60000),
     ]
     model_list = [
         # ("m4_small", 11, 4000),
@@ -538,8 +538,15 @@ def main():
         # ("m4_small", 8, 4000),
         # ("m4_noflowsim", 19, 4000),
         # ("m4_noflowsim", 12, 4000),
-        ("m4_noflowsim", 9, 4000),
-        ("m4_noflowsim", 7, 4000),
+        # ("m4_noflowsim", 9, 4000),
+        # ("m4_noflowsim", 7, 4000),
+        ("m4_no", 11, 4000),
+        ("m4_no", 10, 4000),
+        ("m4_no", 9, 4000),
+        ("m4_no", 8, 4000),
+        ("m4_no", 7, 4000),
+        ("m4_no", 6, 4000),
+        ("m4_no", 5, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),

@@ -614,7 +614,7 @@ int main(int argc, char *argv[]) {
                     //times.push_back((double) fct_map[i] / (double) fct_i.at(i));
                 } else if (topology->contains_chunk(i)) {
                     float prop_delay = (float) routing.at(i).size() * (float) latency;
-                    times.push_back(std::max( (float) 1.0, (prop_delay + (float) topology->chunk_time(i)) / (float) fct_i.at(i)));
+                    times.push_back(std::max( (float) 1.0, (prop_delay + (float) topology->get_current_time() + (float) topology->chunk_time(i) - (float) fat.at(i)) / (float) fct_i.at(i)));
                     //times.push_back((double) topology->chunk_time(i) / (double) fct_i.at(i));
                 } else {
                     times.push_back(1.0);
@@ -625,7 +625,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (true) {
+    if (false) {
         std::vector<float> times;
             for (int i = 0; i < n_flows; i++) {
                     float prop_delay = (float) routing.at(i).size() * (float) latency;
@@ -646,7 +646,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::vector<float> fct_vector;
-    if (true || use_m4) {
+    if (use_m4) {
         for (int i = 0; i < res_fct_tensor.sizes()[0]; i++) {
             fct_vector.push_back(res_fct_tensor[i][0].item<float>());
         }
