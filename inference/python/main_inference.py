@@ -10,7 +10,7 @@ import yaml
 # Adjust the path if the library is located elsewhere
 lib = ctypes.CDLL("../build/libinference_shared.so")  # Ensure the correct library name
 
-config_file = "../../config/test_config_lstm_topo_cplusplus.yaml"
+config_file = "../../flowsim/config.yaml"
 config = yaml.safe_load(open(config_file, "r"))
 config_dataset = config["dataset"]
 config_model = config["model"]
@@ -22,7 +22,7 @@ hidden_size = config_model["hidden_size"]
 enable_flowsim = config_dataset["enable_flowsim_diff"]
 n_links = config_dataset["n_links_max"]
 # n_flows = len(size)
-n_flows = 10
+n_flows = 2000
 
 # Define the argument and return types of the interactive_inference function
 lib.interactive_inference.argtypes = [
@@ -48,7 +48,8 @@ lib.interactive_inference.argtypes = [
 lib.interactive_inference.restype = ctypes.c_int
 
 # Prepare input data
-data_dir = "/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical/0/ns3"
+#data_dir = "/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical/0/ns3"
+data_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/0/ns3"
 config_str = "_topology_flows_dctcp"
 
 # Load numpy arrays
@@ -182,7 +183,7 @@ if result == 0:
             f"Flow ID {i}: Predicted FCT = {predicted_fct}, Actual FCT = {actual_fct}"
         )
 
-    print("\nFirst 10 SLDN Results:")
+    print("\First 10 SLDN Results:")
     for i in range(max(-10, -n_flows), 0):
         predicted_sldn = res_sldn[i, 0]
         actual_sldn = res_sldn[i, 1]
@@ -191,11 +192,14 @@ if result == 0:
         )
 
     # Save the results to a file
-    # np.savez(
-    #     "../../res/inference_link_cplusplus_empirical.npz",
-    #     fct=res_fct,
-    #     sldn=res_sldn,
-    # )
+    np.save("../../flowsim/baseline.npy", res_fct[:,0])
+    '''
+    np.savez(
+         "../../flowsim/baseline.npy",
+         fct=res_fct,
+         sldn=res_sldn,
+    )
+    '''
     print("Results saved to '../../res/inference_link_cplusplus_empirical.npz'")
 else:
     print("An error occurred during inference.")
