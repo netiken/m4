@@ -36,6 +36,7 @@ class Inference:
             self.lstmcell_time,
             self.output_layer,
             self.lstmcell_rate_link,
+            self.lstmcell_time_link,
         ) = self.load_model(checkpoint_path)
 
         self.gcn_layers = [
@@ -48,6 +49,9 @@ class Inference:
         if self.lstmcell_rate_link is not None:
             self.lstmcell_rate_link = torch.jit.script(
                 self.lstmcell_rate_link.to(self.device)
+            )
+            self.lstmcell_time_link = torch.jit.script(
+                self.lstmcell_time_link.to(self.device)
             )
 
         self.rtt = 0
@@ -122,6 +126,7 @@ class Inference:
                 model.lstmcell_time,
                 model.output_layer,
                 model.lstmcell_rate_link,
+                model.lstmcell_time_link,
             )
         else:
             return (
@@ -170,6 +175,11 @@ class Inference:
     def update_time(self, h_vec, time_deltas):
         with torch.no_grad():
             h_vec_res = self.lstmcell_time(time_deltas, h_vec)
+        return h_vec_res
+
+    def update_time_link(self, h_vec, time_deltas):
+        with torch.no_grad():
+            h_vec_res = self.lstmcell_time_link(time_deltas, h_vec)
         return h_vec_res
 
 
@@ -425,6 +435,14 @@ def interactive_inference(
         #     f"n_active_flows: {flowid_active_list_cur.numel()}, graph_id_cur: {graph_id_cur}, fat: {flow_arrival_time/1000.0}, fct: {flow_completion_time/1000.0}"
         # )
         if flowid_active_list_cur is not None and flowid_active_list_cur.numel() > 0:
+            # Get unique link indices
+            edge_mask = flowid_active_mask_cur[edges_list[0]]
+            edges_list_active = edges_list[:, edge_mask]
+
+            active_link_idx, new_link_indices = torch.unique(
+                edges_list_active[1], return_inverse=True, sorted=False
+            )
+
             time_deltas = time_cur - time_last[flowid_active_list_cur]
             if time_deltas.max() > 0:
                 time_deltas[:] = time_deltas.max()
@@ -432,21 +450,17 @@ def interactive_inference(
                     h_vec[flowid_active_list_cur],
                     time_deltas / 1000.0,
                 )
+                if inference.enable_link_state:
+                    inference.z_t_link[active_link_idx] = inference.update_time_link(
+                        inference.z_t_link[active_link_idx],
+                        time_deltas / 1000.0,
+                    )
             time_last[flowid_active_list_cur] = time_cur
-
-            # Get unique link indices
-            edge_mask = flowid_active_mask_cur[edges_list[0]]
-            edges_list_active = edges_list[:, edge_mask]
 
             n_flows_active_cur = flowid_active_list_cur.size(0)
             new_flow_indices = torch.searchsorted(
                 flowid_active_list_cur, edges_list_active[0]
             )
-
-            active_link_idx, new_link_indices = torch.unique(
-                edges_list_active[1], return_inverse=True, sorted=False
-            )
-
             new_link_indices += n_flows_active_cur
             edges_list_active = torch.stack([new_flow_indices, new_link_indices], dim=0)
 
