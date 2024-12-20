@@ -76,8 +76,10 @@ def collate_fn(batch):
     flow_active_matrix = np.concatenate(flow_active_matrix)
 
     batch_index = np.zeros(flow_active_matrix.shape[0], dtype=np.int32)
+    batch_index_link = np.zeros(n_links_accu[-1], dtype=np.int32)
     for i in range(1, batch_size):
         batch_index[n_flows_accu[i - 1] : n_flows_accu[i]] = i
+        batch_index_link[n_links_accu[i - 1] : n_links_accu[i]] = i
         edge_index_matrix[i][0] += n_flows_accu[i - 1]
         edge_index_matrix[i][1] += n_links_accu[i - 1]
     edge_index_matrix = np.concatenate(edge_index_matrix, axis=1)
@@ -99,6 +101,7 @@ def collate_fn(batch):
         torch.tensor(inputs),
         torch.tensor(outputs),
         torch.tensor(batch_index),
+        torch.tensor(batch_index_link),
         specs,
         padded_remainsize_matrix,
         padded_queuelen_matrix,
