@@ -193,7 +193,7 @@ class FlowSimLstm(LightningModule):
                 self.lstmcell_rate_link = SeqCell(
                     input_size=hidden_size, hidden_size=hidden_size
                 )
-                # self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
+                self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
             dim_flowsim = 16 if self.enable_flowsim_diff else 0
             self.output_layer = nn.Sequential(
                 nn.Linear(hidden_size + dim_flowsim, hidden_size // 2),  # First layer
@@ -262,6 +262,7 @@ class FlowSimLstm(LightningModule):
         self,
         x,
         batch_index,
+        batch_index_link,
         remainsize_matrix,
         queuelen_matrix,
         queuelen_link_matrix,
@@ -307,16 +308,34 @@ class FlowSimLstm(LightningModule):
             )  # (n_flows, n_events)
 
             time_deltas_full = time_delta_matrix[batch_index, :]  # (n_flows, n_events)
-
+            time_deltas_full_link = time_delta_matrix[batch_index_link, :]
             for j in range(n_events):
                 active_flow_mask = flow_activity_mask[:, j]  # (n_flows,)
                 if active_flow_mask.any():
                     active_flow_idx = torch.where(active_flow_mask)[0]
+                    n_flows_active = active_flow_idx.size(0)
+
+                    edge_mask = active_flow_mask[edges_a_to_b[0]]
+                    edge_index_a_to_b = edges_a_to_b[:, edge_mask]
+                    active_link_idx, new_link_indices = torch.unique(
+                        edge_index_a_to_b[1], return_inverse=True, sorted=False
+                    )
+                    n_links_active = active_link_idx.size(0)
+
                     time_deltas = time_deltas_full[active_flow_idx, j]
+
                     if (time_deltas > self.rtt).all():
                         batch_h_state[active_flow_idx, :] = self.lstmcell_time(
                             time_deltas, batch_h_state[active_flow_idx, :]
                         )
+                        if self.enable_link_state:
+                            time_deltas_link = time_deltas_full_link[active_link_idx, j]
+                            batch_h_state_link[active_link_idx, :] = (
+                                self.lstmcell_time_link(
+                                    time_deltas_link,
+                                    batch_h_state_link[active_link_idx, :],
+                                )
+                            )
 
                     if self.enable_remainsize and len(remainsize_matrix[j]) == len(
                         active_flow_idx
@@ -332,17 +351,9 @@ class FlowSimLstm(LightningModule):
                         )
                         loss_size_num[active_flow_idx, 0] += 1
 
-                    edge_mask = active_flow_mask[edges_a_to_b[0]]
-                    edge_index_a_to_b = edges_a_to_b[:, edge_mask]
-
-                    n_flows_active = active_flow_idx.size(0)
                     new_flow_indices = torch.searchsorted(
                         active_flow_idx, edge_index_a_to_b[0]
                     )
-                    active_link_idx, new_link_indices = torch.unique(
-                        edge_index_a_to_b[1], return_inverse=True, sorted=False
-                    )
-
                     new_link_indices += n_flows_active
                     edge_index_a_to_b = torch.stack(
                         [new_flow_indices, new_link_indices], dim=0
@@ -421,6 +432,7 @@ class FlowSimLstm(LightningModule):
             input,
             output,
             batch_index,
+            batch_index_link,
             spec,
             remainsize_matrix,
             queuelen_matrix,
@@ -433,6 +445,7 @@ class FlowSimLstm(LightningModule):
         estimated, loss_size, loss_queue = self(
             input,
             batch_index,
+            batch_index_link,
             remainsize_matrix,
             queuelen_matrix,
             queuelen_link_matrix,
@@ -566,7 +579,7 @@ class FlowSimLstm(LightningModule):
                 parameters += list(gcn_layer.parameters())
             if self.enable_link_state:
                 parameters += list(self.lstmcell_rate_link.parameters())
-                # parameters += list(self.lstmcell_time_link.parameters())
+                parameters += list(self.lstmcell_time_link.parameters())
             if self.enable_remainsize:
                 parameters += list(self.remain_size_layer.parameters())
                 parameters += list(self.queue_len_layer.parameters())
