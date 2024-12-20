@@ -203,16 +203,16 @@ class FlowSimLstm(LightningModule):
             )
             if self.enable_remainsize:
                 self.remain_size_layer = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size // 8),  # First layer
+                    nn.Linear(hidden_size, hidden_size // 2),  # First layer
                     nn.ReLU(),  # Non-linearity
                     nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size // 8, 1),  # Second layer
+                    nn.Linear(hidden_size // 2, 1),  # Second layer
                 )
                 self.queue_len_layer = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size // 8),  # First layer
+                    nn.Linear(hidden_size, hidden_size // 2),  # First layer
                     nn.ReLU(),  # Non-linearity
                     nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size // 8, 1),  # Second layer
+                    nn.Linear(hidden_size // 2, 1),  # Second layer
                 )
         elif enable_gnn:
             logging.info(f"GNN enabled")
@@ -313,14 +313,12 @@ class FlowSimLstm(LightningModule):
                 active_flow_mask = flow_activity_mask[:, j]  # (n_flows,)
                 if active_flow_mask.any():
                     active_flow_idx = torch.where(active_flow_mask)[0]
-                    n_flows_active = active_flow_idx.size(0)
 
                     edge_mask = active_flow_mask[edges_a_to_b[0]]
                     edge_index_a_to_b = edges_a_to_b[:, edge_mask]
                     active_link_idx, new_link_indices = torch.unique(
                         edge_index_a_to_b[1], return_inverse=True, sorted=False
                     )
-                    n_links_active = active_link_idx.size(0)
 
                     time_deltas = time_deltas_full[active_flow_idx, j]
 
@@ -351,6 +349,7 @@ class FlowSimLstm(LightningModule):
                         )
                         loss_size_num[active_flow_idx, 0] += 1
 
+                    n_flows_active = active_flow_idx.size(0)
                     new_flow_indices = torch.searchsorted(
                         active_flow_idx, edge_index_a_to_b[0]
                     )
