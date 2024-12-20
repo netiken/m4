@@ -444,6 +444,12 @@ def interactive_inference(
             time_deltas = time_cur - time_last[flowid_active_list_cur]
             if time_deltas.max() > 0:
                 time_deltas[:] = time_deltas.max()
+                time_deltas_link = torch.full(
+                    (active_link_idx.size(0), 1),
+                    time_deltas.max(),
+                    dtype=torch.float32,
+                    device=device,
+                )
                 h_vec[flowid_active_list_cur] = inference.update_time(
                     h_vec[flowid_active_list_cur],
                     time_deltas / 1000.0,
@@ -451,7 +457,7 @@ def interactive_inference(
                 if inference.enable_link_state:
                     inference.z_t_link[active_link_idx] = inference.update_time_link(
                         inference.z_t_link[active_link_idx],
-                        time_deltas / 1000.0,
+                        time_deltas_link / 1000.0,
                     )
             time_last[flowid_active_list_cur] = time_cur
 
@@ -545,20 +551,21 @@ def main():
         ("eval_test", 5, 60000),
     ]
     model_list = [
-        # ("m4_small", 11, 4000),
-        # ("m4_small", 9, 4000),
-        # ("m4_small", 8, 4000),
-        # ("m4_noflowsim", 19, 4000),
-        # ("m4_noflowsim", 12, 4000),
-        # ("m4_noflowsim", 9, 4000),
-        # ("m4_noflowsim", 7, 4000),
-        ("m4_no", 11, 4000),
-        ("m4_no", 10, 4000),
-        ("m4_no", 9, 4000),
-        ("m4_no", 8, 4000),
-        ("m4_no", 7, 4000),
-        ("m4_no", 6, 4000),
-        ("m4_no", 5, 4000),
+        ("m4_large", 12, 4000),
+        ("m4_large", 11, 4000),
+        ("m4_large", 10, 4000),
+        ("m4_large", 9, 4000),
+        ("m4_large", 8, 4000),
+        ("m4_large", 7, 4000),
+        ("m4_large", 6, 4000),
+        ("m4_large", 5, 4000),
+        # ("m4", 11, 4000),
+        # ("m4", 10, 4000),
+        # ("m4", 9, 4000),
+        # ("m4", 8, 4000),
+        # ("m4", 7, 4000),
+        # ("m4", 6, 4000),
+        # ("m4", 5, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
