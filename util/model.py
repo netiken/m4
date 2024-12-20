@@ -202,17 +202,22 @@ class FlowSimLstm(LightningModule):
                 nn.Linear(hidden_size // 2, output_size),  # Second layer
             )
             if self.enable_remainsize:
+                model_scaling_factor = 2
                 self.remain_size_layer = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size // 2),  # First layer
+                    nn.Linear(
+                        hidden_size, hidden_size // model_scaling_factor
+                    ),  # First layer
                     nn.ReLU(),  # Non-linearity
                     nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size // 2, 1),  # Second layer
+                    nn.Linear(hidden_size // model_scaling_factor, 1),  # Second layer
                 )
                 self.queue_len_layer = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size // 2),  # First layer
+                    nn.Linear(
+                        hidden_size, hidden_size // model_scaling_factor
+                    ),  # First layer
                     nn.ReLU(),  # Non-linearity
                     nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size // 2, 1),  # Second layer
+                    nn.Linear(hidden_size // model_scaling_factor, 1),  # Second layer
                 )
         elif enable_gnn:
             logging.info(f"GNN enabled")
