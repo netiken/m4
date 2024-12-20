@@ -73,12 +73,9 @@ class Inference:
         self.lstmcell_time.save(f"{directory}/lstmcell_time.pt")
         self.output_layer.save(f"{directory}/output_layer.pt")
 
-        # lstmcell_rate_fp16 = self.lstmcell_rate.to(dtype=torch.float16)
-        # lstmcell_rate_fp16.save(f"{directory}/lstmcell_rate_fp16.pt")
-        # lstmcell_time_fp16 = self.lstmcell_time.to(dtype=torch.float16)
-        # lstmcell_time_fp16.save(f"{directory}/lstmcell_time_fp16.pt")
-        # output_layer_fp16 = self.output_layer.to(dtype=torch.float16)
-        # output_layer_fp16.save(f"{directory}/output_layer_fp16.pt")
+        if self.enable_link_state:
+            self.lstmcell_rate_link.save(f"{directory}/lstmcell_rate_link.pt")
+            self.lstmcell_time_link.save(f"{directory}/lstmcell_time_link.pt")
 
     def load_model(self, checkpoint_path):
         model_config = self.model_config
