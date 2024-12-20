@@ -555,6 +555,26 @@ class FlowSimLstm(LightningModule):
                     batch_size=self.batch_size,
                     sync_dist=self.enable_dist,
                 )
+            if self.enable_link_state:
+                lstm_norms_link = []
+                for param in self.lstmcell_rate_link.parameters():
+                    if param.grad is not None:
+                        lstm_norms_link.append(param.grad.norm().item())
+                for param in self.lstmcell_time_link.parameters():
+                    if param.grad is not None:
+                        lstm_norms_link.append(param.grad.norm().item())
+                if lstm_norms_link:
+                    avg_lstm_grad_link = sum(lstm_norms_link) / len(lstm_norms_link)
+                    self.log(
+                        f"{tag}_lstm_grad_norm_link",
+                        avg_lstm_grad_link,
+                        on_step=True,
+                        on_epoch=True,
+                        logger=True,
+                        prog_bar=True,
+                        batch_size=self.batch_size,
+                        sync_dist=self.enable_dist,
+                    )
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, tag="train")
