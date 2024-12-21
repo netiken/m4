@@ -109,10 +109,12 @@ class SeqCell(nn.Module):
         self.input_size = input_size
         # self.seq_cell = nn.LSTMCell(input_size, hidden_size)
         self.seq_cell = nn.GRUCell(input_size, hidden_size)
+        self.norm_layer = nn.LayerNorm(hidden_size)  # Normalize the hidden state
 
     def forward(self, x, h_t):
         # h_t, c_t = self.seq_cell(x, (h_t, c_t))
         h_t = self.seq_cell(x, h_t)
+        h_t = self.norm_layer(h_t)  # Apply normalization
         return h_t
 
 
@@ -368,10 +370,10 @@ class FlowSimLstm(LightningModule):
                                 == len(queue_len_est)
                                 == len(queue_link_idx)
                             ):
-                                queue_len_est = torch.div(
-                                    queue_len_est + 1.0, queue_len_gt + 1.0
-                                )
-                                queue_len_gt = torch.ones_like(queue_len_est)
+                                # queue_len_est = torch.div(
+                                #     queue_len_est + 1.0, queue_len_gt + 1.0
+                                # )
+                                # queue_len_gt = torch.ones_like(queue_len_est)
                                 loss_queue[queue_link_idx, 0] += torch.abs(
                                     queue_len_est - queue_len_gt
                                 )
