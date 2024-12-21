@@ -75,7 +75,7 @@ def collate_fn(batch):
 
     flow_active_matrix = np.concatenate(flow_active_matrix)
 
-    batch_index = np.zeros(flow_active_matrix.shape[0], dtype=np.int32)
+    batch_index = np.zeros(n_flows_accu[-1], dtype=np.int32)
     batch_index_link = np.zeros(n_links_accu[-1], dtype=np.int32)
     for i in range(1, batch_size):
         batch_index[n_flows_accu[i - 1] : n_flows_accu[i]] = i
