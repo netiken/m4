@@ -368,6 +368,10 @@ class FlowSimLstm(LightningModule):
                                 == len(queue_len_est)
                                 == len(queue_link_idx)
                             ):
+                                queue_len_est = torch.div(
+                                    queue_len_est + 1.0, queue_len_gt + 1.0
+                                )
+                                queue_len_gt = torch.ones_like(queue_len_est)
                                 loss_queue[queue_link_idx, 0] += torch.abs(
                                     queue_len_est - queue_len_gt
                                 )
