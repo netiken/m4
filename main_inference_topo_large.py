@@ -568,8 +568,10 @@ def main():
         # ("m4_small", 8, 4000),
         # ("m4_noflowsim", 19, 4000),
         # ("m4_noflowsim", 7, 4000),
-        ("m4_queuegt", 5, 4000),
-        ("m4_queuegt", 4, 4000),
+        # ("m4_small", 6, 4000),
+        # ("m4_small", 10, 4000),
+        ("m4_small", 11, 4000),
+        # ("m4_queuegt", 4, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
