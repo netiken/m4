@@ -60,8 +60,9 @@ class HomoNetGNN(nn.Module):
         self.conv = SAGEConv(
             c_in, c_out, aggr="sum", project=True
         )  # project=True is default
-        # self.dropout = nn.Dropout(dropout)
         self.norm = torch.nn.LayerNorm(c_out)
+
+        # self.dropout = nn.Dropout(dropout)
         # self.final_lin = nn.Linear(c_out, c_out)
         # self.final_lin = nn.Sequential(
         #     nn.Linear(c_out, c_out),  # First layer

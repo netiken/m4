@@ -39,7 +39,7 @@ python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=
 
 python main_train.py --train_config=./config/train_config_lstm_topo_empirical.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --note topo_512_flowsim_input_empirical_remainsize
 
-python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note m4_large
+python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note m4_queue
 
 python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_train --note=topo_256_flowsim
 
@@ -71,7 +71,7 @@ time python main_inference_link.py
 
 https://github.com/kwzhao/High-Precision-Congestion-Control/compare/8ded7c2ec5dae18a72c53c268eee0a70df5a2964...01fdae82351980dba89a34b33d9680e2eae44855
 
-https://github.com/liecn/per-flow-sim/compare/5d975a4c49aa2a40de6078fb4b3113315dc5976d...cf4eabcc9d59d2650d425f18e1f55b48ddf0b395
+https://github.com/liecn/per-flow-sim/compare/c6a4a7aeb191a7b924be19d87d2c79d7384f4a06...617b5e4907f1422d04783bdc2178f106aab78ce7
 
 ulimit -n 65536
 
