@@ -1,19 +1,10 @@
 import torch
 from pytorch_lightning import LightningModule
 import torch.nn as nn
-from .func import serialize_fp32
 import numpy as np
 import logging
-import struct
 import os
-from sortedcontainers import SortedSet
-
-import torch.nn.functional as F
-
-from torch_geometric.nn import HeteroConv, MessagePassing, SAGEConv
-from torch_geometric.data import HeteroData, Batch, Data
-from torch_geometric.utils import degree
-from typing import Tuple
+from torch_geometric.nn import SAGEConv
 
 
 class WeightedL1Loss(nn.Module):
@@ -57,62 +48,22 @@ class HomoGNNLayer(nn.Module):
 class HomoNetGNN(nn.Module):
     def __init__(self, c_in, c_out, dropout=0.2):
         super(HomoNetGNN, self).__init__()
-        self.conv = SAGEConv(
-            c_in, c_out, aggr="sum", project=True
-        )  # project=True is default
+        self.conv = SAGEConv(c_in, c_out, aggr="sum", project=True)
         self.norm = torch.nn.LayerNorm(c_out)
 
-        # self.dropout = nn.Dropout(dropout)
-        # self.final_lin = nn.Linear(c_out, c_out)
-        # self.final_lin = nn.Sequential(
-        #     nn.Linear(c_out, c_out),  # First layer
-        #     nn.ReLU(),  # Non-linearity
-        #     # nn.Dropout(p=dropout),
-        #     nn.Linear(c_out, c_out),  # Second layer
-        # )
-
     def forward(self, x, edge_index):
-        # Apply the SAGEConv layer (includes residual connection)
         out = self.conv(x, edge_index)
         out = self.norm(out)  # Apply normalization
-
-        # Apply linear transformation, activation, and dropout
-        # out = F.relu(self.final_lin(out))
-        # out = self.dropout(out)
-
         return out
-
-
-# class HomoNetGNN(nn.Module):
-#     def __init__(self, c_in, c_out, dropout=0.2):
-#         super(HomoNetGNN, self).__init__()
-#         self.conv = SAGEConv(c_in + 1, c_out, aggr="mean", project=True)
-#         self.norm = torch.nn.LayerNorm(c_out)
-
-#     def forward(self, x, edge_index):
-#         row, col = edge_index
-#         deg = degree(row, num_nodes=x.size(0), dtype=x.dtype)
-#         deg = deg.view(-1, 1)  # Reshape to (num_nodes, 1)
-#         x = torch.cat([x, deg], dim=1)  # Concatenate degree to the feature matrix
-
-#         # Apply the SAGEConv layer (includes residual connection)
-#         out = self.conv(x, edge_index)
-#         out = self.norm(out)  # Apply normalization
-
-#         return out
 
 
 class SeqCell(nn.Module):
     def __init__(self, input_size, hidden_size):
         super(SeqCell, self).__init__()
-        self.hidden_size = hidden_size
-        self.input_size = input_size
-        # self.seq_cell = nn.LSTMCell(input_size, hidden_size)
         self.seq_cell = nn.GRUCell(input_size, hidden_size)
         self.norm_layer = nn.LayerNorm(hidden_size)  # Normalize the hidden state
 
     def forward(self, x, h_t):
-        # h_t, c_t = self.seq_cell(x, (h_t, c_t))
         h_t = self.seq_cell(x, h_t)
         h_t = self.norm_layer(h_t)  # Apply normalization
         return h_t
@@ -183,7 +134,6 @@ class FlowSimLstm(LightningModule):
                     for i in range(gcn_n_layer)
                 ]
             )
-            # lstmcell_rate_extra = 0
             lstmcell_rate_extra = 13
             self.lstmcell_rate = SeqCell(
                 input_size=hidden_size + lstmcell_rate_extra, hidden_size=hidden_size
@@ -257,7 +207,6 @@ class FlowSimLstm(LightningModule):
 
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":
-            # return nn.L1Loss()
             return WeightedL1Loss()
         elif loss_fn_type == "mse":
             return WeightedMSELoss()
@@ -286,7 +235,6 @@ class FlowSimLstm(LightningModule):
             batch_h_state[:, 0] = 1.0
             batch_h_state[:, 2] = x[:, 0]
             batch_h_state[:, 3] = x[:, 2]
-            # batch_h_state[:, 3 : 1 + x.shape[1]] = x[:, 2:]
 
             batch_h_state_link = torch.zeros(
                 (batch_size * self.n_links, self.hidden_size), device=x.device
@@ -368,10 +316,6 @@ class FlowSimLstm(LightningModule):
                                 == len(queue_len_est)
                                 == len(queue_link_idx)
                             ):
-                                # queue_len_est = torch.div(
-                                #     queue_len_est + 1.0, queue_len_gt + 1.0
-                                # )
-                                # queue_len_gt = torch.ones_like(queue_len_est)
                                 loss_queue[queue_link_idx, 0] += torch.abs(
                                     queue_len_est - queue_len_gt
                                 )
@@ -440,7 +384,6 @@ class FlowSimLstm(LightningModule):
             if self.enable_flowsim_diff:
                 input_tmp = torch.cat([x, batch_h_state], dim=1)
                 res = self.output_layer(input_tmp)
-                # res = self.output_layer(batch_h_state) + x[:, 1:2]
             else:
                 res = self.output_layer(batch_h_state) + 1.0
             if self.enable_remainsize:
@@ -480,8 +423,6 @@ class FlowSimLstm(LightningModule):
             time_delta_matrix,
             edges_a_to_b_matrix,
         )
-
-        # Generate a mask based on lengths
 
         est = torch.div(estimated, output).squeeze()
         gt = torch.ones_like(est)
@@ -601,8 +542,6 @@ class FlowSimLstm(LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.step(batch, batch_idx, tag="train")
-        # Gradient clipping
-        # torch.nn.utils.clip_grad_norm_(self.model_lstm.parameters(), max_norm=1.0)
         if self.enable_log_norm:
             self._log_gradient_norms("train")
 

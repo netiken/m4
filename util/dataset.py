@@ -1,4 +1,4 @@
-from torch.utils.data import Dataset, DataLoader, BatchSampler, RandomSampler
+from torch.utils.data import Dataset, DataLoader
 from pytorch_lightning import LightningDataModule
 import torch
 import numpy as np
@@ -6,14 +6,12 @@ import json
 import logging
 import os
 from .consts import (
-    PLACEHOLDER,
     balance_len_bins,
     balance_len_bins_list,
     get_base_delay_transmission,
     get_base_delay_link,
     get_base_delay_path,
 )
-from collections import defaultdict
 
 
 def collate_fn(batch):
@@ -83,7 +81,6 @@ def collate_fn(batch):
         edge_index_matrix[i][0] += n_flows_accu[i - 1]
         edge_index_matrix[i][1] += n_links_accu[i - 1]
     edge_index_matrix = np.concatenate(edge_index_matrix, axis=1)
-    # edge_index_matrix[1] += n_flows.sum()
 
     if remainsize_matrix[0] is not None:
         padded_remainsize_matrix = []
@@ -255,15 +252,6 @@ class DataModulePerFlow(LightningDataModule):
                                             )
                                             for segment_id in range(len(busy_periods))
                                         ]
-
-                                        # sample_indices = np.random.choice(
-                                        #     len(len_per_period),
-                                        #     min(
-                                        #         segments_per_seq * 100,
-                                        #         len(len_per_period),
-                                        #     ),
-                                        #     replace=False,
-                                        # )
                                         sample_indices = np.arange(len(len_per_period))
 
                                         len_per_period_all.extend(
@@ -292,16 +280,6 @@ class DataModulePerFlow(LightningDataModule):
                             topo_type_cur = topo_type.replace("-x_", f"-{n_hosts}_")
                             spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
                             for sample in sample_list:
-                                # qfeat=np.load(f"{dir_input}/{spec}/qfeat{topo_type_cur}s{sample}.npy")
-                                # flow_id_list=qfeat[:,0]
-                                # fsize=np.load(f"{dir_input}/{spec}/fsize.npy")
-
-                                # statss = np.load(
-                                #     f"{dir_input}/{spec}/stats.npy", allow_pickle=True
-                                # )
-                                # if float(statss.item().get("size_sigma_candidate")) < 15000:
-                                #     continue
-
                                 file_suffix = f"s{sample}_i0"
                                 fid = np.load(
                                     f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
@@ -361,11 +339,6 @@ class DataModulePerFlow(LightningDataModule):
                                                 )
                                             ]
 
-                                            # sample_indices = np.random.choice(
-                                            #     len(len_per_period),
-                                            #     segments_per_seq * 5,
-                                            #     replace=True,
-                                            # )
                                             sample_indices = np.arange(
                                                 len(len_per_period)
                                             )
@@ -1497,7 +1470,6 @@ class TopoFctSldnSegment(Dataset):
 
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
-        # output_data = np.log2(fcts / 1000.0 + 1).reshape(-1, 1).astype(np.float32)
 
         sizes = np.log2(sizes / 1000.0 + 1)
         # sizes = sizes
@@ -1507,8 +1479,6 @@ class TopoFctSldnSegment(Dataset):
             fats = fats / 1000.0
 
         param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
-        # param_data[6:] = param_data[6:] / 10.0
-        # param_data[:2] = param_data[:2] / 10.0
         param_data_repeat = np.repeat(param_data[:, np.newaxis], n_flows, axis=1).T
         if not self.enable_flowsim_gt:
             input_data = np.column_stack(
