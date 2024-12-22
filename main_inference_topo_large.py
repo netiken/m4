@@ -541,8 +541,8 @@ def main():
     max_inflight_flows = 0
     dataset_list = [
         ("", 1, 85584, 0),
-        ("", 1, 573200, 1),
-        ("", 1, 92278, 2),
+        # ("", 1, 573200, 1),
+        # ("", 1, 92278, 2),
     ]
     model_list = [
         # ("topo_featrate", 7, 4000),
@@ -570,8 +570,12 @@ def main():
         # ("m4_noflowsim", 7, 4000),
         # ("m4_small", 6, 4000),
         # ("m4_small", 10, 4000),
-        ("m4_small", 11, 4000),
-        # ("m4_queuegt", 4, 4000),
+        # ("m4_small", 11, 4000),
+        # ("m4_grunorm_mid", 4, 4000),
+        # ("m4_grunorm_mid", 3, 4000),
+        ("m4_grunorm_small", 18, 4000),
+        ("m4_grunorm_small", 12, 4000),
+        ("m4_grunorm_small", 10, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")

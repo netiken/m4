@@ -551,6 +551,7 @@ def main():
         ("eval_test", 5, 60000),
     ]
     model_list = [
+        ("m4_grunorm_small", 19, 4000),
         # ("m4_grunorm_small", 18, 4000),
         # ("m4_grunorm_small", 17, 4000),
         # ("m4_grunorm_small", 16, 4000),
@@ -567,7 +568,7 @@ def main():
         # ("m4_grunorm_small", 5, 4000),
         # ("m4_grunorm_small", 4, 4000),
         # ("m4_grunorm_small", 3, 4000),
-        ("m4_grunorm_mid", 16, 4000),
+        # ("m4_grunorm_mid", 16, 4000),
         # ("m4_grunorm_mid", 15, 4000),
         # ("m4_grunorm_mid", 14, 4000),
         # ("m4_grunorm_mid", 13, 4000),
