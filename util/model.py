@@ -162,7 +162,6 @@ class FlowSimLstm(LightningModule):
         self.enable_log_norm = enable_log_norm
         self.loss_efficiency_size = 0.1
         self.loss_efficiency_queue = 0.1
-        self.bw_const = 1.0
         if enable_path:
             self.n_links = 12
         elif enable_topo:
@@ -293,7 +292,7 @@ class FlowSimLstm(LightningModule):
                 (batch_size * self.n_links, self.hidden_size), device=x.device
             )
             batch_h_state_link[:, 1] = 1.0
-            batch_h_state_link[:, 2] = self.bw_const
+            batch_h_state_link[:, 2] = 1.0
 
             if self.enable_remainsize:
                 loss_size = torch.zeros((n_flows, 1), device=x.device)
