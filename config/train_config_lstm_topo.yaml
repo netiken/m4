@@ -28,8 +28,8 @@ model:
   n_layer: 2
   gcn_n_layer: 3
   loss_fn_type: "l1"
-  hidden_size: 200
-  gcn_hidden_size: 200
+  hidden_size: 300
+  gcn_hidden_size: 300
   dropout: 0.2
   enable_bidirectional: True
   enable_positional_encoding: False
@@ -40,9 +40,9 @@ model:
 
 # Training parameters
 training:
-  gpu: [1]
+  gpu: [0]
   n_epochs: 20
-  batch_size: 2
+  batch_size: 1
   learning_rate: 0.0001
   num_workers: 2
   enable_val: True
