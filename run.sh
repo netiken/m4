@@ -150,6 +150,8 @@ cargo run --release -- --root=./data_test_config --mixes spec/test_config.mix.js
 cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
 cargo run --release -- --root=./eval_train_test --mixes spec/eval_train_test.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
+cargo run --release -- --root=./eval_test --mixes spec/0.mix.json ns3
+
 cargo run --release -- --root=./data_test_config --mixes spec/0.mix.json ns3
 cargo run --release -- --root=./test --mixes spec/0.mix.json ns3
 
