@@ -17,7 +17,13 @@ color_list = [
     "seagreen",
 ]
 hatch_list = ["o", "x", "/", ".", "*", "-", "\\"]
-linestyle_list = ["-", "-.", ":", "--"]
+linestyle_list = [
+    "-",
+    "--",
+    "--",
+    "-.",
+    ":",
+]
 markertype_list = ["o", "^", "x", "x", "|"]
 
 
@@ -38,14 +44,15 @@ def plot_cdf(
     title=None,
     enable_abs=False,
     group_size=1,
+    fig_idx=0,
 ):
     _fontsize = fontsize
-    fig = plt.figure(figsize=(6, 2.0))  # 2.5 inch for 1/3 double column width
+    fig = plt.figure(fig_idx, figsize=(5, 2.0))  # 2.5 inch for 1/3 double column width
     ax = fig.add_subplot(111)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
 
-    plt.axhline(99, color="k", linewidth=3, linestyle="--", zorder=0)
+    # plt.axhline(99, color="k", linewidth=3, linestyle="--", zorder=0)
 
     ax.tick_params(axis="y", direction="in")
     ax.tick_params(axis="x", direction="in")
@@ -85,7 +92,7 @@ def plot_cdf(
                 linestyle=linestyle_list[(i // group_size) % len(linestyle_list)],
                 color=color_list[(i % group_size) % len(color_list)],
                 label=linelabels[i],
-                linewidth=3,
+                linewidth=2,
             )
         else:
             plt.plot(
@@ -93,7 +100,7 @@ def plot_cdf(
                 cdf,
                 linestyle=linestyle_list[(i // group_size) % len(linestyle_list)],
                 color=color_list[(i % group_size) % len(color_list)],
-                linewidth=3,
+                linewidth=2,
             )
 
     legend_properties = {"size": legend_font}
@@ -113,6 +120,105 @@ def plot_cdf(
     plt.yticks(fontsize=_fontsize)
     plt.xticks(fontsize=_fontsize)
     # plt.grid(True)
+
+    if rotate_xaxis:
+        plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
+    if title:
+        plt.title(title, fontsize=_fontsize - 5)
+    if file_name:
+        plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
+
+
+def plot_lines(
+    raw_data,
+    file_name,
+    linelabels,
+    x_label,
+    y_label,
+    log_switch=False,
+    rotate_xaxis=False,
+    ylim=None,
+    xlim=None,
+    fontsize=15,
+    legend_font=15,
+    loc=2,
+    legend_cols=1,
+    title=None,
+    format_idx=None,
+    fig_idx=0,
+):
+    """
+    Plots multiple line plots for the given datasets.
+
+    Parameters:
+    - raw_data: List of datasets (each dataset is a tuple of x and y values).
+    - file_name: Name of the file to save the plot.
+    - linelabels: List of labels for the lines.
+    - x_label: Label for the x-axis.
+    - y_label: Label for the y-axis.
+    - log_switch: Whether to use logarithmic scaling on the x-axis.
+    - rotate_xaxis: Whether to rotate x-axis tick labels.
+    - ylim: Tuple specifying y-axis limits.
+    - xlim: Tuple specifying x-axis limits.
+    - fontsize: Font size for axis labels and title.
+    - legend_font: Font size for the legend.
+    - loc: Legend location.
+    - title: Title of the plot.
+    - fig_idx: Figure index for the plot.
+    """
+    _fontsize = fontsize
+    fig = plt.figure(fig_idx, figsize=(5, 2.0))
+    ax = fig.add_subplot(111)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    ax.tick_params(axis="y", direction="in")
+    ax.tick_params(axis="x", direction="in")
+    if log_switch:
+        ax.set_xscale("log")
+
+    plt.ylabel(y_label, fontsize=_fontsize)
+    plt.xlabel(x_label, fontsize=_fontsize)
+    linelabels = ["\n".join(wrap(l, 30)) for l in linelabels]
+
+    for i in range(len(raw_data)):
+        x, y = raw_data[i]
+        if len(x) == 0 or len(y) == 0:
+            continue
+        idx_selected = format_idx[i] if format_idx else i
+        if i < len(linelabels):
+            plt.plot(
+                x,
+                y,
+                # linestyle=linestyle_list[idx_selected % len(linestyle_list)],
+                color=color_list[idx_selected % len(color_list)],
+                label=linelabels[i],
+                linewidth=2,
+            )
+        else:
+            plt.plot(
+                x,
+                y,
+                # linestyle=linestyle_list[idx_selected % len(linestyle_list)],
+                color=color_list[idx_selected % len(color_list)],
+                linewidth=2,
+            )
+
+    legend_properties = {"size": legend_font}
+    plt.legend(
+        prop=legend_properties,
+        frameon=False,
+        loc=loc,
+        ncol=legend_cols,
+    )
+
+    if ylim:
+        plt.ylim(top=ylim)
+    if xlim:
+        plt.xlim(right=xlim)
+
+    plt.yticks(fontsize=_fontsize)
+    plt.xticks(fontsize=_fontsize)
 
     if rotate_xaxis:
         plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
