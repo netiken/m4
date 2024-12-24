@@ -363,23 +363,6 @@ class FlowSimLstm(LightningModule):
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
-                        # if self.enable_remainsize:
-                        #     queue_link_idx = queuelen_link_matrix[j]
-                        #     if len(queue_link_idx) > 0:
-                        #         queue_len_est = self.queue_len_layer(
-                        #             batch_h_state_link[queue_link_idx, :]
-                        #         )[:, 0]
-
-                        #         queue_len_gt = queuelen_matrix[j]
-                        #         if (
-                        #             len(queue_len_gt)
-                        #             == len(queue_len_est)
-                        #             == len(queue_link_idx)
-                        #         ):
-                        #             loss_queue[queue_link_idx, 0] += torch.abs(
-                        #                 queue_len_est - queue_len_gt
-                        #             )
-                        #             loss_queue_num[queue_link_idx, 0] += 1
 
             if self.enable_flowsim_diff:
                 input_tmp = torch.cat([x, batch_h_state], dim=1)

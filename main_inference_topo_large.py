@@ -545,6 +545,7 @@ def main():
         ("", 1, 92278, 2),
     ]
     model_list = [
+        ("m4", 10, 4000),
         # ("topo_featrate", 7, 4000),
         # ("topo_remainsize_large_data", 7, 4000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
@@ -573,7 +574,7 @@ def main():
         # ("m4_small", 11, 4000),
         # ("m4_grunorm_mid", 4, 4000),
         # ("m4_grunorm_mid", 3, 4000),
-        ("m4", 17, 4000),
+        # ("m4", 17, 4000),
         # ("m4", 16, 4000),
         # ("m4", 10, 4000),
         # ("m4_grunorm", 10, 4000),
