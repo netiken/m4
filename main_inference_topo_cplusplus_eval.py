@@ -507,7 +507,7 @@ def main():
         type=str,
         required=False,
         help="Path to the input data directory",
-        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_test_8k",
+        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_test",
     )
     parser.add_argument(
         "--output",
@@ -539,7 +539,7 @@ def main():
     else:
         print("Running m4's inference")
         model_instance = "m4"
-        checkpoint = f"{args.output}/{model_instance}_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=015.ckpt"
+        checkpoint = f"{args.output}/{model_instance}_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=010.ckpt"
         inference = Inference(
             data_config,
             model_config,
