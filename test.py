@@ -1,186 +1,144 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from util.plot import plot_cdf, plot_lines, plot_box_by_config
+from util.consts import balance_size_bins, balance_size_bins_label
+from util.plot import color_list
+import json
+import os
 from collections import defaultdict
 
 
-def process_events_and_compute_neighbors(all_events, max_hops=3):
-    """
-    Process flow arrival and completion events, calculating neighbor counts up to max_hops
-    for all affected flows at each event, and returning a list of snapshots with these counts.
+# Define constants
+n_scenario = 100
+empirical_str = "eval_test_large"
+legend_list = ["flowSim", "m4"]
+model_instance_list = ["flowsim", "m4_10"]
 
-    Parameters:
-    - all_events (list): List of tuples (event_time, flow_change, links, flow_id).
-      Each tuple is:
-        event_time: The timestamp of the event
-        flow_change: +1 for arrival, -1 for completion
-        links: A set or iterable of link IDs involved in this event
-        flow_id: The ID of the arriving or completing flow
-    - max_hops (int): Maximum number of hops to calculate neighbors.
+n_methods = len(legend_list)
 
-    Returns:
-    - res_snapshots (list): A list of dictionaries, one for each event processed.
-      Each dictionary maps:
-         flow_id -> hop_counts (list of integers)
-      If a flow has no neighbors at any hop, hop_counts defaults to [0].
-    """
-    link_to_flows = defaultdict(set)  # Map each link to active flows
-    flow_neighbors = defaultdict(set)  # Map each flow to its neighbors
-    res_snapshots = []  # Store a snapshot of neighbor counts for each event
+# Load configurations
+config_file = f"/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec/eval_test.mix.json"
+configs = json.load(open(config_file))
 
-    for event_time, flow_change, links, flow_id in all_events:
-        affected_flows = set()
+# Find available scenarios
+index_list_ori = []
+for i in range(n_scenario):
+    if os.path.exists(
+        f"/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/{empirical_str}/{i}/ns3/flowsim_fct.npy"
+    ):
+        index_list_ori.append(i)
 
-        if flow_change == 1:  # Flow arrival
-            # For each link, add the new flow and update neighbors just for flows on that link
-            for link in links:
-                link_to_flows[link].add(flow_id)
-                flows_on_link = link_to_flows[link].copy()
+# Prepare config_list
+index_list = []
+config_list = []
+for idx, i in enumerate(index_list_ori):
+    config = configs[i]
+    max_load = float(config["max_load"])
+    cc = config["cc"]  # Congestion control algorithm
+    config_list.append([max_load, cc])  # Include max_load and cc
+    index_list.append(idx)
+config_list = np.array(config_list)
 
-                # Update neighbors for flows on this link
-                for f in flows_on_link:
-                    flow_neighbors[f].update(flows_on_link)
-                    flow_neighbors[f].discard(f)  # Remove self
-                affected_flows.update(flows_on_link)
+# Define flow size buckets and labels
+size_bins = [0, 1 * 1024, 200 * 1024, 1024 * 1024, np.inf]  # Sizes in bytes
+size_bin_labels = ["<=1KB", "1KB-200KB", "200KB-1MB", ">1MB"]
 
-        elif flow_change == -1:  # Flow completion
-            # Remove the completed flow from its links
-            for link in links:
-                link_to_flows[link].discard(flow_id)
+# Define max load groups
+max_load_bins = [0, 0.45, 0.6, np.inf]
+max_load_labels = ["<45%", "45-60%", ">60%"]
 
-            # If we know about this flow, remove it and adjust neighbors
-            if flow_id in flow_neighbors:
-                old_neighbors = flow_neighbors[flow_id]
-                flow_neighbors.pop(flow_id, None)
-                for neighbor in old_neighbors:
-                    if flow_id in flow_neighbors[neighbor]:
-                        flow_neighbors[neighbor].discard(flow_id)
-                        affected_flows.add(neighbor)
-                affected_flows.add(flow_id)
+# Initialize error storage
+error_by_model = {
+    model: {
+        cc: {load: {label: [] for label in size_bin_labels} for load in max_load_labels}
+        for cc in set(config_list[:, 1])
+    }
+    for model in legend_list
+}
 
-        # Compute neighbor counts for all affected flows at this event
-        event_counts = {}
-        for flow in affected_flows:
-            neighbors = flow_neighbors.get(flow, set())
-            visited = {flow}
-            current_hop = neighbors.copy()
-            hop_counts = []
+# Process scenarios
+for idx, scenario_idx in enumerate(index_list):
+    # Load flow sizes
+    sizes = np.load(
+        f"/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/{empirical_str}/{scenario_idx}/ns3/fsize.npy"
+    )
 
-            # BFS-like multi-hop neighbor exploration
-            for _ in range(max_hops):
-                if not current_hop:
-                    break
-                hop_counts.append(len(current_hop))
-                next_hop = {
-                    n
-                    for neighbor in current_hop
-                    for n in flow_neighbors.get(neighbor, set())
-                    if n not in visited
-                }
-                visited.update(current_hop)
-                current_hop = next_hop
+    # Flatten sizes to match dimensions with relative errors
+    sizes = sizes.flatten()
 
-            # Default to [0] if no neighbors found
-            hop_counts = hop_counts if hop_counts else [0]
-            event_counts[flow] = hop_counts
+    # Group flows into size buckets
+    size_indices = np.digitize(sizes, size_bins)
 
-        # Record the snapshot for this event
-        res_snapshots.append(event_counts)
+    # Get max load and CC group for the scenario
+    max_load = config_list[idx, 0]
+    cc = config_list[idx, 1]
+    load_group = max_load_labels[np.digitize(max_load, max_load_bins, right=False) - 1]
 
-    return res_snapshots
+    # Process each model instance
+    for model_idx, model_instance in enumerate(model_instance_list):
+        model_name = legend_list[model_idx]
+        data = np.load(f"./res/{model_instance}{empirical_str}.npz")
+        sldn = data["fct"]
+        predicted_sldns = sldn[scenario_idx, : len(sizes), 0]
+        actual_sldns = sldn[scenario_idx, : len(sizes), 1]
 
+        # Calculate relative errors
+        relative_errors = np.abs(actual_sldns - predicted_sldns) / actual_sldns * 100
 
-def plot_cdf_for_hops(res_total, max_hops=3, dataset_labels=None):
-    """
-    Plot the per-hop neighbors for all datasets from the snapshots returned by process_events_and_compute_neighbors.
+        # Flatten relative_errors to match sizes
+        relative_errors = relative_errors.flatten()
 
-    Parameters:
-    - res_total (list): A list of datasets, where each dataset is a list of "event_counts".
-      Each "event_counts" is a list of snapshot dictionaries.
-      Each snapshot dictionary: {flow_id: [hop_counts]}.
-    - max_hops (int): Number of hop levels to plot.
-    - dataset_labels (list): Labels for each dataset.
-    """
-    if dataset_labels is None:
-        dataset_labels = [f"Dataset {i+1}" for i in range(len(res_total))]
+        # Group errors into buckets
+        for b in range(1, len(size_bins)):
+            bin_mask = size_indices == b
+            bin_errors = relative_errors[bin_mask]
+            error_by_model[model_name][cc][load_group][size_bin_labels[b - 1]].extend(
+                bin_errors
+            )
 
-    for hop_idx in range(max_hops):
-        plt.figure(figsize=(6, 4))
-        for dataset_idx, scenario_data in enumerate(res_total):
-            # scenario_data: a list of event_counts
-            # event_counts: a list of snapshot dicts
-            # snapshot_dict: {flow_id: [hop_counts]}
+# Calculate mean error for each model, CC, max load group, and size bucket
+mean_error_results = {
+    model: {
+        cc: {
+            load: {
+                bucket: np.mean(errors) if errors else 0
+                for bucket, errors in group.items()
+            }
+            for load, group in load_group_dict.items()
+        }
+        for cc, load_group_dict in cc_group_dict.items()
+    }
+    for model, cc_group_dict in error_by_model.items()
+}
 
-            hop_values = []
-            for event_counts in scenario_data:
-                # event_counts is a list of dictionaries
-                for snapshot_dict in event_counts:
-                    # snapshot_dict: {flow_id: hop_counts}
-                    for hop_counts_array in snapshot_dict.values():
-                        if hop_idx < len(hop_counts_array):
-                            hop_values.append(hop_counts_array[hop_idx])
-                        else:
-                            hop_values.append(0)
+num_results = {
+    model: {
+        cc: {
+            load: {bucket: len(errors) for bucket, errors in group.items()}
+            for load, group in load_group_dict.items()
+        }
+        for cc, load_group_dict in cc_group_dict.items()
+    }
+    for model, cc_group_dict in error_by_model.items()
+}
 
-            if len(hop_values) == 0:
-                continue
+# Print results
+print("Mean Error by Model, CC, Load Group, and Flow Size Bucket:")
+for model, cc_group_dict in mean_error_results.items():
+    print(f"\nModel: {model}")
+    for cc, load_group_dict in cc_group_dict.items():
+        print(f"  Congestion Control: {cc}")
+        for load, group in load_group_dict.items():
+            print(f"    Load Group: {load}")
+            for bucket, mean_error in group.items():
+                print(f"      {bucket}: {mean_error:.2f}%")
 
-            sorted_values = np.sort(hop_values)
-            cdf = np.arange(1, len(sorted_values) + 1) / len(sorted_values)
-            label = dataset_labels[dataset_idx]
-            plt.plot(sorted_values, cdf * 100, label=label, linewidth=2)
-
-        plt.xlabel(f"# of Neighbors at Hop {hop_idx + 1}", fontsize=15)
-        plt.ylabel("CDF (%)", fontsize=15)
-        plt.legend(fontsize=15)
-        plt.tight_layout()
-        plt.title(f"Per-Hop Neighbors (Hop {hop_idx + 1})", fontsize=15)
-        plt.show()
-
-
-# Main Script
-res_total = []
-dir_input = "/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train"
-topo_type = "_topology_flows"
-data_list = []
-sampled_list = np.random.choice(np.arange(4000), 2, replace=False)
-
-for shard in sampled_list:
-    for n_flows in [2000]:
-        for n_hosts in [32]:
-            for sample in [0]:
-                topo_type_cur = topo_type
-                spec = f"{shard}/ns3"
-                try:
-                    fid = np.load(f"{dir_input}/{spec}/fid{topo_type_cur}.npy")
-                    if (
-                        len(fid) == len(set(fid))
-                        and np.all(fid[:-1] <= fid[1:])
-                        and len(fid) % n_flows == 0
-                    ):
-                        data_list.append((spec, (0, n_hosts - 1), topo_type_cur))
-                except:
-                    continue
-
-print(len(data_list))
-
-res_n_flows_active = []
-for spec_idx, (spec, src_dst_pair_target, topo_type) in enumerate(data_list):
-    dir_input_tmp = f"{dir_input}/{spec}"
-    fat = np.load(f"{dir_input_tmp}/fat.npy")
-    fct = fat + np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
-    link_info = np.load(f"{dir_input_tmp}/flow_to_path.npy", allow_pickle=True)
-
-    arrival_events = [(fat[i], 1, set(link_info[i]), i) for i in range(len(fat))]
-    completion_events = [(fct[i], -1, set(link_info[i]), i) for i in range(len(fct))]
-    all_events = sorted(arrival_events + completion_events, key=lambda x: x[0])
-
-    neighbor_counts = process_events_and_compute_neighbors(all_events)
-    res_n_flows_active.append(neighbor_counts)
-
-res_total.append(res_n_flows_active)
-
-# Scenario Labels
-dataset_labels = ["Train", "Test", "m4-train"]
-
-# Plot Results
-plot_cdf_for_hops(res_total, max_hops=3, dataset_labels=dataset_labels)
+print("Num of Results by Model, CC, Load Group, and Flow Size Bucket:")
+for model, cc_group_dict in num_results.items():
+    print(f"\nModel: {model}")
+    for cc, load_group_dict in cc_group_dict.items():
+        print(f"  Congestion Control: {cc}")
+        for load, group in load_group_dict.items():
+            print(f"    Load Group: {load}")
+            for bucket, num in group.items():
+                print(f"      {bucket}: {num}")
