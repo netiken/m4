@@ -106,6 +106,7 @@ if __name__ == "__main__":
             enable_abstime=dataset_config.get("enable_abstime", False),
             enable_flowsim_gt=dataset_config.get("enable_flowsim_gt", False),
             enable_remainsize=dataset_config.get("enable_remainsize", False),
+            enable_queuelen=dataset_config.get("enable_queuelen", False),
             segments_per_seq=dataset_config.get("segments_per_seq", 200),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
             enable_path=dataset_config.get("enable_path", False),
@@ -195,6 +196,7 @@ if __name__ == "__main__":
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_flowsim_diff=dataset_config.get("enable_flowsim_diff", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
+                enable_queuelen=dataset_config.get("enable_queuelen", False),
                 enable_path=dataset_config.get("enable_path", False),
                 enable_topo=dataset_config.get("enable_topo", False),
                 loss_average=(
@@ -238,6 +240,7 @@ if __name__ == "__main__":
             enable_abstime=dataset_config.get("enable_abstime", False),
             enable_flowsim_gt=dataset_config.get("enable_flowsim_gt", False),
             enable_remainsize=dataset_config.get("enable_remainsize", False),
+            enable_queuelen=dataset_config.get("enable_queuelen", False),
             segments_per_seq=dataset_config.get("segments_per_seq", 200),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
             enable_path=dataset_config.get("enable_path", False),
@@ -294,6 +297,7 @@ if __name__ == "__main__":
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_flowsim_diff=dataset_config.get("enable_flowsim_diff", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
+                enable_queuelen=dataset_config.get("enable_queuelen", False),
                 enable_path=dataset_config.get("enable_path", False),
                 enable_topo=dataset_config.get("enable_topo", False),
                 loss_average=(

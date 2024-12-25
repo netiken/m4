@@ -132,6 +132,7 @@ class DataModulePerFlow(LightningDataModule):
         enable_abstime=False,
         enable_flowsim_gt=False,
         enable_remainsize=False,
+        enable_queuelen=False,
         segments_per_seq=200,
         sampling_method="uniform",  # uniform, weighted, balanced
         enable_path=False,
@@ -165,6 +166,7 @@ class DataModulePerFlow(LightningDataModule):
         self.enable_abstime = enable_abstime
         self.enable_flowsim_gt = enable_flowsim_gt
         self.enable_remainsize = enable_remainsize
+        self.enable_queuelen = enable_queuelen
         self.current_period_len_idx = current_period_len_idx
         self.enable_topo = enable_topo
         logging.info(
@@ -849,6 +851,7 @@ class DataModulePerFlow(LightningDataModule):
         enable_abstime = self.enable_abstime
         enable_flowsim_gt = self.enable_flowsim_gt
         enable_remainsize = self.enable_remainsize
+        enable_queuelen = self.enable_queuelen
 
         if current_period_len_idx is not None:
 
@@ -876,6 +879,7 @@ class DataModulePerFlow(LightningDataModule):
                     enable_gnn,
                     enable_flowsim_gt,
                     enable_remainsize=enable_remainsize,
+                    enable_queuelen=enable_queuelen,
                 )
             elif self.enable_path:
                 return PathFctSldnSegment(
@@ -886,6 +890,7 @@ class DataModulePerFlow(LightningDataModule):
                     enable_gnn,
                     enable_flowsim_gt,
                     enable_remainsize=enable_remainsize,
+                    enable_queuelen=enable_queuelen,
                 )
             else:
                 return LinkFctSldnSegment(
@@ -897,6 +902,7 @@ class DataModulePerFlow(LightningDataModule):
                     enable_abstime,
                     enable_flowsim_gt,
                     enable_remainsize=enable_remainsize,
+                    enable_queuelen=enable_queuelen,
                 )
 
     def __dump_data_list(self, path):
@@ -924,6 +930,7 @@ class LinkFctSldnSegment(Dataset):
         enable_abstime,
         enable_flowsim_gt=False,
         enable_remainsize=False,
+        enable_queuelen=False,
     ):
         self.data_list = data_list
         self.dir_input = dir_input
@@ -1117,6 +1124,7 @@ class PathFctSldnSegment(Dataset):
         enable_gnn,
         enable_flowsim_gt=False,
         enable_remainsize=False,
+        enable_queuelen=False,
     ):
         self.data_list = data_list
         self.dir_input = dir_input
@@ -1330,6 +1338,7 @@ class TopoFctSldnSegment(Dataset):
         enable_gnn,
         enable_flowsim_gt=False,
         enable_remainsize=False,
+        enable_queuelen=False,
     ):
         self.data_list = data_list
         self.dir_input = dir_input
@@ -1340,9 +1349,10 @@ class TopoFctSldnSegment(Dataset):
         self.enable_gnn = enable_gnn
         self.enable_flowsim_gt = enable_flowsim_gt
         self.enable_remainsize = enable_remainsize
+        self.enable_queuelen = enable_queuelen
         self.n_links = 96
         logging.info(
-            f"call TopoFctSldnSegment. data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn},enable_flowsim_gt={enable_flowsim_gt}, enable_remainsize={enable_remainsize}"
+            f"call TopoFctSldnSegment. data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn},enable_flowsim_gt={enable_flowsim_gt}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
         )
 
     def __len__(self):
@@ -1427,17 +1437,18 @@ class TopoFctSldnSegment(Dataset):
             for j in range(len(events))
         ]
 
+        if self.enable_queuelen:
+            queuelen_list_total = np.load(
+                f"{dir_input_tmp}/qlen{topo_type}.npy",
+                allow_pickle=True,
+            ).item()
+            queuelen_list = [np.array(queuelen_list_total[i]) for i in fid]
+            queuelen_link_list = link_info
+        else:
+            queuelen_list = None
+            queuelen_link_list = None
+
         if self.enable_remainsize:
-            if not self.enable_flowsim_gt:
-                queuelen_list_total = np.load(
-                    f"{dir_input_tmp}/qlen{topo_type}.npy",
-                    allow_pickle=True,
-                ).item()
-                queuelen_list = [np.array(queuelen_list_total[i]) for i in fid]
-                queuelen_link_list = link_info
-            else:
-                queuelen_list = None
-                queuelen_link_list = None
             busy_periods_remainsize = np.load(
                 f"{dir_input_tmp}/period_remainsize{topo_type}_t{self.flow_size_threshold}.npy",
                 allow_pickle=True,
@@ -1465,8 +1476,6 @@ class TopoFctSldnSegment(Dataset):
                     remainsize_list.append([])
         else:
             remainsize_list = None
-            queuelen_list = None
-            queuelen_link_list = None
 
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
