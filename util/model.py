@@ -367,7 +367,7 @@ class FlowSimLstm(LightningModule):
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
-                        # if self.enable_remainsize:
+                        # if self.enable_queuelen:
                         #     queue_link_idx = queuelen_link_matrix[j]
                         #     if len(queue_link_idx) > 0:
                         #         queue_len_est = self.queue_len_layer(
@@ -448,7 +448,7 @@ class FlowSimLstm(LightningModule):
             loss = loss + loss_size_mean * self.loss_efficiency_size
         if self.enable_queuelen:
             loss_queue_mean = 0
-            if loss_queue_mean.size(0) != 0:
+            if loss_queue.size(0) != 0:
                 loss_queue_mean = loss_queue.nanmean()
             self._log_loss(loss_queue_mean, f"{tag}_queue")
             loss = loss + loss_queue_mean * self.loss_efficiency_queue
