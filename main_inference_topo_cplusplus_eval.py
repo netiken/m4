@@ -110,6 +110,7 @@ class Inference:
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_flowsim_diff=dataset_config.get("enable_flowsim_diff", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
+                enable_queuelen=dataset_config.get("enable_queuelen", False),
                 enable_path=dataset_config.get("enable_path", False),
                 enable_topo=dataset_config.get("enable_topo", False),
             )
@@ -538,7 +539,7 @@ def main():
         model_instance = "flowsim"
     else:
         print("Running m4's inference")
-        model_instance = "m4"
+        model_instance = "final"
         checkpoint = f"{args.output}/{model_instance}_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=010.ckpt"
         inference = Inference(
             data_config,
