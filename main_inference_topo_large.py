@@ -110,6 +110,7 @@ class Inference:
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_flowsim_diff=dataset_config.get("enable_flowsim_diff", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
+                enable_queuelen=dataset_config.get("enable_queuelen", False),
                 enable_path=dataset_config.get("enable_path", False),
                 enable_topo=dataset_config.get("enable_topo", False),
             )
