@@ -546,8 +546,14 @@ def main():
         ("", 1, 92278, 2),
     ]
     model_list = [
-        ("m4", 10, 4000),
-        ("m4", 17, 4000),
+        # ("m4", 10, 4000),
+        # ("m4", 17, 4000),
+        ("final", 10, 4000),
+        # ("final_nosize", 11, 4000),
+        # ("final_nosize", 7, 4000),
+        # ("final_noqueue", 9, 4000),
+        # ("final_noqueue", 6, 4000),
+        # old
         # ("topo_featrate", 7, 4000),
         # ("topo_remainsize_large_data", 7, 4000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
