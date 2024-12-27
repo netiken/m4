@@ -501,7 +501,7 @@ def main():
         type=str,
         required=False,
         help="Path to the YAML configuration file",
-        default="./config/test_config_lstm_topo_cplusplus.yaml",
+        default="./config/test_config_lstm_topo_cplusplus_eval.yaml",
     )
     parser.add_argument(
         "--input",
