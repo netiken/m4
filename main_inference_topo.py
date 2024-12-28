@@ -347,9 +347,15 @@ def interactive_inference(
                 predictions = inference.infer(input_tensor)
                 sldn_est = predictions[:, 0]
             else:
-                predictions = inference.infer(h_vec[flowid_active_list])
+                input_tensor = torch.cat(
+                    (
+                        data_extra[flowid_active_list, 2:],
+                        h_vec[flowid_active_list],
+                    ),
+                    dim=1,
+                )
+                predictions = inference.infer(input_tensor)
                 sldn_est = predictions[:, 0]
-                sldn_est += 1.0
 
             sldn_est[sldn_est < 1.0] = 1.0
             fct_stamp_est = (
@@ -549,12 +555,12 @@ def main():
         # ("eval_train", 2000, 2000),
         # ("eval_test_80k", 100, 80000),
         # ("eval_test_60k", 100, 60000),
-        ("eval_test_large", 100, 80000),
+        ("eval_test", 3, 80000),
     ]
     model_list = [
         # ("m4", 10, 4000),
         # ("m4", 17, 4000),
-        ("final", 10, 4000),
+        # ("final", 10, 4000),
         # ("final_nosupervision", 10, 4000),
         # ("final_nosupervision", 12, 4000),
         # ("final_nosize", 11, 4000),
@@ -562,16 +568,17 @@ def main():
         # ("final_noqueue", 9, 4000),
         # ("final_noqueue", 6, 4000),
         # test
-        # ("final_noqueue", 14, 4000),
-        # ("final_noqueue", 13, 4000),
-        # ("final_noqueue", 12, 4000),
-        # ("final_noqueue", 11, 4000),
-        # ("final_noqueue", 10, 4000),
-        # ("final_noqueue", 9, 4000),
-        # ("final_noqueue", 8, 4000),
-        # ("final_noqueue", 7, 4000),
-        # ("final_noqueue", 6, 4000),
-        # ("final_noqueue", 5, 4000),
+        # ("final_noflowsim", 14, 4000),
+        # ("final_noflowsim", 13, 4000),
+        # ("final_noflowsim", 12, 4000),
+        # ("final_noflowsim", 11, 4000),
+        ("final_noflowsim", 11, 4000),
+        ("final_noflowsim", 10, 4000),
+        ("final_noflowsim", 9, 4000),
+        ("final_noflowsim", 8, 4000),
+        ("final_noflowsim", 7, 4000),
+        ("final_noflowsim", 6, 4000),
+        ("final_noflowsim", 5, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
