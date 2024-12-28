@@ -347,9 +347,15 @@ def interactive_inference(
                 predictions = inference.infer(input_tensor)
                 sldn_est = predictions[:, 0]
             else:
-                predictions = inference.infer(h_vec[flowid_active_list])
+                input_tensor = torch.cat(
+                    (
+                        data_extra[flowid_active_list, 2:],
+                        h_vec[flowid_active_list],
+                    ),
+                    dim=1,
+                )
+                predictions = inference.infer(input_tensor)
                 sldn_est = predictions[:, 0]
-                sldn_est += 1.0
 
             sldn_est[sldn_est < 1.0] = 1.0
             fct_stamp_est = (
