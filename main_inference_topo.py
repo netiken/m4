@@ -555,7 +555,7 @@ def main():
         # ("eval_train", 2000, 2000),
         # ("eval_test_80k", 100, 80000),
         # ("eval_test_60k", 100, 60000),
-        ("eval_test", 3, 80000),
+        ("eval_test", 100, 80000),
     ]
     model_list = [
         # ("m4", 10, 4000),
@@ -568,17 +568,15 @@ def main():
         # ("final_noqueue", 9, 4000),
         # ("final_noqueue", 6, 4000),
         # test
-        # ("final_noflowsim", 14, 4000),
-        # ("final_noflowsim", 13, 4000),
         # ("final_noflowsim", 12, 4000),
-        # ("final_noflowsim", 11, 4000),
         ("final_noflowsim", 11, 4000),
-        ("final_noflowsim", 10, 4000),
-        ("final_noflowsim", 9, 4000),
-        ("final_noflowsim", 8, 4000),
-        ("final_noflowsim", 7, 4000),
-        ("final_noflowsim", 6, 4000),
-        ("final_noflowsim", 5, 4000),
+        # ("final_noflowsim", 11, 4000),
+        # ("final_noflowsim", 10, 4000),
+        # ("final_noflowsim", 9, 4000),
+        # ("final_noflowsim", 8, 4000),
+        # ("final_noflowsim", 7, 4000),
+        # ("final_noflowsim", 6, 4000),
+        # ("final_noflowsim", 5, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),

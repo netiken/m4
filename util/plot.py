@@ -12,7 +12,6 @@ color_list = [
     "crimson",
     "orange",
     "cornflowerblue",
-    "black",
     "blueviolet",
     "seagreen",
 ]
