@@ -38,6 +38,8 @@ std::vector<float> res_sldn;
 // m4 model
 static torch::jit::script::Module lstmcell_time;
 static torch::jit::script::Module lstmcell_rate;
+static torch::jit::script::Module lstm_time_link;
+static torch::jit::script::Module lstm_rate_link;
 static torch::jit::script::Module output_layer;
 static torch::jit::script::Module gnn_layer_0;
 static torch::jit::script::Module gnn_layer_1;
@@ -131,10 +133,12 @@ void setup_m4(torch::Device device) {
 
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "../inference/models_topo/"; // Consider making this configurable
+        const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/model/";
         try {
             lstmcell_time = torch::jit::load(model_dir + "lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "lstmcell_rate.pt", device);
+            lstm_rate_link = torch::jit::load(model_dir + "lstmcell_rate_link.pt", device);
+            lstm_time_link = torch::jit::load(model_dir + "lstmcell_time_link.pt", device);
             output_layer = torch::jit::load(model_dir + "output_layer.pt", device);
             gnn_layer_0 = torch::jit::load(model_dir + "gnn_layer_0.pt", device);
             gnn_layer_1 = torch::jit::load(model_dir + "gnn_layer_1.pt", device);
@@ -147,6 +151,8 @@ void setup_m4(torch::Device device) {
         // Set models to evaluation mode
         lstmcell_time.eval();
         lstmcell_rate.eval();
+        lstmcell_rate_link.eval();
+        lstmcell_time_link.eval();
         output_layer.eval();
         gnn_layer_0.eval();
         gnn_layer_1.eval();
@@ -154,6 +160,8 @@ void setup_m4(torch::Device device) {
         // Optimize models for inference
         lstmcell_time = torch::jit::optimize_for_inference(lstmcell_time);
         lstmcell_rate = torch::jit::optimize_for_inference(lstmcell_rate);
+        lstmcell_time_link = torch::jit::optimize_for_inference(lstmcell_time_link);
+        lstmcell_rate_link = torch::jit::optimize_for_inference(lstmcell_rate_link);
         output_layer = torch::jit::optimize_for_inference(output_layer);
         gnn_layer_0 = torch::jit::optimize_for_inference(gnn_layer_0);
         gnn_layer_1 = torch::jit::optimize_for_inference(gnn_layer_1);
@@ -370,14 +378,14 @@ void step_m4() {
         link_to_graph_id.index_put_({no_flow_links_tensor}, -1);
 
         // // Create tensors with desired reset values for 'z_t_link'
-        // auto z_values = torch::stack({
-        //     torch::zeros({no_flow_links_tensor.size(0)}, options_float),
-        //     torch::ones({no_flow_links_tensor.size(0)}, options_float),
-        //     torch::ones({no_flow_links_tensor.size(0)}, options_float)
-        // }, 1).to(device);
+        auto z_values = torch::stack({
+             torch::zeros({no_flow_links_tensor.size(0)}, options_float),
+             torch::ones({no_flow_links_tensor.size(0)}, options_float),
+             torch::ones({no_flow_links_tensor.size(0)}, options_float)
+        }, 1).to(device);
 
-        // // Assign the new values to 'z_t_link' in bulk
-        // z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice(), torch::indexing::Slice()}, z_values);
+        // Assign the new values to 'z_t_link' in bulk
+        z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice(), torch::indexing::Slice()}, z_values);
     }
     // Update h_vec for active flows
     auto flowid_active_mask_cur = torch::logical_and(flowid_active_mask, flow_to_graph_id == graph_id_cur);
@@ -425,8 +433,10 @@ void step_m4() {
 
         // Update rate using lstmcell_rate
         auto h_vec_rate_updated=gnn_output_1.slice(0,0,n_flows_active_cur);
+        auto h_vec_rate_link = gnn_outpu_1.slice(0, 0, n_flows_active_cur);
 
         h_vec_rate_updated = lstmcell_rate.forward({ h_vec_rate_updated, h_vec_time_updated }).toTensor();
+        h_vec_rate_link = lstmcell_rate_link.forward({ h_vec_rate_link, h_vec_time_updated }).toTensor();
 
         // Update h_vec with the new hidden states
         h_vec.index_copy_(0, flowid_active_list_cur, h_vec_rate_updated);
