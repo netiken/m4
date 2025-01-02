@@ -555,7 +555,7 @@ def main():
         # ("eval_train", 2000, 2000),
         # ("eval_test_80k", 100, 80000),
         # ("eval_test_60k", 100, 60000),
-        ("eval_test", 100, 80000),
+        ("eval_test", 3, 80000),
     ]
     model_list = [
         # ("m4", 10, 4000),
@@ -570,18 +570,18 @@ def main():
         # ("final_noflowsim", 12, 4000),
         # ("final_noflowsim", 11, 4000),
         # ("final_re", 10, 4000),
-        ("final_re", 7, 4000),
-        # test
-        # ("final_re", 14, 4000),
-        # ("final_re", 13, 4000),
-        # ("final_re", 12, 4000),
-        # ("final_re", 11, 4000),
-        # ("final_re", 10, 4000),
-        # ("final_re", 9, 4000),
-        # ("final_re", 8, 4000),
         # ("final_re", 7, 4000),
-        # ("final_re", 6, 4000),
-        # ("final_re", 5, 4000),
+        # test
+        ("final_loss07", 12, 4000),
+        ("final_loss07", 11, 4000),
+        ("final_loss07", 10, 4000),
+        ("final_loss07", 9, 4000),
+        ("final_loss07", 8, 4000),
+        ("final_loss07", 7, 4000),
+        ("final_loss07", 6, 4000),
+        ("final_loss07", 5, 4000),
+        ("final_loss07", 4, 4000),
+        ("final_loss07", 3, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),

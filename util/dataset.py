@@ -523,7 +523,7 @@ class DataModulePerFlow(LightningDataModule):
                                         and np.all(fid[:-1] <= fid[1:])
                                         and len(fid) % n_flows == 0
                                         and os.path.exists(
-                                            f"{dir_input}/{spec}/flowsim_fct.npy"
+                                            f"{self.dir_input}/{spec}/flowsim_fct.npy"
                                         )
                                     ):
                                         busy_periods = np.load(
@@ -764,7 +764,9 @@ class DataModulePerFlow(LightningDataModule):
                 else:
                     data_list_test = data_list["test"]
                 sample_index = np.random.choice(
-                    np.arange(len(data_list_test)), min(500,len(data_list_test)), replace=False
+                    np.arange(len(data_list_test)),
+                    min(500, len(data_list_test)),
+                    replace=False,
                 )
                 data_list_test = [data_list_test[i] for i in sample_index]
             self.test = self.__create_dataset(
