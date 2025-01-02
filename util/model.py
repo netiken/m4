@@ -491,8 +491,8 @@ class FlowSimLstm(LightningModule):
             f"{test_dir}/res.npz",
             est=estimated.cpu().numpy(),
             output=output.cpu().numpy(),
-            res_size=np.array(res_size),
-            res_queue=np.array(res_queue),
+            res_size=res_size,
+            res_queue=res_queue,
         )
 
     def _log_gradient_norms(self, tag):
