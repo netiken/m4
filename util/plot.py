@@ -45,9 +45,10 @@ def plot_cdf(
     group_size=1,
     colors=None,
     fig_idx=0,
+    fig_size=(5, 2.0),
 ):
     _fontsize = fontsize
-    fig = plt.figure(fig_idx, figsize=(5, 2.0))  # 2.5 inch for 1/3 double column width
+    fig = plt.figure(fig_idx, figsize=fig_size)  # 2.5 inch for 1/3 double column width
     ax = fig.add_subplot(111)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
@@ -148,6 +149,8 @@ def plot_lines(
     title=None,
     format_idx=None,
     fig_idx=0,
+    linewidth=2,
+    fig_size=(5, 2.0),
 ):
     """
     Plots multiple line plots for the given datasets.
@@ -169,7 +172,7 @@ def plot_lines(
     - fig_idx: Figure index for the plot.
     """
     _fontsize = fontsize
-    fig = plt.figure(fig_idx, figsize=(5, 2.0))
+    fig = plt.figure(fig_idx, figsize=fig_size)
     ax = fig.add_subplot(111)
     ax.spines["right"].set_visible(False)
     ax.spines["top"].set_visible(False)
@@ -195,7 +198,7 @@ def plot_lines(
                 # linestyle=linestyle_list[idx_selected % len(linestyle_list)],
                 color=color_list[idx_selected % len(color_list)],
                 label=linelabels[i],
-                linewidth=2,
+                linewidth=linewidth,
             )
         else:
             plt.plot(
@@ -203,7 +206,7 @@ def plot_lines(
                 y,
                 # linestyle=linestyle_list[idx_selected % len(linestyle_list)],
                 color=color_list[idx_selected % len(color_list)],
-                linewidth=2,
+                linewidth=linewidth,
             )
 
     legend_properties = {"size": legend_font}

@@ -41,11 +41,13 @@ python main_train.py --train_config=./config/train_config_lstm_topo_empirical.ya
 
 python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note m4_queuegt
 
-python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_train --note=topo_256_flowsim
+python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_train --note=final
+
+python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note=final
 
 python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_manual --note=topo_256_flowsim
 
-python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=topo_256_flowsim
+python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=final
 
 # test
 python main_train.py --test_config=./config/test_config_lstm_link.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_link_size --dir_output=/data2/lichenni/output_perflow --test_on_train --note=link_flowsim_input_remainsize
