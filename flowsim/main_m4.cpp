@@ -279,6 +279,8 @@ void update_times_m4() {
 
 void step_m4() {
     torch::NoGradGuard no_grad;
+
+    auto options_float = torch::TensorOptions().dtype(torch::kFloat32);
     
     // Decide whether the next event is a flow arrival or completion
     if (flow_arrival_time < flow_completion_time) {
@@ -382,7 +384,8 @@ void step_m4() {
              torch::zeros({no_flow_links_tensor.size(0)}, options_float),
              torch::ones({no_flow_links_tensor.size(0)}, options_float),
              torch::ones({no_flow_links_tensor.size(0)}, options_float)
-        }, 1).to(device);
+        }, 1);
+        //.to(device);
 
         // Assign the new values to 'z_t_link' in bulk
         z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice(), torch::indexing::Slice()}, z_values);
@@ -428,6 +431,7 @@ void step_m4() {
 
         // Forward pass through the GNN layers
         //auto z_t_link_cur=z_t_link.index_select(0,active_link_idx);
+        std::cout << active_link_idx.size(0) << " " << h_vec_time_updated.size(1) << " " << h_vec_time_link_updated.size(1) << "\n";
         auto x_combined=torch::cat({h_vec_time_updated, h_vec_time_link_updated}, 0); // TODO: check this
 
         auto gnn_output_0 = gnn_layer_0.forward({x_combined, edges_list_active}).toTensor();

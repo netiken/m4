@@ -154,7 +154,7 @@ class FlowSimLstm(LightningModule):
                 nn.Dropout(p=dropout),
                 nn.Linear(hidden_size // 2, output_size),  # Second layer
             )
-            model_scaling_factor = 8
+            model_scaling_factor = 2
             if self.enable_remainsize:
                 self.remain_size_layer = nn.Sequential(
                     nn.Linear(

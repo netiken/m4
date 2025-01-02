@@ -47,7 +47,7 @@ python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=te
 
 python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_manual --note=topo_256_flowsim
 
-python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=final
+python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_test_trace --dir_output=/data2/lichenni/output_perflow --test_on_empirical --note=final
 
 # test
 python main_train.py --test_config=./config/test_config_lstm_link.yaml --mode=test --version_id 0 --dir_input=/data2/lichenni/perflow_link_size --dir_output=/data2/lichenni/output_perflow --test_on_train --note=link_flowsim_input_remainsize
@@ -153,6 +153,7 @@ cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
 cargo run --release -- --root=./eval_train_test --mixes spec/eval_train_test.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/0.mix.json ns3
+cargo run --release -- --root=./eval_test_trace --mixes spec/eval_test_trace.mix.json ns3
 
 cargo run --release -- --root=./data_test_config --mixes spec/0.mix.json ns3
 cargo run --release -- --root=./test --mixes spec/0.mix.json ns3
