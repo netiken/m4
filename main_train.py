@@ -161,9 +161,9 @@ if __name__ == "__main__":
             # log_every_n_steps=args.n_epochs_every_log,
             log_every_n_steps=10,
             val_check_interval=1.0,
-            reload_dataloaders_every_n_epochs=(
-                1 if current_period_len_idx is not None else 0
-            ),
+            # reload_dataloaders_every_n_epochs=(
+            #     1 if current_period_len_idx is not None else 0
+            # ),
             # profiler=SimpleProfiler(),
             # fast_dev_run=args.debug,
             # limit_train_batches=1,
@@ -272,7 +272,7 @@ if __name__ == "__main__":
         model_name = model_config["model_name"]
         if model_name == "lstm":
             model = FlowSimLstm.load_from_checkpoint(
-                f"{dir_train}/checkpoints/last.ckpt",
+                f"{dir_train}/checkpoints/best.ckpt",
                 map_location=DEVICE,
                 n_layer=model_config["n_layer"],
                 gcn_n_layer=model_config["gcn_n_layer"],
