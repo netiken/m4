@@ -38,8 +38,8 @@ std::vector<float> res_sldn;
 // m4 model
 static torch::jit::script::Module lstmcell_time;
 static torch::jit::script::Module lstmcell_rate;
-static torch::jit::script::Module lstm_time_link;
-static torch::jit::script::Module lstm_rate_link;
+static torch::jit::script::Module lstmcell_time_link;
+static torch::jit::script::Module lstmcell_rate_link;
 static torch::jit::script::Module output_layer;
 static torch::jit::script::Module gnn_layer_0;
 static torch::jit::script::Module gnn_layer_1;
@@ -137,8 +137,8 @@ void setup_m4(torch::Device device) {
         try {
             lstmcell_time = torch::jit::load(model_dir + "lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "lstmcell_rate.pt", device);
-            lstm_rate_link = torch::jit::load(model_dir + "lstmcell_rate_link.pt", device);
-            lstm_time_link = torch::jit::load(model_dir + "lstmcell_time_link.pt", device);
+            lstmcell_rate_link = torch::jit::load(model_dir + "lstmcell_rate_link.pt", device);
+            lstmcell_time_link = torch::jit::load(model_dir + "lstmcell_time_link.pt", device);
             output_layer = torch::jit::load(model_dir + "output_layer.pt", device);
             gnn_layer_0 = torch::jit::load(model_dir + "gnn_layer_0.pt", device);
             gnn_layer_1 = torch::jit::load(model_dir + "gnn_layer_1.pt", device);
@@ -399,11 +399,13 @@ void step_m4() {
 
         // Check if any time delta is greater than zero
         auto h_vec_time_updated = h_vec.index_select(0, flowid_active_list_cur);
+        auto h_vec_time_link_updated = z_t_link.index_select(0, flowid_active_list_cur);
         auto max_time_delta = torch::max(time_deltas).item<float>();
         if (max_time_delta>0.0f) {
             // Update time using lstmcell_time
             time_deltas.fill_(max_time_delta/1000.0f);
             h_vec_time_updated = lstmcell_time.forward({ time_deltas, h_vec_time_updated}).toTensor();
+            h_vec_time_link_updated = lstmcell_time_link.forward({ time_deltas, h_vec_time_link_updated}).toTensor();
         }
 
         // Create a mask for the edges corresponding to the active flows
@@ -425,24 +427,24 @@ void step_m4() {
         auto edges_list_active=torch::cat({ torch::stack({new_flow_indices, new_link_indices}, 0), torch::stack({new_link_indices, new_flow_indices}, 0)}, 1);
 
         // Forward pass through the GNN layers
-        auto z_t_link_cur=z_t_link.index_select(0,active_link_idx);
-        auto x_combined=torch::cat({h_vec_time_updated, z_t_link_cur}, 0);
+        //auto z_t_link_cur=z_t_link.index_select(0,active_link_idx);
+        auto x_combined=torch::cat({h_vec_time_updated, h_vec_time_link_updated}, 0); // TODO: check this
 
         auto gnn_output_0 = gnn_layer_0.forward({x_combined, edges_list_active}).toTensor();
         auto gnn_output_1 = gnn_layer_1.forward({gnn_output_0, edges_list_active}).toTensor();
 
         // Update rate using lstmcell_rate
-        auto h_vec_rate_updated=gnn_output_1.slice(0,0,n_flows_active_cur);
-        auto h_vec_rate_link = gnn_outpu_1.slice(0, 0, n_flows_active_cur);
+        auto h_vec_rate_updated = gnn_output_1.slice(0,0,n_flows_active_cur);
+        auto h_vec_rate_link = gnn_output_1.slice(0, 0, n_flows_active_cur);
 
         h_vec_rate_updated = lstmcell_rate.forward({ h_vec_rate_updated, h_vec_time_updated }).toTensor();
-        h_vec_rate_link = lstmcell_rate_link.forward({ h_vec_rate_link, h_vec_time_updated }).toTensor();
+        h_vec_rate_link = lstmcell_rate_link.forward({ h_vec_rate_link, h_vec_time_link_updated }).toTensor();
 
         // Update h_vec with the new hidden states
         h_vec.index_copy_(0, flowid_active_list_cur, h_vec_rate_updated);
 
-        // auto z_t_link_updated = gnn_output_1.slice(0, n_flows_active_cur, n_flows_active_cur + active_link_idx.size(0));
-        // z_t_link.index_copy_(0, active_link_idx, z_t_link_updated);
+        auto z_t_link_updated = gnn_output_1.slice(0, n_flows_active_cur, n_flows_active_cur + active_link_idx.size(0));
+        z_t_link.index_copy_(0, active_link_idx, z_t_link_updated);
 
         // Update time_last to the current time for active flows
         time_last.index_put_({flowid_active_list_cur}, time_clock);

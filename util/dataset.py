@@ -475,7 +475,7 @@ class DataModulePerFlow(LightningDataModule):
                     elif self.test_on_empirical:
                         shard_list = np.arange(0, 100)
                     n_hosts_list = [32]
-                    n_flows_list = [40000]
+                    n_flows_list = [2000]
                 else:
                     if self.test_on_manual:
                         if self.enable_path:
@@ -522,6 +522,9 @@ class DataModulePerFlow(LightningDataModule):
                                         len(fid) == len(set(fid))
                                         and np.all(fid[:-1] <= fid[1:])
                                         and len(fid) % n_flows == 0
+                                        and os.path.exists(
+                                            f"{dir_input}/{spec}/flowsim_fct.npy"
+                                        )
                                     ):
                                         busy_periods = np.load(
                                             f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
@@ -536,21 +539,21 @@ class DataModulePerFlow(LightningDataModule):
 
                                         if os.path.exists(remainsize_path):
                                             len_per_period_active = np.load(
-                                                f"{self.dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
+                                                remainsize_path
                                             )
                                         else:
                                             len_per_period_active = len_per_period_stats
 
                                         len_per_period = len_per_period_stats
 
-                                        len_per_period = [
-                                            (
-                                                len_per_period[i]
-                                                if len_per_period_stats[i] < 10000
-                                                else 0
-                                            )
-                                            for i in range(len(len_per_period))
-                                        ]
+                                        # len_per_period = [
+                                        #     (
+                                        #         len_per_period[i]
+                                        #         if len_per_period_stats[i] < 10000
+                                        #         else 0
+                                        #     )
+                                        #     for i in range(len(len_per_period))
+                                        # ]
 
                                         if np.sum(len_per_period) > 0:
                                             data_list_per_period = [
@@ -761,7 +764,7 @@ class DataModulePerFlow(LightningDataModule):
                 else:
                     data_list_test = data_list["test"]
                 sample_index = np.random.choice(
-                    np.arange(len(data_list_test)), 500, replace=False
+                    np.arange(len(data_list_test)), min(500,len(data_list_test)), replace=False
                 )
                 data_list_test = [data_list_test[i] for i in sample_index]
             self.test = self.__create_dataset(

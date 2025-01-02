@@ -147,7 +147,7 @@ class FlowSimLstm(LightningModule):
                     input_size=hidden_size, hidden_size=hidden_size
                 )
                 self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
-            dim_flowsim = 16 if self.enable_flowsim_diff else 13
+            dim_flowsim = 16 if self.enable_flowsim_diff else 14
             self.output_layer = nn.Sequential(
                 nn.Linear(hidden_size + dim_flowsim, hidden_size // 2),  # First layer
                 nn.ReLU(),  # Non-linearity
@@ -227,9 +227,12 @@ class FlowSimLstm(LightningModule):
         flow_active_matrix,  # (n_flows,2)
         time_delta_matrix,  # (batch,n_events)
         edges_a_to_b,  # (2, n_edges)
+        enable_test=False,
     ):
         loss_size = None
         loss_queue = None
+        res_size = None
+        res_queue = None
         if self.enable_gnn and self.enable_lstm:
             batch_size, n_events, _ = time_delta_matrix.size()
             n_flows = x.shape[0]
@@ -248,11 +251,17 @@ class FlowSimLstm(LightningModule):
             if self.enable_remainsize:
                 loss_size = torch.zeros((n_flows, 1), device=x.device)
                 loss_size_num = torch.ones_like(loss_size)
+                if enable_test:
+                    res_size_est = []
+                    res_size_gt = []
             if self.enable_queuelen:
                 loss_queue = torch.zeros(
                     (batch_size * self.n_links, 1), device=x.device
                 )
                 loss_queue_num = torch.ones_like(loss_queue)
+                if enable_test:
+                    res_queue_est = []
+                    res_queue_gt = []
 
             flow_start = flow_active_matrix[:, 0].unsqueeze(1)  # (n_flows, 1)
             flow_end = flow_active_matrix[:, 1].unsqueeze(1)  # (n_flows, 1)
@@ -306,7 +315,13 @@ class FlowSimLstm(LightningModule):
                             remain_size_est - remain_size_gt
                         )
                         loss_size_num[active_flow_idx, 0] += 1
-
+                        if enable_test:
+                            res_size_est.extend(
+                                remain_size_est.cpu().detach().numpy().tolist()
+                            )
+                            res_size_gt.extend(
+                                remain_size_gt.cpu().detach().numpy().tolist()
+                            )
                     if self.enable_queuelen:
                         queue_link_idx = queuelen_link_matrix[j]
                         if len(queue_link_idx) > 0:
@@ -324,6 +339,13 @@ class FlowSimLstm(LightningModule):
                                     queue_len_est - queue_len_gt
                                 )
                                 loss_queue_num[queue_link_idx, 0] += 1
+                                if enable_test:
+                                    res_queue_est.extend(
+                                        queue_len_est.cpu().detach().numpy().tolist()
+                                    )
+                                    res_queue_gt.extend(
+                                        queue_len_gt.cpu().detach().numpy().tolist()
+                                    )
 
                     n_flows_active = active_flow_idx.size(0)
                     new_flow_indices = torch.searchsorted(
@@ -367,30 +389,11 @@ class FlowSimLstm(LightningModule):
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
-                        # if self.enable_queuelen:
-                        #     queue_link_idx = queuelen_link_matrix[j]
-                        #     if len(queue_link_idx) > 0:
-                        #         queue_len_est = self.queue_len_layer(
-                        #             batch_h_state_link[queue_link_idx, :]
-                        #         )[:, 0]
-
-                        #         queue_len_gt = queuelen_matrix[j]
-                        #         if (
-                        #             len(queue_len_gt)
-                        #             == len(queue_len_est)
-                        #             == len(queue_link_idx)
-                        #         ):
-                        #             loss_queue[queue_link_idx, 0] += torch.abs(
-                        #                 queue_len_est - queue_len_gt
-                        #             )
-                        #             loss_queue_num[queue_link_idx, 0] += 1
-
             if self.enable_flowsim_diff:
                 input_tmp = torch.cat([x, batch_h_state], dim=1)
                 res = self.output_layer(input_tmp)
             else:
-                # input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
-                input_tmp = torch.cat([x[:, 3:], batch_h_state], dim=1)
+                input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
                 res = self.output_layer(input_tmp)
                 # res = self.output_layer(batch_h_state) + 1.0
             if self.enable_remainsize:
@@ -403,7 +406,11 @@ class FlowSimLstm(LightningModule):
             # res, _ = self.model_lstm(x[:, :, [0, 1]], lengths)
         else:
             assert False, "Either GNN or LSTM must be enabled"
-        return res, loss_size, loss_queue
+        if self.enable_remainsize and enable_test:
+            res_size = np.array([res_size_est, res_size_gt])
+        if self.enable_queuelen and enable_test:
+            res_queue = np.array([res_queue_est, res_queue_gt])
+        return res, loss_size, loss_queue, res_size, res_queue
 
     def step(self, batch, batch_idx, tag=None):
         (
@@ -419,8 +426,9 @@ class FlowSimLstm(LightningModule):
             time_delta_matrix,
             edges_a_to_b_matrix,
         ) = batch
+        enable_test = tag == "test"
 
-        estimated, loss_size, loss_queue = self(
+        estimated, loss_size, loss_queue, res_size, res_queue = self(
             input,
             batch_index,
             batch_index_link,
@@ -430,6 +438,7 @@ class FlowSimLstm(LightningModule):
             flow_active_matrix,
             time_delta_matrix,
             edges_a_to_b_matrix,
+            enable_test=enable_test,
         )
 
         est = torch.div(estimated, output).squeeze()
@@ -455,7 +464,8 @@ class FlowSimLstm(LightningModule):
                 loss_queue_mean = loss_queue.nanmean()
             self._log_loss(loss_queue_mean, f"{tag}_queue")
             loss = loss + loss_queue_mean * self.loss_efficiency_queue
-        self._save_test_results(tag, spec, estimated, output)
+        if enable_test:
+            self._save_test_results(spec, estimated, output, res_size, res_queue)
 
         return loss
 
@@ -474,15 +484,16 @@ class FlowSimLstm(LightningModule):
             batch_size=self.batch_size,
         )
 
-    def _save_test_results(self, tag, spec, estimated, output):
-        if tag == "test":
-            test_dir = f"{self.save_dir}/{spec[0]}"
-            os.makedirs(test_dir, exist_ok=True)
-            np.savez(
-                f"{test_dir}/res.npz",
-                est=estimated.cpu().numpy(),
-                output=output.cpu().numpy(),
-            )
+    def _save_test_results(self, spec, estimated, output, res_size, res_queue):
+        test_dir = f"{self.save_dir}/{spec[0]}"
+        os.makedirs(test_dir, exist_ok=True)
+        np.savez(
+            f"{test_dir}/res.npz",
+            est=estimated.cpu().numpy(),
+            output=output.cpu().numpy(),
+            res_size=np.array(res_size),
+            res_queue=np.array(res_queue),
+        )
 
     def _log_gradient_norms(self, tag):
         # Compute and log gradient norms for GNN layers
