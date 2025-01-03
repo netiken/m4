@@ -272,7 +272,8 @@ if __name__ == "__main__":
         model_name = model_config["model_name"]
         if model_name == "lstm":
             model = FlowSimLstm.load_from_checkpoint(
-                f"{dir_train}/checkpoints/best.ckpt",
+                # f"{dir_train}/checkpoints/best.ckpt",
+                f"{dir_train}/checkpoints/last_epoch=008.ckpt",
                 map_location=DEVICE,
                 n_layer=model_config["n_layer"],
                 gcn_n_layer=model_config["gcn_n_layer"],

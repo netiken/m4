@@ -154,7 +154,7 @@ class FlowSimLstm(LightningModule):
                 nn.Dropout(p=dropout),
                 nn.Linear(hidden_size // 2, output_size),  # Second layer
             )
-            model_scaling_factor = 8
+            model_scaling_factor = 2
             if self.enable_remainsize:
                 self.remain_size_layer = nn.Sequential(
                     nn.Linear(
@@ -341,6 +341,10 @@ class FlowSimLstm(LightningModule):
                                 == len(queue_len_est)
                                 == len(queue_link_idx)
                             ):
+                                # mask = queue_len_gt > 0
+                                # loss_queue[queue_link_idx[mask], 0] += torch.abs(
+                                #     queue_len_est[mask] - queue_len_gt[mask]
+                                # )
                                 loss_queue[queue_link_idx, 0] += torch.abs(
                                     queue_len_est - queue_len_gt
                                 )
@@ -406,10 +410,10 @@ class FlowSimLstm(LightningModule):
                 res = self.output_layer(input_tmp)
                 # res = self.output_layer(batch_h_state) + 1.0
             if self.enable_remainsize:
-                loss_size = torch.div(loss_size, loss_size_num)
+                # loss_size = torch.div(loss_size, loss_size_num)
                 size_info = x[:, 0].cpu().detach().numpy()
-            if self.enable_queuelen:
-                loss_queue = torch.div(loss_queue, loss_queue_num)
+            # if self.enable_queuelen:
+            # loss_queue = torch.div(loss_queue, loss_queue_num)
 
         elif self.enable_lstm:
             res, _ = self.model_lstm(x, lengths)
