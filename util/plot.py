@@ -143,6 +143,7 @@ def plot_lines(
     rotate_xaxis=False,
     ylim=None,
     xlim=None,
+    ylim_bottom=None,
     fontsize=15,
     legend_font=15,
     loc=2,
@@ -222,6 +223,8 @@ def plot_lines(
 
     if ylim:
         plt.ylim(top=ylim)
+    if ylim_bottom:
+        plt.ylim(bottom=ylim_bottom)
     if xlim:
         plt.xlim(right=xlim)
 
