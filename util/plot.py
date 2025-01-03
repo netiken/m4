@@ -139,6 +139,7 @@ def plot_lines(
     x_label,
     y_label,
     log_switch=False,
+    log_switch_x=False,
     rotate_xaxis=False,
     ylim=None,
     xlim=None,
@@ -181,6 +182,8 @@ def plot_lines(
     ax.tick_params(axis="x", direction="in")
     if log_switch:
         ax.set_yscale("log")
+    if log_switch_x:
+        ax.set_xscale("log")
 
     plt.ylabel(y_label, fontsize=_fontsize)
     plt.xlabel(x_label, fontsize=_fontsize)
