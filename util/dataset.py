@@ -700,7 +700,7 @@ class DataModulePerFlow(LightningDataModule):
                     #     * len(sample_list)
                     #     * self.segments_per_seq
                     # )
-                    n_samples = 2000
+                    n_samples = 1000
 
                     if self.sampling_method == "uniform":
                         weights = len_per_period_all > 0
@@ -1448,6 +1448,7 @@ class TopoFctSldnSegment(Dataset):
                 allow_pickle=True,
             ).item()
             queuelen_list = [np.array(queuelen_list_total[i]) for i in fid]
+            queuelen_list = [np.log2(x + 1) for x in queuelen_list]
             queuelen_link_list = link_info
         else:
             queuelen_list = None
