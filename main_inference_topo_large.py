@@ -664,7 +664,7 @@ def main():
                 f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
             )
             np.savez(
-                f"./res/{model_instance}{dataset_str}_large{shard}_debug.npz",
+                f"./res/{model_instance}{dataset_str}_large{shard}.npz",
                 fct=fct_arr,
                 sldn=sldn_arr,
             )
@@ -736,7 +736,7 @@ def main():
                 #     f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
                 # )
                 np.savez(
-                    f"./res/{model_instance}_{model_ckpt}{dataset_str}_large{shard}_debug.npz",
+                    f"./res/{model_instance}_{model_ckpt}{dataset_str}_large{shard}.npz",
                     fct=fct_arr,
                     sldn=sldn_arr,
                 )
