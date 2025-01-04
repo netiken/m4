@@ -286,8 +286,11 @@ class FlowSimLstm(LightningModule):
 
                     edge_mask = active_flow_mask[edges_a_to_b[0]]
                     edge_index_a_to_b = edges_a_to_b[:, edge_mask]
-                    active_link_idx, new_link_indices = torch.unique(
-                        edge_index_a_to_b[1], return_inverse=True, sorted=False
+                    active_link_idx, new_link_indices, n_flows_perlink = torch.unique(
+                        edge_index_a_to_b[1],
+                        return_inverse=True,
+                        return_counts=True,
+                        sorted=False,
                     )
 
                     time_deltas = time_deltas_full[active_flow_idx, j]
@@ -348,7 +351,9 @@ class FlowSimLstm(LightningModule):
                                 # loss_queue[queue_link_idx, 0] += torch.abs(
                                 #     queue_len_est - queue_len_gt
                                 # )
-                                loss_queue[queue_link_idx, 0] += (queue_len_est - queue_len_gt) ** 2
+                                loss_queue[queue_link_idx, 0] += (
+                                    queue_len_est - queue_len_gt
+                                ) ** 2
                                 loss_queue_num[queue_link_idx, 0] += 1
                                 if enable_test:
                                     res_queue_est.extend(
