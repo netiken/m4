@@ -286,10 +286,9 @@ class FlowSimLstm(LightningModule):
 
                     edge_mask = active_flow_mask[edges_a_to_b[0]]
                     edge_index_a_to_b = edges_a_to_b[:, edge_mask]
-                    active_link_idx, new_link_indices, n_flows_perlink = torch.unique(
+                    active_link_idx, new_link_indices = torch.unique(
                         edge_index_a_to_b[1],
                         return_inverse=True,
-                        return_counts=True,
                         sorted=False,
                     )
 
@@ -331,40 +330,40 @@ class FlowSimLstm(LightningModule):
                             res_size_flowidx.extend(
                                 active_flow_idx.cpu().numpy().tolist()
                             )
-                    if self.enable_queuelen:
-                        queue_link_idx = queuelen_link_matrix[j]
-                        if len(queue_link_idx) > 0:
-                            queue_len_est = self.queue_len_layer(
-                                batch_h_state_link[queue_link_idx, :]
-                            )[:, 0]
+                    # if self.enable_queuelen:
+                    #     queue_link_idx = queuelen_link_matrix[j]
+                    #     if len(queue_link_idx) > 0:
+                    #         queue_len_est = self.queue_len_layer(
+                    #             batch_h_state_link[queue_link_idx, :]
+                    #         )[:, 0]
 
-                            queue_len_gt = queuelen_matrix[j]
-                            if (
-                                len(queue_len_gt)
-                                == len(queue_len_est)
-                                == len(queue_link_idx)
-                            ):
-                                # mask = queue_len_gt > 0
-                                # loss_queue[queue_link_idx[mask], 0] += torch.abs(
-                                #     queue_len_est[mask] - queue_len_gt[mask]
-                                # )
-                                # loss_queue[queue_link_idx, 0] += torch.abs(
-                                #     queue_len_est - queue_len_gt
-                                # )
-                                loss_queue[queue_link_idx, 0] += (
-                                    queue_len_est - queue_len_gt
-                                ) ** 2
-                                loss_queue_num[queue_link_idx, 0] += 1
-                                if enable_test:
-                                    res_queue_est.extend(
-                                        queue_len_est.cpu().detach().numpy().tolist()
-                                    )
-                                    res_queue_gt.extend(
-                                        queue_len_gt.cpu().detach().numpy().tolist()
-                                    )
-                                    res_queue_linkidx.extend(
-                                        queue_link_idx.cpu().numpy().tolist()
-                                    )
+                    #         queue_len_gt = queuelen_matrix[j]
+                    #         if (
+                    #             len(queue_len_gt)
+                    #             == len(queue_len_est)
+                    #             == len(queue_link_idx)
+                    #         ):
+                    #             # mask = queue_len_gt > 0
+                    #             # loss_queue[queue_link_idx[mask], 0] += torch.abs(
+                    #             #     queue_len_est[mask] - queue_len_gt[mask]
+                    #             # )
+                    #             loss_queue[queue_link_idx, 0] += torch.abs(
+                    #                 queue_len_est - queue_len_gt
+                    #             )
+                    #             # loss_queue[queue_link_idx, 0] += (
+                    #             #     queue_len_est - queue_len_gt
+                    #             # ) ** 2
+                    #             loss_queue_num[queue_link_idx, 0] += 1
+                    #             if enable_test:
+                    #                 res_queue_est.extend(
+                    #                     queue_len_est.cpu().detach().numpy().tolist()
+                    #                 )
+                    #                 res_queue_gt.extend(
+                    #                     queue_len_gt.cpu().detach().numpy().tolist()
+                    #                 )
+                    #                 res_queue_linkidx.extend(
+                    #                     queue_link_idx.cpu().numpy().tolist()
+                    #                 )
 
                     n_flows_active = active_flow_idx.size(0)
                     new_flow_indices = torch.searchsorted(
@@ -401,7 +400,43 @@ class FlowSimLstm(LightningModule):
                         z_t_tmp, batch_h_state[active_flow_idx, :]
                     )
                     if self.enable_link_state:
+                        if self.enable_queuelen:
+                            queue_link_idx = queuelen_link_matrix[j]
+                            if len(queue_link_idx) > 0:
+                                queue_len_est = self.queue_len_layer(
+                                    batch_h_state_link[queue_link_idx, :]
+                                )[:, 0]
 
+                                queue_len_gt = queuelen_matrix[j]
+                                if (
+                                    len(queue_len_gt)
+                                    == len(queue_len_est)
+                                    == len(queue_link_idx)
+                                ):
+                                    # mask = queue_len_gt > 0
+                                    # loss_queue[queue_link_idx[mask], 0] += torch.abs(
+                                    #     queue_len_est[mask] - queue_len_gt[mask]
+                                    # )
+                                    loss_queue[queue_link_idx, 0] += torch.abs(
+                                        queue_len_est - queue_len_gt
+                                    )
+                                    # loss_queue[queue_link_idx, 0] += (
+                                    #     queue_len_est - queue_len_gt
+                                    # ) ** 2
+                                    loss_queue_num[queue_link_idx, 0] += 1
+                                    if enable_test:
+                                        res_queue_est.extend(
+                                            queue_len_est.cpu()
+                                            .detach()
+                                            .numpy()
+                                            .tolist()
+                                        )
+                                        res_queue_gt.extend(
+                                            queue_len_gt.cpu().detach().numpy().tolist()
+                                        )
+                                        res_queue_linkidx.extend(
+                                            queue_link_idx.cpu().numpy().tolist()
+                                        )
                         batch_h_state_link[active_link_idx, :] = (
                             self.lstmcell_rate_link(
                                 z_t_tmp_link,
