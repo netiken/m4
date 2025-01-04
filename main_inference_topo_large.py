@@ -209,16 +209,17 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
         f"{dir_input_tmp}/flow_to_path.npy",
         allow_pickle=True,
     )
-    link_info = [[link_dict[link] for link in link_info[i]] for i in fid]
+    # link_info = [[link_dict[link] for link in link_info[i]] for i in fid]
+    link_info = [[link_dict[link] for link in link_info[i]] for i in range(len(size))]
 
     flowid_to_linkid = defaultdict(list)
     edges_list = []
-    for flow_idx in range(len(fid)):
+    for flow_idx in range(len(size)):
         for link_idx in link_info[flow_idx]:
             edges_list.append([flow_idx, link_idx])
             flowid_to_linkid[flow_idx].append(link_idx)
     edges_list = np.array(edges_list).T
-    assert len(size) == len(fct)
+    # assert len(size) == len(fct)
 
     n_links_passed = np.array([len(path) for path in link_info])
     base_delay = get_base_delay_path(size, n_links_passed, lr)
@@ -230,21 +231,23 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
     param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
     # param_data[6:] = param_data[6:] / 10.0
     # param_data[:2] = param_data[:2] / 10.0
-    param_data_repeat = np.repeat(param_data[:, np.newaxis], len(fid), axis=1).T
+    param_data_repeat = np.repeat(param_data[:, np.newaxis], len(size), axis=1).T
     return (
         size,
         fat,
         fct,
-        i_fct,
+        i_fcts_flowsim,
         edges_list,
         sldn_flowsim,
         flowid_to_linkid,
         param_data_repeat,
+        fid,
     )
 
 
 def interactive_inference(
     inference,
+    fid,
     size,
     fat,
     fct,
@@ -258,6 +261,7 @@ def interactive_inference(
     n_flows_total=1000,
 ):
     n_flows_total_min = min(len(size), n_flows_total)
+    print(f"n_flows_total_min: {n_flows_total_min}")
     n_flows_active_max = min(n_flows_active_max, n_flows_total_min)
     size = size[:n_flows_total_min]
     fat = fat[:n_flows_total_min]
@@ -489,10 +493,10 @@ def interactive_inference(
     print(f"Time elapsed: {time_elapsed}")
 
     # Prepare results
-    res_fct = flow_metric[:, 0].cpu().numpy()
-    res_sldn = flow_metric[:, 1].cpu().numpy()
-    actual_fct = fct[:n_flows_total_min]
-    actual_sldn = fct[:n_flows_total_min] / i_fct[:n_flows_total_min]
+    res_fct = flow_metric[:, 0].cpu().numpy()[fid]
+    res_sldn = flow_metric[:, 1].cpu().numpy()[fid]
+    actual_fct = fct
+    actual_sldn = fct / i_fct[fid]
 
     res_fct = np.stack([res_fct, actual_fct], axis=1)
     res_sldn = np.stack([res_sldn, actual_sldn], axis=1)
@@ -554,15 +558,15 @@ def main():
     model_list = [
         # ("m4", 10, 4000),
         # ("m4", 17, 4000),
-        # ("final", 10, 4000),
+        ("final", 10, 4000),
         # ("final_nosize", 11, 4000),
         # ("final_nosize", 7, 4000),
         # ("final_noqueue", 9, 4000),
         # ("final_noqueue", 6, 4000),
         # ("final_noflowsim", 12, 4000),
         # ("final_noflowsim", 11, 4000),
-        ("final_re", 10, 4000),
-        ("final_re", 7, 4000),
+        # ("final_re", 10, 4000),
+        # ("final_re", 7, 4000),
         # old
         # ("topo_featrate", 7, 4000),
         # ("topo_remainsize_large_data", 7, 4000),
@@ -614,6 +618,7 @@ def main():
                     sldn_flowsim,
                     flowid_to_linkid,
                     param_data,
+                    fid,
                 ) = load_data(
                     input_dir,
                     topo_type=data_config["topo_type"],
@@ -623,7 +628,9 @@ def main():
                 )
                 res_fct = []
                 res_sldn = []
-                for flow_id in range(len(size)):
+                sldn_flowsim = sldn_flowsim[fid]
+                i_fct = i_fct[fid]
+                for flow_id in range(len(sldn_flowsim)):
                     predicted_completion_time = sldn_flowsim[flow_id] * i_fct[flow_id]
                     actual_completion_time = fct[flow_id]
                     predicted_sldn = sldn_flowsim[flow_id]
@@ -657,7 +664,7 @@ def main():
                 f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
             )
             np.savez(
-                f"./res/{model_instance}{dataset_str}_large{shard}.npz",
+                f"./res/{model_instance}{dataset_str}_large{shard}_debug.npz",
                 fct=fct_arr,
                 sldn=sldn_arr,
             )
@@ -687,6 +694,7 @@ def main():
                         sldn_flowsim,
                         flowid_to_linkid,
                         param_data,
+                        fid,
                     ) = load_data(
                         input_dir,
                         topo_type=data_config["topo_type"],
@@ -696,6 +704,7 @@ def main():
                     )
                     res_fct, res_sldn = interactive_inference(
                         inference,
+                        fid,
                         size,
                         fat,
                         fct,
@@ -727,7 +736,7 @@ def main():
                 #     f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
                 # )
                 np.savez(
-                    f"./res/{model_instance}_{model_ckpt}{dataset_str}_large{shard}.npz",
+                    f"./res/{model_instance}_{model_ckpt}{dataset_str}_large{shard}_debug.npz",
                     fct=fct_arr,
                     sldn=sldn_arr,
                 )

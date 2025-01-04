@@ -1448,7 +1448,7 @@ class TopoFctSldnSegment(Dataset):
                 allow_pickle=True,
             ).item()
             queuelen_list = [np.array(queuelen_list_total[i]) for i in fid]
-            queuelen_list = [np.log2(x + 1) for x in queuelen_list]
+            # queuelen_list = [np.log2(x + 1) for x in queuelen_list]
             queuelen_link_list = link_info
         else:
             queuelen_list = None
