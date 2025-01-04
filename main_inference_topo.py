@@ -559,12 +559,12 @@ def main():
         # ("eval_train", 2000, 2000),
         # ("eval_test_80k", 100, 80000),
         # ("eval_test_60k", 100, 60000),
-        ("eval_test", 100, 80000),
+        ("eval_test", 3, 80000),
     ]
     model_list = [
         # ("m4", 10, 4000),
         # ("m4", 17, 4000),
-        ("final", 10, 4000),
+        # ("final", 10, 4000),
         # ("final_nosupervision", 10, 4000),
         # ("final_nosupervision", 12, 4000),
         # ("final_nosize", 11, 4000),
@@ -576,18 +576,16 @@ def main():
         # ("final_re", 10, 4000),
         # ("final_re", 7, 4000),
         # test
-        # ("final_mlp4", 14, 4000),
-        # ("final_mlp4", 13, 4000),
-        # ("final_mlp4", 12, 4000),
-        # ("final_mlp4", 11, 4000),
-        # ("final_mlp4", 10, 4000),
-        # ("final_mlp4", 9, 4000),
-        # ("final_mlp4", 8, 4000),
-        # ("final_mlp4", 7, 4000),
-        # ("final_mlp4", 6, 4000),
-        # ("final_mlp4", 5, 4000),
-        # ("final_mlp4", 4, 4000),
-        # ("final_mlp4", 3, 4000),
+        ("new", 12, 4000),
+        ("new", 11, 4000),
+        ("new", 10, 4000),
+        ("new", 9, 4000),
+        ("new", 8, 4000),
+        ("new", 7, 4000),
+        ("new", 6, 4000),
+        ("new", 5, 4000),
+        ("new", 4, 4000),
+        ("new", 3, 4000),
         # old
         # ("topo_512_flowsim_input", 24, 2000),
         # ("topo_512_flowsim_input_dropout", 19, 2000),
@@ -688,7 +686,7 @@ def main():
                     f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
                 )
                 np.savez(
-                    f"./res/{model_instance}_debug{dataset_str}.npz",
+                    f"./res/{model_instance}{dataset_str}.npz",
                     fct=fct_arr,
                     sldn=sldn_arr,
                 )
@@ -761,7 +759,7 @@ def main():
                     #     f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
                     # )
                     np.savez(
-                        f"./res/{model_instance}_{model_ckpt}_debug{dataset_str}.npz",
+                        f"./res/{model_instance}_{model_ckpt}{dataset_str}.npz",
                         fct=fct_arr,
                         sldn=sldn_arr,
                     )
