@@ -153,6 +153,7 @@ cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
 cargo run --release -- --root=./eval_train_test --mixes spec/eval_train_test.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/0.mix.json ns3
+cargo run --release -- --root=./eval_debug --mixes spec/eval_debug.mix.json ns3
 cargo run --release -- --root=./eval_test_trace --mixes spec/eval_test_trace.mix.json ns3
 
 cargo run --release -- --root=./data_test_config --mixes spec/0.mix.json ns3
@@ -160,9 +161,9 @@ cargo run --release -- --root=./test --mixes spec/0.mix.json ns3
 
 # run exps fig 7
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_7
-cargo run --release -- --root=./data_fix --mix spec/0.mix.json ns3
-cargo run --release -- --root=./data_fix --mix spec/1.mix.json ns3
-cargo run --release -- --root=./data_fix --mix spec/2.mix.json ns3
+cargo run --release -- --root=./data --mix spec/0.mix.json ns3
+cargo run --release -- --root=./data --mix spec/1.mix.json ns3
+cargo run --release -- --root=./data --mix spec/2.mix.json ns3
 
 # git large file
 git filter-branch --tree-filter 'rm -f plot_simulation.ipynb' HEAD
