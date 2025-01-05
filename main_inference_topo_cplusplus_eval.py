@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from util.model import FlowSimLstm
+from util.temp_model import FlowSimLstm
 from util.consts import get_base_delay_path, get_base_delay_transmission
 import argparse
 import yaml
@@ -61,6 +61,7 @@ class Inference:
         self.save_models()
 
     def save_models(self, directory="./inference/models_eval"):
+        directory = "./flowsim/new_model"
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -78,6 +79,7 @@ class Inference:
             self.lstmcell_time_link.save(f"{directory}/lstmcell_time_link.pt")
 
     def load_model(self, checkpoint_path):
+        checkpoint_path = "/data2/lichenni/output_perflow/final_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=010.ckpt"
         model_config = self.model_config
         training_config = self.training_config
         dataset_config = self.dataset_config
@@ -159,6 +161,7 @@ class Inference:
             for gcn in self.gcn_layers:
                 x_combined = gcn(x_combined, edge_index_combined)
             z_tmp = x_combined[:n_flows]
+            print(param_data.shape)
             z_tmp = torch.cat([z_tmp, param_data], dim=1)
 
             h_vec_res = self.lstmcell_rate(z_tmp, h_vec)
