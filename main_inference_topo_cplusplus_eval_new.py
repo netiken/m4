@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from util.model import FlowSimLstm
+from util.temp_model import FlowSimLstm
 from util.consts import get_base_delay_path, get_base_delay_transmission
 import argparse
 import yaml
@@ -8,7 +8,6 @@ import time
 from collections import defaultdict
 import traceback
 import os
-import gc
 
 torch.set_float32_matmul_precision("high")
 
@@ -59,8 +58,10 @@ class Inference:
         self.z_t_link = torch.zeros((self.n_link, self.hidden_size), device=self.device)
         self.z_t_link[:, 1] = 1.0
         self.z_t_link[:, 2] = 1.0
+        self.save_models()
 
-    def save_models(self, directory="./inference/models_topo"):
+    def save_models(self, directory="./inference/models_eval"):
+        directory = "./flowsim/new_model"
         if not os.path.exists(directory):
             os.makedirs(directory)
 
@@ -78,6 +79,7 @@ class Inference:
             self.lstmcell_time_link.save(f"{directory}/lstmcell_time_link.pt")
 
     def load_model(self, checkpoint_path):
+        checkpoint_path = "/data2/lichenni/output_perflow/final_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=010.ckpt"
         model_config = self.model_config
         training_config = self.training_config
         dataset_config = self.dataset_config
@@ -164,6 +166,7 @@ class Inference:
             h_vec_res = self.lstmcell_rate(z_tmp, h_vec)
 
             if self.enable_link_state:
+                print(x_combined[n_flows:].shape, h_vec_link.shape)
                 h_vec_link_res = self.lstmcell_rate_link(
                     x_combined[n_flows:], h_vec_link
                 )
@@ -259,7 +262,6 @@ def interactive_inference(
     n_flows_total=1000,
 ):
     n_flows_total_min = min(len(size), n_flows_total)
-    print(f"n_flows_total_min: {n_flows_total_min}")
     n_flows_active_max = min(n_flows_active_max, n_flows_total_min)
     size = size[:n_flows_total_min]
     fat = fat[:n_flows_total_min]
@@ -430,6 +432,8 @@ def interactive_inference(
             link_to_graph_id[no_flow_links] = -1
 
             if inference.enable_link_state:
+                print(inference.z_t_link.shape)
+                print(inference.z_t_link[no_flow_links, 1])
                 inference.z_t_link[no_flow_links] = 0.0
                 inference.z_t_link[no_flow_links, 1] = 1.0
                 inference.z_t_link[no_flow_links, 2] = 1.0
@@ -502,13 +506,6 @@ def interactive_inference(
     return res_fct, res_sldn
 
 
-def release_gpu_memory():
-    """Utility function to release GPU memory."""
-    gc.collect()  # Collect unused objects
-    torch.cuda.empty_cache()  # Clear the GPU cache
-    torch.cuda.ipc_collect()  # Clear shared memory if using multiprocessing
-
-
 def main():
     parser = argparse.ArgumentParser(description="Interactive Inference Script")
     parser.add_argument(
@@ -516,14 +513,14 @@ def main():
         type=str,
         required=False,
         help="Path to the YAML configuration file",
-        default="./config/test_config_lstm_topo_eval.yaml",
+        default="./config/test_config_lstm_topo_cplusplus_eval.yaml",
     )
     parser.add_argument(
         "--input",
         type=str,
         required=False,
         help="Path to the input data directory",
-        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/",
+        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_test",
     )
     parser.add_argument(
         "--output",
@@ -547,137 +544,31 @@ def main():
         training_config = config_info["training"]
         data_config = config_info["dataset"]
 
-    max_inflight_flows = 0
-    dataset_list = [
-        # ("", 1000, 2000),
-        # ("_empirical", 100, 2000),
-        # ("_eval_small", 100, 10000),
-        # ("_eval", 100, 30000),
-        # ("_eval_sweep", 100, 30000),
-        # ("eval_train", 2000, 2000),
-        # ("eval_test_80k", 100, 80000),
-        # ("eval_test_50k", 100, 50000),
-        ("eval_test", 100, 50000),
-    ]
-    model_list = [
-        # ("m4", 10, 4000),
-        # ("m4", 17, 4000),
-        # ("final", 10, 4000),
-        # ("final_nosupervision", 10, 4000),
-        # ("final_nosupervision", 12, 4000),
-        # ("final_nosize", 11, 4000),
-        # ("final_nosize", 7, 4000),
-        # ("final_noqueue", 9, 4000),
-        # ("final_noqueue", 6, 4000),
-        # ("final_noflowsim", 12, 4000),
-        # ("final_noflowsim", 11, 4000),
-        # ("final_re", 10, 4000),
-        # ("final_re", 7, 4000),
-        # ("new_ori", 11, 4000),
-        ("new", 11, 4000),
-        ("new", 9, 4000),
-        # test
-        # ("new_loss05", 14, 4000),
-        # ("new_loss05", 13, 4000),
-        # ("new_loss05", 12, 4000),
-        # ("new_loss05", 11, 4000),
-        # ("new_loss05", 10, 4000),
-        # ("new_loss05", 9, 4000),
-        # ("new_loss05", 8, 4000),
-        # ("new_loss05", 7, 4000),
-        # ("new_loss05", 6, 4000),
-        # ("new_loss05", 5, 4000),
-        # ("new_ori", 8, 4000),
-        # ("new", 3, 4000),
-    ]
+    n_flows_total = 10
+    input_dir = args.input
+    input_dir = "./flowsim"
+    spec = "new_eval"
     if args.flowsim:
         print("Running flow simulation")
         model_instance = "flowsim"
-        for dataset_str, n_shards, n_flows_total in dataset_list:
-            input_dir = args.input + dataset_str
-            fct_list, sldn_list = [], []
-            for shard in np.arange(n_shards):
-                try:
-                    spec = f"{shard}/ns3"
-                    (
-                        size,
-                        fat,
-                        fct,
-                        i_fct,
-                        edges_list,
-                        sldn_flowsim,
-                        flowid_to_linkid,
-                        param_data,
-                        fid,
-                    ) = load_data(
-                        input_dir,
-                        topo_type=data_config["topo_type"],
-                        spec=spec,
-                        lr=data_config["lr"],
-                        max_inflight_flows=max_inflight_flows,
-                    )
-                    res_fct = []
-                    res_sldn = []
-                    sldn_flowsim = sldn_flowsim[fid]
-                    i_fct = i_fct[fid]
-                    for flow_id in range(len(sldn_flowsim)):
-                        predicted_completion_time = (
-                            sldn_flowsim[flow_id] * i_fct[flow_id]
-                        )
-                        actual_completion_time = fct[flow_id]
-                        predicted_sldn = sldn_flowsim[flow_id]
-                        assert predicted_sldn != np.inf
-                        actual_sldn = fct[flow_id] / i_fct[flow_id]
-                        res_fct.append(
-                            [
-                                predicted_completion_time,
-                                actual_completion_time,
-                            ]
-                        )
-                        res_sldn.append([predicted_sldn, actual_sldn])
-                    res_fct = np.array(res_fct)
-                    res_sldn = np.array(res_sldn)
-                    print(
-                        f"Finished workload={shard}. fct shape: {res_fct.shape}, sldn shape: {res_sldn.shape}"
-                    )
-                    res_fct_tmp = np.zeros((n_flows_total, 2))
-                    res_sldn_tmp = np.zeros((n_flows_total, 2))
-                    res_fct_tmp[: res_fct.shape[0], :] = res_fct
-                    res_sldn_tmp[: res_sldn.shape[0], :] = res_sldn
-                    fct_list.append(res_fct_tmp)
-                    sldn_list.append(res_sldn_tmp)
-                except Exception as e:
-                    print(f"Error: {e}")
-                    traceback.print_exc()  # This prints the full traceback of the exception
-                    continue
-                fct_arr = np.array(fct_list)
-                sldn_arr = np.array(sldn_list)
-                print(
-                    f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
-                )
-                np.savez(
-                    f"./res/{model_instance}{dataset_str}.npz",
-                    fct=fct_arr,
-                    sldn=sldn_arr,
-                )
     else:
         print("Running m4's inference")
-        for dataset_str, n_shards, n_flows_total in dataset_list:
-            input_dir = args.input + dataset_str
-            for model_instance, model_ckpt, model_shard in model_list:
-                model_name_loaded = f"last_epoch={model_ckpt:03d}"
-                checkpoint = f"{args.output}/{model_instance}_shard{model_shard}_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/{model_name_loaded}.ckpt"
-                inference = Inference(
-                    data_config,
-                    model_config,
-                    training_config,
-                    checkpoint_path=checkpoint,
-                )
-                print(f"Loaded model: {model_instance}/{model_name_loaded}")
-                fct_list, sldn_list = [], []
-                for shard in np.arange(n_shards):
+        model_instance = "final"
+        checkpoint = f"{args.output}/{model_instance}_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=010.ckpt"
+        inference = Inference(
+            data_config,
+            model_config,
+            training_config,
+            checkpoint_path=checkpoint,
+        )
+
+    for max_inflight_flows in [0]:
+        fct_list, sldn_list = [], []
+        for shard in np.arange(1):
+            for nflows in [n_flows_total]:
+                for nhosts in [32]:
                     try:
-                        spec = f"{shard}/ns3"
+                        spec = "test/ns3"  # f"{shard}/ns3"
                         (
                             size,
                             fat,
@@ -695,46 +586,80 @@ def main():
                             lr=data_config["lr"],
                             max_inflight_flows=max_inflight_flows,
                         )
-                        res_fct, res_sldn = interactive_inference(
-                            inference,
-                            fid,
-                            size,
-                            fat,
-                            fct,
-                            i_fct,
-                            sldn_flowsim,
-                            param_data,
-                            lr=data_config["lr"],
-                            n_flows_active_max=n_flows_total,
-                            edges_list=edges_list,
-                            flowid_to_linkid=flowid_to_linkid,
-                            n_flows_total=n_flows_total,
+                        if not args.flowsim:
+                            res_fct, res_sldn = interactive_inference(
+                                inference,
+                                size,
+                                fat,
+                                fct,
+                                i_fct,
+                                sldn_flowsim,
+                                param_data,
+                                lr=data_config["lr"],
+                                n_flows_active_max=n_flows_total,
+                                edges_list=edges_list,
+                                flowid_to_linkid=flowid_to_linkid,
+                                n_flows_total=n_flows_total,
+                            )
+                        else:
+                            res_fct = []
+                            res_sldn = []
+                            sldn_flowsim = sldn_flowsim[fid]
+                            i_fct = i_fct[fid]
+                            for flow_id in range(len(sldn_flowsim)):
+                                predicted_completion_time = (
+                                    sldn_flowsim[flow_id] * i_fct[flow_id]
+                                )
+                                actual_completion_time = fct[flow_id]
+                                predicted_sldn = sldn_flowsim[flow_id]
+                                assert predicted_sldn != np.inf
+                                actual_sldn = fct[flow_id] / i_fct[flow_id]
+                                res_fct.append(
+                                    [predicted_completion_time, actual_completion_time]
+                                )
+                                res_sldn.append([predicted_sldn, actual_sldn])
+                            res_fct = np.array(res_fct)
+                            res_sldn = np.array(res_sldn)
+                        print(
+                            f"Finished workload={shard}. fct shape: {res_fct.shape}, sldn shape: {res_sldn.shape}"
                         )
-                        # print(
-                        #     f"Finished workload={shard}. fct shape: {res_fct.shape}, sldn shape: {res_sldn.shape}"
-                        # )
                         res_fct_tmp = np.zeros((n_flows_total, 2))
                         res_sldn_tmp = np.zeros((n_flows_total, 2))
                         res_fct_tmp[: res_fct.shape[0], :] = res_fct
                         res_sldn_tmp[: res_sldn.shape[0], :] = res_sldn
                         fct_list.append(res_fct_tmp)
                         sldn_list.append(res_sldn_tmp)
+
+                        print("First 10 FCT Results:")
+                        for i in range(max(-n_flows_total, -10), 0):
+                            predicted_fct = res_fct[i, 0]
+                            actual_fct = res_fct[i, 1]
+                            print(
+                                f"Flow ID {i}: Predicted FCT = {predicted_fct}, Actual FCT = {actual_fct}"
+                            )
+
+                        print("\nFirst 10 SLDN Results:")
+                        for i in range(max(-n_flows_total, -10), 0):
+                            predicted_sldn = res_sldn[i, 0]
+                            actual_sldn = res_sldn[i, 1]
+                            print(
+                                f"Flow ID {i}: Predicted SLDN = {predicted_sldn}, Actual SLDN = {actual_sldn}"
+                            )
+
                     except Exception as e:
                         print(f"Error: {e}")
                         traceback.print_exc()  # This prints the full traceback of the exception
                         continue
-                    fct_arr = np.array(fct_list)
-                    sldn_arr = np.array(sldn_list)
-                    # print(
-                    #     f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
-                    # )
-                    np.savez(
-                        f"./res/{model_instance}_{model_ckpt}{dataset_str}.npz",
-                        fct=fct_arr,
-                        sldn=sldn_arr,
-                    )
-                del inference
-                release_gpu_memory()
+            fct_arr = np.array(fct_list)
+            sldn_arr = np.array(sldn_list)
+            print(
+                f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
+            )
+            # np.savez(
+            #     f"./res/{model_instance}{empirical_str}.npz",
+            #     fct=fct_arr,
+            #     sldn=sldn_arr,
+            # )
 
 
 if __name__ == "__main__":
