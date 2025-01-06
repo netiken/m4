@@ -161,12 +161,12 @@ class Inference:
             for gcn in self.gcn_layers:
                 x_combined = gcn(x_combined, edge_index_combined)
             z_tmp = x_combined[:n_flows]
-            print(param_data.shape)
             z_tmp = torch.cat([z_tmp, param_data], dim=1)
 
             h_vec_res = self.lstmcell_rate(z_tmp, h_vec)
 
             if self.enable_link_state:
+                print(x_combined[n_flows:].shape, h_vec_link.shape)
                 h_vec_link_res = self.lstmcell_rate_link(
                     x_combined[n_flows:], h_vec_link
                 )
@@ -220,7 +220,7 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
         for link_idx in link_info[flow_idx]:
             edges_list.append([flow_idx, link_idx])
             flowid_to_linkid[flow_idx].append(link_idx)
-    edges_list = np.array(edges_list).T
+    edges_list = np.array(edges_list).T 
     assert len(size) == len(fct)
 
     n_links_passed = np.array([len(path) for path in link_info])
@@ -425,6 +425,8 @@ def interactive_inference(
             link_to_graph_id[no_flow_links] = -1
 
             if inference.enable_link_state:
+                print(inference.z_t_link.shape)
+                print(inference.z_t_link[no_flow_links, 1])
                 inference.z_t_link[no_flow_links] = 0.0
                 inference.z_t_link[no_flow_links, 1] = 1.0
                 inference.z_t_link[no_flow_links, 2] = 1.0
@@ -537,6 +539,8 @@ def main():
 
     n_flows_total = 10
     input_dir = args.input
+    input_dir = "./flowsim"
+    spec = "new_eval"
     if args.flowsim:
         print("Running flow simulation")
         model_instance = "flowsim"
@@ -557,7 +561,7 @@ def main():
             for nflows in [n_flows_total]:
                 for nhosts in [32]:
                     try:
-                        spec = f"{shard}/ns3"
+                        spec = "test/ns3" #f"{shard}/ns3"
                         (
                             size,
                             fat,

@@ -144,9 +144,9 @@ void setup_m4(torch::Device device) {
             lstmcell_rate_link = torch::jit::load(model_dir + "lstmcell_rate_link.pt", device);
             lstmcell_time_link = torch::jit::load(model_dir + "lstmcell_time_link.pt", device);
             output_layer = torch::jit::load(model_dir + "output_layer.pt", device);
-            gnn_layer_0 = torch::jit::load(old_dir + "gnn_layer_0.pt", device);
-            gnn_layer_1 = torch::jit::load(old_dir + "gnn_layer_1.pt", device);
-            gnn_layer_2 = torch::jit::load(old_dir + "gnn_layer_2.pt", device);
+            gnn_layer_0 = torch::jit::load(model_dir + "gnn_layer_0.pt", device);
+            gnn_layer_1 = torch::jit::load(model_dir + "gnn_layer_1.pt", device);
+            gnn_layer_2 = torch::jit::load(model_dir + "gnn_layer_2.pt", device);
         }
         catch (const c10::Error& e) {
             std::cerr << "[ERROR] Failed to load one or more models: " << e.what() << std::endl;
@@ -198,7 +198,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
     //fct_tensor = torch::from_blob(fct, {n_flows}, options_float).to(device);
     fct_tensor = torch::from_blob(fct.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
     sldn_tensor = torch::div(fct_tensor, i_fct_tensor);
-    params_tensor = torch::from_blob(params.data(), {12}, options_double).to(torch::kFloat32).to(device);
+    params_tensor = torch::from_blob(params.data(), {13}, options_double).to(torch::kFloat32).to(device);
     //sldn_flowsim_tensor = torch::from_blob(sldn_flowsim, {n_flows}, options_float).to(device); // TODO: what is this set to?
 
     // Convert flowid_to_linkid to tensors
@@ -267,7 +267,8 @@ void update_times_m4() {
         auto size_cur = size_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
         auto sldn_flowsim_cur = sldn_flowsim_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
         auto nlinks_cur = flowid_to_nlinks_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
-        auto input_tensor = torch::cat({size_cur, sldn_flowsim_cur, nlinks_cur, h_vec_active}, 1); // [n_active, 3 + h_vec_dim]
+        auto params_data_cur = params_tensor.repeat({n_flows_active, 1});
+        auto input_tensor = torch::cat({size_cur, sldn_flowsim_cur, nlinks_cur, params_data_cur, h_vec_active}, 1); // [n_active, 3 + h_vec_dim]
 
         // Perform inference
         sldn_est = output_layer.forward({ input_tensor }).toTensor().view(-1);; // [n_active]
@@ -389,15 +390,31 @@ void step_m4() {
         link_to_graph_id.index_put_({no_flow_links_tensor}, -1);
 
         // // Create tensors with desired reset values for 'z_t_link'
+        auto reset_values = torch::zeros({no_flow_links_tensor.size(0), z_t_link.size(1)}, options_float);
+        auto ones = torch::ones({no_flow_links_tensor.size(0)}, options_float);
+
+        auto slice = z_t_link.index({no_flow_links_tensor, torch::index::Slice()});
+        std::cout << slice.size(0) << " " << slice.size(1) << "\n";
+        std::cout << reset_values.size(0) << " " << reset_values.size(1) << "\n";
+
+        z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice()}, reset_values);
+        z_t_link.index_put_({no_flow_links_tensor, 1}, ones);
+        z_t_link.index_put_({no_flow_links_tensor, 2}, ones);
+        /*
         auto z_values = torch::stack({
              torch::zeros({no_flow_links_tensor.size(0)}, options_float),
-             torch::ones({no_flow_links_tensor.size(0)}, options_float),
-             torch::ones({no_flow_links_tensor.size(0)}, options_float)
+             //torch::ones({no_flow_links_tensor.size(0)}, options_float),
+             //torch::ones({no_flow_links_tensor.size(0)}, options_float),
         }, 1);
         //.to(device);
 
         // Assign the new values to 'z_t_link' in bulk
-        z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice(), torch::indexing::Slice()}, z_values);
+        std::cout << "cat " << no_flow_links_tensor.size(0) << "\n";
+        std::cout << no_flow_links_tensor[0].item<int64_t>() << " " << no_flow_links_tensor[1].item<int64_t>() << "\n";
+        std::cout << z_t_link.size(0) << " " << z_t_link.size(1) << "\n";
+        //z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice(), torch::indexing::Slice()}, z_values);
+        z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice()}, z_values);
+        */
     }
     // Update h_vec for active flows
     auto flowid_active_mask_cur = torch::logical_and(flowid_active_mask, flow_to_graph_id == graph_id_cur);
@@ -440,28 +457,27 @@ void step_m4() {
 
         // Forward pass through the GNN layers
         auto z_t_link_cur=z_t_link.index_select(0,active_link_idx);
-        auto x_test = torch::cat({h_vec_time_updated, z_t_link_cur}, 0);
-        std::cout << active_link_idx.size(0) << " " << h_vec_time_updated.size(0) << " " << h_vec_time_link_updated.size(0) << " " << z_t_link_cur.size(0) << "\n";
-        auto x_combined=torch::cat({h_vec_time_updated, h_vec_time_link_updated}, 0); // TODO: check this
-        std::cout << x_combined.size(0) << " " << x_combined.size(1) << "\n";
+        auto x_combined=torch::cat({h_vec_time_updated, h_vec_time_link_updated}, 0);
 
         auto gnn_output_0 = gnn_layer_0.forward({x_combined, edges_list_active}).toTensor();
         auto gnn_output_1 = gnn_layer_1.forward({gnn_output_0, edges_list_active}).toTensor();
-        //auto gnn_output_2 = gnn_layer_2.forward({gnn_output_1, edges_list_active}).toTensor();
-        auto gnn_output_2 = gnn_output_1;
+        auto gnn_output_2 = gnn_layer_2.forward({gnn_output_1, edges_list_active}).toTensor();
+        //auto gnn_output_2 = gnn_output_1;
 
         std::cout << "gnn ran\n";
 
         // Update rate using lstmcell_rate
         auto h_vec_rate_updated = gnn_output_2.slice(0,0,n_flows_active_cur);
-        auto h_vec_rate_link = gnn_output_2.slice(0, 0, n_flows_active_cur);
+        //auto h_vec_rate_link = gnn_output_2.slice(0, 0, n_flows_active_cur); // TODO: this is probably not the right thing to look at
+        auto h_vec_rate_link = gnn_output_2.slice(0, n_flows_active_cur, gnn_output_2.size(0));
 
         auto params_data = params_tensor.repeat({n_flows_active_cur, 1});
         h_vec_rate_updated = torch::cat({h_vec_rate_updated, params_data}, 1);
 
 
         auto forward_schema = lstmcell_rate.get_method("forward").function().getSchema();
-        std::cout << "Forward schema: " << forward_schema << std::endl;        
+        std::cout << h_vec_rate_link.size(0) << " " << h_vec_rate_link.size(1) << "\n";
+        std::cout << h_vec_time_link_updated.size(0) << " " << h_vec_time_link_updated.size(1) << "\n";      
 
         h_vec_rate_updated = lstmcell_rate.forward({ h_vec_rate_updated, h_vec_time_updated }).toTensor();
         h_vec_rate_link = lstmcell_rate_link.forward({ h_vec_rate_link, h_vec_time_link_updated }).toTensor();
@@ -470,7 +486,8 @@ void step_m4() {
         h_vec.index_copy_(0, flowid_active_list_cur, h_vec_rate_updated);
 
         //auto z_t_link_updated = h_vec_rate_link.slice(0, n_flows_active_cur, n_flows_active_cur + active_link_idx.size(0));
-        z_t_link.index_copy_(0, active_link_idx, h_vec_rate_link);
+        new_link_indices -= n_flows_active_cur;
+        z_t_link.index_copy_(0, new_link_indices, h_vec_rate_link);
 
         // Update time_last to the current time for active flows
         time_last.index_put_({flowid_active_list_cur}, time_clock);
@@ -486,7 +503,7 @@ int main(int argc, char *argv[]) {
     const std::string fct_path = argv[5];
     const std::string fct_i_path = argv[6];
     const std::string flow_link_path = argv[7];
-    const std::string config_path = argv[8];
+    const std::string config_path = "./new_config.yaml"; //argv[8];
     const std::string param_path = "87/ns3/param_topology.npy";
     const std::string write_path = argv[9];
     const bool use_m4 = std::stoi(argv[10]);
