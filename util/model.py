@@ -211,8 +211,6 @@ class FlowSimLstm(LightningModule):
     def _get_loss_fn(self, loss_fn_type):
         if loss_fn_type == "l1":
             return WeightedL1Loss()
-        elif loss_fn_type == "mse":
-            return WeightedMSELoss()
         else:
             raise ValueError(f"Unsupported loss function type: {loss_fn_type}")
 
@@ -240,14 +238,14 @@ class FlowSimLstm(LightningModule):
             batch_h_state = torch.zeros((n_flows, self.hidden_size), device=x.device)
 
             batch_h_state[:, 0] = 1.0
-            batch_h_state[:, 2] = x[:, 0]
-            batch_h_state[:, 3] = x[:, 2]
+            batch_h_state[:, 2] = x[:, 0]  # remain size
+            batch_h_state[:, 3] = x[:, 2]  # # of links
 
             batch_h_state_link = torch.zeros(
                 (batch_size * self.n_links, self.hidden_size), device=x.device
             )
             batch_h_state_link[:, 1] = 1.0
-            batch_h_state_link[:, 2] = 1.0
+            batch_h_state_link[:, 2] = 1.0  # const for link bandwidth
 
             if self.enable_remainsize:
                 loss_size = torch.zeros((n_flows, 1), device=x.device)
@@ -402,43 +400,7 @@ class FlowSimLstm(LightningModule):
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
-                        # if self.enable_queuelen:
-                        #     queue_link_idx = queuelen_link_matrix[j]
-                        #     if len(queue_link_idx) > 0:
-                        #         queue_len_est = self.queue_len_layer(
-                        #             batch_h_state_link[queue_link_idx, :]
-                        #         )[:, 0]
 
-                        #         queue_len_gt = queuelen_matrix[j]
-                        #         if (
-                        #             len(queue_len_gt)
-                        #             == len(queue_len_est)
-                        #             == len(queue_link_idx)
-                        #         ):
-                        #             # mask = queue_len_gt > 0
-                        #             # loss_queue[queue_link_idx[mask], 0] += torch.abs(
-                        #             #     queue_len_est[mask] - queue_len_gt[mask]
-                        #             # )
-                        #             loss_queue[queue_link_idx, 0] += torch.abs(
-                        #                 queue_len_est - queue_len_gt
-                        #             )
-                        #             # loss_queue[queue_link_idx, 0] += (
-                        #             #     queue_len_est - queue_len_gt
-                        #             # ) ** 2
-                        #             loss_queue_num[queue_link_idx, 0] += 1
-                        #             if enable_test:
-                        #                 res_queue_est.extend(
-                        #                     queue_len_est.cpu()
-                        #                     .detach()
-                        #                     .numpy()
-                        #                     .tolist()
-                        #                 )
-                        #                 res_queue_gt.extend(
-                        #                     queue_len_gt.cpu().detach().numpy().tolist()
-                        #                 )
-                        #                 res_queue_linkidx.extend(
-                        #                     queue_link_idx.cpu().numpy().tolist()
-                        #                 )
             if self.enable_flowsim_diff:
                 input_tmp = torch.cat([x, batch_h_state], dim=1)
                 res = self.output_layer(input_tmp)

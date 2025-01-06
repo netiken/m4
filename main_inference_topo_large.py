@@ -229,8 +229,6 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
     flowid_to_linkid = [flowid_to_linkid[i] for i in flowid_to_linkid]
 
     param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
-    # param_data[6:] = param_data[6:] / 10.0
-    # param_data[:2] = param_data[:2] / 10.0
     param_data_repeat = np.repeat(param_data[:, np.newaxis], len(size), axis=1).T
     return (
         size,
@@ -573,39 +571,6 @@ def main():
         # ("new_ori", 11, 4000),
         ("new", 11, 4000),
         ("new", 9, 4000),
-        # old
-        # ("topo_featrate", 7, 4000),
-        # ("topo_remainsize_large_data", 7, 4000),
-        # ("topo_512_flowsim_input_dropout", 19, 2000),
-        # ("topo_512_flowsim_input_empirical", 94, 100),
-        # ("final", 7, 4000),
-        # ("final_param", 6, 4000),
-        # ("final_gnn_layer3", 6, 4000),
-        # ("final_gnn_layer3", 5, 4000),
-        # ("final_gnn_layer4", 4, 4000),
-        # ("m4", 14, 4000),
-        # ("m4_data200", 19, 4000),
-        # ("m4_data200", 9, 4000),
-        # ("m4_queue1", 15, 4000),
-        # ("m4", 14, 4000),
-        # ("m4", 15, 4000),
-        # ("m4_large", 7, 4000),
-        # ("m4_gnn4", 14, 4000),
-        # ("m4_gnn4", 8, 4000),
-        # ("m4_small", 11, 4000),
-        # ("m4_small", 9, 4000),
-        # ("m4_small", 8, 4000),
-        # ("m4_noflowsim", 19, 4000),
-        # ("m4_noflowsim", 7, 4000),
-        # ("m4_small", 6, 4000),
-        # ("m4_small", 10, 4000),
-        # ("m4_small", 11, 4000),
-        # ("m4_grunorm_mid", 4, 4000),
-        # ("m4_grunorm_mid", 3, 4000),
-        # ("m4", 17, 4000),
-        # ("m4", 16, 4000),
-        # ("m4", 10, 4000),
-        # ("m4_grunorm", 10, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
