@@ -700,7 +700,7 @@ class DataModulePerFlow(LightningDataModule):
                     #     * len(sample_list)
                     #     * self.segments_per_seq
                     # )
-                    n_samples = 1000
+                    n_samples = 2000
 
                     if self.sampling_method == "uniform":
                         weights = len_per_period_all > 0

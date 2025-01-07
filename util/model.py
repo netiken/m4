@@ -113,8 +113,8 @@ class FlowSimLstm(LightningModule):
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
         self.enable_log_norm = enable_log_norm
-        self.loss_efficiency_size = 0.03
-        self.loss_efficiency_queue = 0.03
+        self.loss_efficiency_size = 0.01
+        self.loss_efficiency_queue = 0.01
         if enable_path:
             self.n_links = 12
         elif enable_topo:
@@ -149,12 +149,12 @@ class FlowSimLstm(LightningModule):
                 self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
             dim_flowsim = 16 if self.enable_flowsim_diff else 14
             self.output_layer = nn.Sequential(
-                nn.Linear(hidden_size + dim_flowsim, hidden_size//2),  # First layer
+                nn.Linear(hidden_size + dim_flowsim, hidden_size),  # First layer
                 nn.ReLU(),  # Non-linearity
                 nn.Dropout(p=dropout),
-                nn.Linear(hidden_size//2, output_size),  # Second layer
+                nn.Linear(hidden_size, output_size),  # Second layer
             )
-            model_scaling_factor = 2
+            model_scaling_factor = 1
             if self.enable_remainsize:
                 self.remain_size_layer = nn.Sequential(
                     nn.Linear(
