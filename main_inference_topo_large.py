@@ -569,8 +569,9 @@ def main():
         # ("final_re", 10, 4000),
         # ("final_re", 7, 4000),
         # ("new_ori", 11, 4000),
-        ("new", 11, 4000),
-        ("new", 9, 4000),
+        # ("new", 11, 4000),
+        # ("new", 9, 4000),
+        ("new_loss01_mlp1", 10, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
