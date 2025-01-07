@@ -259,7 +259,7 @@ def interactive_inference(
     n_flows_total=1000,
 ):
     n_flows_total_min = min(len(size), n_flows_total)
-    print(f"n_flows_total_min: {n_flows_total_min}")
+    # print(f"n_flows_total_min: {n_flows_total_min}")
     n_flows_active_max = min(n_flows_active_max, n_flows_total_min)
     size = size[:n_flows_total_min]
     fat = fat[:n_flows_total_min]
@@ -555,8 +555,8 @@ def main():
         # ("_eval", 100, 30000),
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
-        # ("eval_test", 100, 50000),
         ("eval_test", 100, 50000),
+        # ("eval_test", 3, 50000),
     ]
     model_list = [
         # ("m4", 10, 4000),
@@ -575,18 +575,24 @@ def main():
         # ("new_ori", 11, 4000),
         # ("new", 11, 4000),
         # ("new", 9, 4000),
-        ("new_loss01_mlp1", 10, 4000),
+        # ("new_loss01_mlp1", 10, 4000),
+        # ("new_loss01_mlp1_noqueue", 9, 4000),
+        # ("new_loss01_mlp1_noqueue", 8, 4000),
+        # ("new_loss01_mlp1_nosize", 11, 4000),
+        # ("new_loss01_mlp1_nosize", 9, 4000),
+        ("new_loss01_mlp1_noflowsim", 10, 4000),
+        ("new_loss01_mlp1_noflowsim", 11, 4000),
         # test
         # ("new_loss01_mlp1", 14, 4000),
         # ("new_loss01_mlp1", 13, 4000),
-        # ("new_loss01_mlp1", 12, 4000),
-        # ("new_loss01_mlp1", 11, 4000),
-        # ("new_loss01_mlp1", 10, 4000),
-        # ("new_loss01_mlp1", 9, 4000),
-        # ("new_loss01_mlp1", 8, 4000),
-        # ("new_loss01_mlp1", 7, 4000),
-        # ("new_loss01_mlp1", 6, 4000),
-        # ("new_loss01_mlp1", 5, 4000),
+        # ("new_loss01_mlp1_noflowsim", 12, 4000),
+        # ("new_loss01_mlp1_noflowsim", 11, 4000),
+        # ("new_loss01_mlp1_noflowsim", 10, 4000),
+        # # ("new_loss01_mlp1_noflowsim", 9, 4000),
+        # ("new_loss01_mlp1_noflowsim", 8, 4000),
+        # ("new_loss01_mlp1_noflowsim", 7, 4000),
+        # ("new_loss01_mlp1_noflowsim", 6, 4000),
+        # ("new_loss01_mlp1_noflowsim", 5, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
