@@ -442,6 +442,11 @@ void step_m4() {
         auto unique_result_tuple = torch::_unique(edge_index_cur[1], true, true);
         auto active_link_idx = std::get<0>(unique_result_tuple);  // Unique link IDs
         auto new_link_indices = std::get<1>(unique_result_tuple); // Inverse indices for reindexing
+        std::cout << "edgy " << active_link_idx.dim() << " " << new_link_indices.dim() << "\n";
+        for (int i = 0; i < new_link_indices.size(0); i++) {
+            std::cout << " " << new_link_indices[i].item<float>();
+        }
+        std::cout << "\n";
 
         new_link_indices += n_flows_active_cur;
         auto edges_list_active=torch::cat({ torch::stack({new_flow_indices, new_link_indices}, 0), torch::stack({new_link_indices, new_flow_indices}, 0)}, 1);
@@ -467,9 +472,6 @@ void step_m4() {
         auto gnn_output_0 = gnn_layer_0.forward({x_combined, edges_list_active}).toTensor();
         auto gnn_output_1 = gnn_layer_1.forward({gnn_output_0, edges_list_active}).toTensor();
         auto gnn_output_2 = gnn_layer_2.forward({gnn_output_1, edges_list_active}).toTensor();
-        //auto gnn_output_2 = gnn_output_1;
-
-        std::cout << "gnn ran\n";
 
         // Update rate using lstmcell_rate
         auto h_vec_rate_updated = gnn_output_2.slice(0,0,n_flows_active_cur);
@@ -488,9 +490,11 @@ void step_m4() {
         //auto z_t_link_updated = h_vec_rate_link.slice(0, n_flows_active_cur, n_flows_active_cur + active_link_idx.size(0));
         new_link_indices -= n_flows_active_cur;
         try {
+        std::cout << active_link_idx.size(0) << "\n";
         std::cout << z_t_link.size(0) << " " << z_t_link.size(1) << "\n";
         std::cout << new_link_indices.size(0) << "\n";
         std::cout << h_vec_rate_link.size(0) << "\n";
+        std::cout << gnn_output_2.size(0) << " " << n_flows_active_cur << "\n";
         z_t_link.index_copy_(0, new_link_indices, h_vec_rate_link);
         } catch (const c10::Error& e) {
             std::cout << e.what() << "\n";
