@@ -553,7 +553,7 @@ def main():
         model_instance = "flowsim"
     else:
         print("Running m4's inference")
-        model_instance = "final"
+        model_instance = "new_loss01_mlp1"
         checkpoint = f"{args.output}/{model_instance}_shard4000_nflows1_nhosts1_nsamples1_lr10Gbps/version_0/checkpoints/last_epoch=010.ckpt"
         inference = Inference(
             data_config,
