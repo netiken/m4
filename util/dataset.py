@@ -55,9 +55,8 @@ def collate_fn(batch):
                 for k in range(flow_active_matrix[j].shape[0]):
                     if (
                         flow_active_matrix[j][k, 0] == i
-                        # and (queuelen_matrix[j][k]).any()
-                        and np.count_nonzero(queuelen_matrix[j][k])
-                        > len(queuelen_matrix[j][k]) // 4
+                        and (queuelen_matrix[j][k]).any()
+                        # and np.count_nonzero(queuelen_matrix[j][k]) > len(queuelen_matrix[j][k]) // 4
                     ):
                         tmp.append(queuelen_matrix[j][k])
                         link_idx = queuelen_link_matrix[j][k]
