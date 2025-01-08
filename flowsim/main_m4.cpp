@@ -37,6 +37,9 @@ std::vector<float> res_sldn;
 
 
 // m4 model
+int gpu_id = 2;
+torch::Device device(torch::kCUDA, gpu_id);
+
 static torch::jit::script::Module lstmcell_time;
 static torch::jit::script::Module lstmcell_rate;
 static torch::jit::script::Module lstmcell_time_link;
@@ -136,8 +139,7 @@ void setup_m4(torch::Device device) {
 
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/new_model/";
-        const std::string old_dir = "/data1/lichenni/projects/per-flow-sim/inference/models_topo/";
+        const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/model/";
         try {
             lstmcell_time = torch::jit::load(model_dir + "lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "lstmcell_rate.pt", device);
@@ -390,13 +392,13 @@ void step_m4() {
         link_to_graph_id.index_put_({no_flow_links_tensor}, -1);
 
         // // Create tensors with desired reset values for 'z_t_link'
-        auto reset_values = torch::zeros({no_flow_links_tensor.size(0), z_t_link.size(1)}, options_float);
-        auto ones = torch::ones({no_flow_links_tensor.size(0)}, options_float);
+        auto reset_values = torch::zeros({no_flow_links_tensor.size(0), z_t_link.size(1)}, options_float).to(device);
+        auto ones = torch::ones({no_flow_links_tensor.size(0)}, options_float).to(device);
 
-        auto slice = z_t_link.index({no_flow_links_tensor, torch::index::Slice()});
+        auto slice = z_t_link.index({no_flow_links_tensor, torch::indexing::Slice()});
         std::cout << slice.size(0) << " " << slice.size(1) << "\n";
         std::cout << reset_values.size(0) << " " << reset_values.size(1) << "\n";
-
+        
         z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice()}, reset_values);
         z_t_link.index_put_({no_flow_links_tensor, 1}, ones);
         z_t_link.index_put_({no_flow_links_tensor, 2}, ones);
@@ -452,7 +454,10 @@ void step_m4() {
             // Update time using lstmcell_time
             time_deltas.fill_(max_time_delta/1000.0f);
             h_vec_time_updated = lstmcell_time.forward({ time_deltas, h_vec_time_updated}).toTensor();
-            h_vec_time_link_updated = lstmcell_time_link.forward({ time_deltas, h_vec_time_link_updated}).toTensor();
+
+            auto time_deltas_link = torch::zeros({active_link_idx.size(0), 1}, options_float).to(device);
+            time_deltas_link.fill_(max_time_delta);
+            h_vec_time_link_updated = lstmcell_time_link.forward({ time_deltas_link, h_vec_time_link_updated }).toTensor();
         }
 
         // Forward pass through the GNN layers
@@ -474,11 +479,6 @@ void step_m4() {
         auto params_data = params_tensor.repeat({n_flows_active_cur, 1});
         h_vec_rate_updated = torch::cat({h_vec_rate_updated, params_data}, 1);
 
-
-        auto forward_schema = lstmcell_rate.get_method("forward").function().getSchema();
-        std::cout << h_vec_rate_link.size(0) << " " << h_vec_rate_link.size(1) << "\n";
-        std::cout << h_vec_time_link_updated.size(0) << " " << h_vec_time_link_updated.size(1) << "\n";      
-
         h_vec_rate_updated = lstmcell_rate.forward({ h_vec_rate_updated, h_vec_time_updated }).toTensor();
         h_vec_rate_link = lstmcell_rate_link.forward({ h_vec_rate_link, h_vec_time_link_updated }).toTensor();
 
@@ -487,7 +487,15 @@ void step_m4() {
 
         //auto z_t_link_updated = h_vec_rate_link.slice(0, n_flows_active_cur, n_flows_active_cur + active_link_idx.size(0));
         new_link_indices -= n_flows_active_cur;
+        try {
+        std::cout << z_t_link.size(0) << " " << z_t_link.size(1) << "\n";
+        std::cout << new_link_indices.size(0) << "\n";
+        std::cout << h_vec_rate_link.size(0) << "\n";
         z_t_link.index_copy_(0, new_link_indices, h_vec_rate_link);
+        } catch (const c10::Error& e) {
+            std::cout << e.what() << "\n";
+            assert(false);
+        }
 
         // Update time_last to the current time for active flows
         time_last.index_put_({flowid_active_list_cur}, time_clock);
@@ -585,10 +593,7 @@ int main(int argc, char *argv[]) {
     int32_t n_links;
     n_links_node >> n_links;
 
-    int gpu_id = 1;
-    torch::Device device(torch::kCUDA, gpu_id);
-
-    if (true || use_m4) {
+    if (use_m4) {
         setup_m4(device);
         setup_m4_tensors(device, n_edges, n_links, hidden_size);
     }

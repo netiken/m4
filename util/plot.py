@@ -152,6 +152,7 @@ def plot_lines(
     format_idx=None,
     fig_idx=0,
     linewidth=2,
+    colors=None,
     fig_size=(5, 2.0),
 ):
     """
@@ -173,6 +174,7 @@ def plot_lines(
     - title: Title of the plot.
     - fig_idx: Figure index for the plot.
     """
+    colors=colors if colors else color_list
     _fontsize = fontsize
     fig = plt.figure(fig_idx, figsize=fig_size)
     ax = fig.add_subplot(111)
@@ -200,7 +202,7 @@ def plot_lines(
                 x,
                 y,
                 # linestyle=linestyle_list[idx_selected % len(linestyle_list)],
-                color=color_list[idx_selected % len(color_list)],
+                color=colors[idx_selected % len(colors)],
                 label=linelabels[i],
                 linewidth=linewidth,
             )
@@ -209,7 +211,7 @@ def plot_lines(
                 x,
                 y,
                 # linestyle=linestyle_list[idx_selected % len(linestyle_list)],
-                color=color_list[idx_selected % len(color_list)],
+                color=colors[idx_selected % len(colors)],
                 linewidth=linewidth,
             )
 
@@ -320,6 +322,70 @@ def plot_box_by_config(
     ax.set_xticklabels(
         unique_configs, rotation=45 if rotate_xaxis else 0, fontsize=fontsize - 2
     )
+    ax.tick_params(axis="y", labelsize=fontsize - 2)
+
+    if title:
+        ax.set_title(title, fontsize=fontsize)
+
+    # Add legend
+    if legend_list:
+        legend_properties = {"size": legend_font}
+        ax.legend(handles, legend_list, loc=loc, prop=legend_properties, frameon=False)
+
+    plt.tight_layout()
+
+    if title:
+        ax.set_title(title, fontsize=fontsize - 5)
+
+    # Save or show the plot
+    if file_name:
+        plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
+
+
+def plot_box_by_group(
+    bucketed_data,
+    bucket_labels,
+    legend_list,
+    n_methods=2,
+    x_label=None,
+    y_label="Relative Error (%)",
+    title=None,
+    fontsize=15,
+    legend_font=15,
+    loc=3,
+    rotate_xaxis=False,
+    file_name=None,
+    remove_outliers=True,
+    fig_idx=0,
+):
+    colors = [color_list[2]]
+    # Create the plot
+    fig = plt.figure(fig_idx, figsize=(5, 3.2))
+    ax = fig.add_subplot(111)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    # x_positions = np.arange(len(unique_configs))
+    box_width = 0.8 / n_methods  # Adjust width based on number of methods
+    ax.boxplot(
+        [
+            bucketed_data[label]
+            for label in bucket_labels
+            if len(bucketed_data[label]) > 0
+        ],
+        # labels=[label for label in bucket_labels if len(bucketed_data[label]) > 0],
+        showfliers=not remove_outliers,
+        widths=box_width,
+        patch_artist=True,
+        boxprops=dict(facecolor=colors[0], color="black"),
+        medianprops=dict(color="black"),
+    )
+
+    # Set labels and title
+    ax.set_xlabel(x_label, fontsize=fontsize)
+    ax.set_ylabel(y_label, fontsize=fontsize)
+    # ax.set_xticks(x_positions)
+    ax.set_xticklabels(bucket_labels, fontsize=fontsize - 2)
     ax.tick_params(axis="y", labelsize=fontsize - 2)
 
     if title:
