@@ -11,7 +11,6 @@ import os
 
 torch.set_float32_matmul_precision("high")
 
-
 class Inference:
     def __init__(
         self,
@@ -495,10 +494,10 @@ def interactive_inference(
     print(f"Time elapsed: {time_elapsed}")
 
     # Prepare results
-    res_fct = flow_metric[:, 0].cpu().numpy()[fid]
-    res_sldn = flow_metric[:, 1].cpu().numpy()[fid]
+    res_fct = flow_metric[:, 0].cpu().numpy()
+    res_sldn = flow_metric[:, 1].cpu().numpy()
     actual_fct = fct
-    actual_sldn = fct / i_fct[fid]
+    actual_sldn = fct / i_fct
 
     res_fct = np.stack([res_fct, actual_fct], axis=1)
     res_sldn = np.stack([res_sldn, actual_sldn], axis=1)
@@ -513,7 +512,7 @@ def main():
         type=str,
         required=False,
         help="Path to the YAML configuration file",
-        default="./config/test_config_lstm_topo_cplusplus_eval.yaml",
+        default="./flowsim/new_config.yaml",
     )
     parser.add_argument(
         "--input",
@@ -586,9 +585,11 @@ def main():
                             lr=data_config["lr"],
                             max_inflight_flows=max_inflight_flows,
                         )
+                        n_flows_total = max(fid) + 1
                         if not args.flowsim:
                             res_fct, res_sldn = interactive_inference(
                                 inference,
+                                fid,
                                 size,
                                 fat,
                                 fct,
