@@ -229,7 +229,7 @@ class DataModulePerFlow(LightningDataModule):
                                         len_per_period = [
                                             (
                                                 len_per_period[i]
-                                                if len_per_period_active[i] < 200
+                                                if len_per_period_active[i] < 150
                                                 else 0
                                             )
                                             for i in range(len(len_per_period))
