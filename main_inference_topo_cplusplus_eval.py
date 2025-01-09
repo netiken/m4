@@ -506,7 +506,7 @@ def main():
         type=str,
         required=False,
         help="Path to the YAML configuration file",
-        default="./config/test_config_lstm_topo_cplusplus_eval.yaml",
+        default="./flowsim/new_config.yaml",
     )
     parser.add_argument(
         "--input",
@@ -520,7 +520,7 @@ def main():
         type=str,
         required=False,
         help="Path to save the output predictions",
-        default="/data2/lichenni/output_perflow",
+        default="/data1/lichenni/projects/per-flow-sim/flowsim/validation",
     )
     parser.add_argument(
         "--flowsim",
@@ -537,7 +537,7 @@ def main():
         training_config = config_info["training"]
         data_config = config_info["dataset"]
 
-    n_flows_total = 10
+    n_flows_total = 2000
     input_dir = args.input
     input_dir = "./flowsim"
     spec = "new_eval"
@@ -645,11 +645,10 @@ def main():
             print(
                 f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
             )
-            # np.savez(
-            #     f"./res/{model_instance}{empirical_str}.npz",
-            #     fct=fct_arr,
-            #     sldn=sldn_arr,
-            # )
+            np.save(
+                "./flowsim/validation.npy",
+                sldn_arr
+            )
 
 
 if __name__ == "__main__":

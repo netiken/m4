@@ -35,9 +35,12 @@ std::vector<int32_t> edges_link_ids;
 std::vector<float> res_fct;
 std::vector<float> res_sldn;
 
+// m4 options
+auto options_int64 = torch::TensorOptions().dtype(torch::kInt64);
+
 
 // m4 model
-int gpu_id = 2;
+int gpu_id = 3;
 torch::Device device(torch::kCUDA, gpu_id);
 
 static torch::jit::script::Module lstmcell_time;
@@ -181,7 +184,6 @@ void setup_m4(torch::Device device) {
 
 void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, int32_t h_vec_dim) {
     // Define tensor options
-    auto options_int64 = torch::TensorOptions().dtype(torch::kInt64);
     auto options_float = torch::TensorOptions().dtype(torch::kFloat32);
     auto options_int32 = torch::TensorOptions().dtype(torch::kInt32);
     auto options_bool = torch::TensorOptions().dtype(torch::kBool);
@@ -440,13 +442,8 @@ void step_m4() {
 
         // Extract return_inverse from the tuple (index 1 of the tuple)
         auto unique_result_tuple = torch::_unique(edge_index_cur[1], true, true);
-        auto active_link_idx = std::get<0>(unique_result_tuple);  // Unique link IDs
+        auto active_link_idx = std::get<0>(unique_result_tuple).to(torch::kInt64);  // Unique link IDs
         auto new_link_indices = std::get<1>(unique_result_tuple); // Inverse indices for reindexing
-        std::cout << "edgy " << active_link_idx.dim() << " " << new_link_indices.dim() << "\n";
-        for (int i = 0; i < new_link_indices.size(0); i++) {
-            std::cout << " " << new_link_indices[i].item<float>();
-        }
-        std::cout << "\n";
 
         new_link_indices += n_flows_active_cur;
         auto edges_list_active=torch::cat({ torch::stack({new_flow_indices, new_link_indices}, 0), torch::stack({new_link_indices, new_flow_indices}, 0)}, 1);
@@ -489,17 +486,7 @@ void step_m4() {
 
         //auto z_t_link_updated = h_vec_rate_link.slice(0, n_flows_active_cur, n_flows_active_cur + active_link_idx.size(0));
         new_link_indices -= n_flows_active_cur;
-        try {
-        std::cout << active_link_idx.size(0) << "\n";
-        std::cout << z_t_link.size(0) << " " << z_t_link.size(1) << "\n";
-        std::cout << new_link_indices.size(0) << "\n";
-        std::cout << h_vec_rate_link.size(0) << "\n";
-        std::cout << gnn_output_2.size(0) << " " << n_flows_active_cur << "\n";
-        z_t_link.index_copy_(0, new_link_indices, h_vec_rate_link);
-        } catch (const c10::Error& e) {
-            std::cout << e.what() << "\n";
-            assert(false);
-        }
+        z_t_link.index_copy_(0, active_link_idx, h_vec_rate_link);
 
         // Update time_last to the current time for active flows
         time_last.index_put_({flowid_active_list_cur}, time_clock);

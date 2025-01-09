@@ -42,13 +42,17 @@ print(len(kb))
 
 baseline = np.load("baseline.npy")
 new = np.load("new.npy")
+validation = np.load("validation.npy")
 test_link = np.load("test_link.npy")
+
+print(validation.shape)
 
 ax.ecdf(m4_slowdown, label="new approach: flowsim and m4 together")
 ax.ecdf(real_slowdown, label="ns3")
 ax.ecdf(flowsim_slowdown, label="flowsim")
 ax.ecdf(baseline / ideal, label="current m4")
 ax.ecdf(test_link / ideal, label="new flowsim and m4")
+ax.ecdf(validation[0, :, 0], label="validation")
 #ax.ecdf(new / ideal, label="flowsim into m4")
 plt.xlabel("Slowdown")
 plt.title("CDF of slowdowns")
