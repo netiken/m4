@@ -442,7 +442,7 @@ void step_m4() {
 
         // Extract return_inverse from the tuple (index 1 of the tuple)
         auto unique_result_tuple = torch::_unique(edge_index_cur[1], true, true);
-        auto active_link_idx = std::get<0>(unique_result_tuple).to(torch::kInt64);  // Unique link IDs
+        auto active_link_idx = std::get<0>(unique_result_tuple); //.to(torch::kInt64);  // Unique link IDs
         auto new_link_indices = std::get<1>(unique_result_tuple); // Inverse indices for reindexing
 
         new_link_indices += n_flows_active_cur;
@@ -486,7 +486,8 @@ void step_m4() {
 
         //auto z_t_link_updated = h_vec_rate_link.slice(0, n_flows_active_cur, n_flows_active_cur + active_link_idx.size(0));
         new_link_indices -= n_flows_active_cur;
-        z_t_link.index_copy_(0, active_link_idx, h_vec_rate_link);
+        auto long_indices = active_link_idx.to(torch::kInt64);
+        z_t_link.index_copy_(0, long_indices, h_vec_rate_link);
 
         // Update time_last to the current time for active flows
         time_last.index_put_({flowid_active_list_cur}, time_clock);
@@ -495,17 +496,19 @@ void step_m4() {
 
 
 int main(int argc, char *argv[]) {
-    const std::string fat_path = argv[1];
-    const std::string fsize_path = argv[2];
-    const std::string topo_path = argv[3];
-    const std::string routing_path = argv[4];
-    const std::string fct_path = argv[5];
-    const std::string fct_i_path = argv[6];
-    const std::string flow_link_path = argv[7];
+    const std::string scenario_path = argv[1];
+    const std::string fat_path = scenario_path + "/fat.npy";
+    const std::string fsize_path = scenario_path + "/fsize.npy";
+    const std::string topo_path = scenario_path + "/topology.txt";
+    const std::string routing_path = scenario_path + "/flow_to_path.txt";
+    const std::string fct_path = scenario_path + "/fct_topology_flows.npy";
+    const std::string fct_i_path = scenario_path + "/fct_i_topology_flows.npy";
+    const std::string flow_link_path = scenario_path + "/flow_to_links.txt";
     const std::string config_path = "./new_config.yaml"; //argv[8];
-    const std::string param_path = "87/ns3/param_topology.npy";
-    const std::string write_path = argv[9];
-    const bool use_m4 = std::stoi(argv[10]);
+    const std::string param_path = "validate_m4/ns3/param_topology_flows.npy";
+    const std::string write_path = argv[3];
+    const bool use_m4 = std::stoi(argv[4]);
+    const uint32_t mode = std::stoi(argv[5]); // 0 - arrival times, 1 - independent, 2 - flowsim uses m4
  
     npy::npy_data d_fat = npy::read_npy<int64_t>(fat_path);
     std::vector<int64_t> arrival_times = d_fat.data;
@@ -514,7 +517,7 @@ int main(int argc, char *argv[]) {
     std::vector<int64_t> flow_sizes = d_fsize.data;
 
     limit = arrival_times.size();
-    n_flows = arrival_times.size();
+    n_flows = 2000; //arrival_times.size();
 
     for (int i = 0; i < arrival_times.size() & i < limit; i++) {
         int64_t flow_size = flow_sizes.at(i);
@@ -584,7 +587,7 @@ int main(int argc, char *argv[]) {
     int32_t n_links;
     n_links_node >> n_links;
 
-    if (use_m4) {
+    if (true || use_m4) {
         setup_m4(device);
         setup_m4_tensors(device, n_edges, n_links, hidden_size);
     }
@@ -702,13 +705,15 @@ int main(int argc, char *argv[]) {
 
     std::vector<float> fct_vector;
     if (use_m4) {
+        std::cout << "cat\n";
         for (int i = 0; i < res_fct_tensor.sizes()[0]; i++) {
             fct_vector.push_back(res_fct_tensor[i][0].item<float>());
         }
     } else {
+        std::cout << "bonob\n";
         for (int i = 0; i < arrival_times.size() & i < limit; i++) {
             int64_t prop_delay = (int64_t) routing.at(i).size() * (int64_t) latency;
-            fct_vector.push_back(fct_map[i]);
+            fct_vector.push_back(fct_map[i] + prop_delay);
     //    fct_vector.push_back(sldn_est[i].item<float>());
         }
     }

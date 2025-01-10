@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from util.temp_model import FlowSimLstm
+#from util.model import FlowSimLstm
 from util.consts import get_base_delay_path, get_base_delay_transmission
 import argparse
 import yaml
@@ -519,14 +520,14 @@ def main():
         type=str,
         required=False,
         help="Path to the input data directory",
-        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_test",
+        default="/data1/lichenni/projects/per-flow-sim/flowsim/",
     )
     parser.add_argument(
         "--output",
         type=str,
         required=False,
         help="Path to save the output predictions",
-        default="/data2/lichenni/output_perflow",
+        default="/data1/lichenni/projects/per-flow-sim/flowsim/validation.npy",
     )
     parser.add_argument(
         "--flowsim",
@@ -543,10 +544,9 @@ def main():
         training_config = config_info["training"]
         data_config = config_info["dataset"]
 
-    n_flows_total = 10
+    n_flows_total = 2000
     input_dir = args.input
     input_dir = "./flowsim"
-    spec = "new_eval"
     if args.flowsim:
         print("Running flow simulation")
         model_instance = "flowsim"
@@ -567,7 +567,7 @@ def main():
             for nflows in [n_flows_total]:
                 for nhosts in [32]:
                     try:
-                        spec = "test/ns3"  # f"{shard}/ns3"
+                        spec = "validate_m4/ns3"  # f"{shard}/ns3"
                         (
                             size,
                             fat,
@@ -585,7 +585,7 @@ def main():
                             lr=data_config["lr"],
                             max_inflight_flows=max_inflight_flows,
                         )
-                        n_flows_total = max(fid) + 1
+                        #n_flows_total = len(size)
                         if not args.flowsim:
                             res_fct, res_sldn = interactive_inference(
                                 inference,
@@ -656,6 +656,7 @@ def main():
             print(
                 f"Finished inference. fct shape: {fct_arr.shape}, sldn shape: {sldn_arr.shape}"
             )
+            np.save("flowsim/validate.npy", fct_arr[0, :, 0])
             # np.savez(
             #     f"./res/{model_instance}{empirical_str}.npz",
             #     fct=fct_arr,

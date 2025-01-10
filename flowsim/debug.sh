@@ -1,1 +1,1 @@
-gdb --args build/flowsim 87/ns3/fat.npy 87/ns3/fsize.npy 87/ns3/topology.txt 87/ns3/flow_to_path.txt 87/ns3/fct_topology_flows_dctcp.npy 87/ns3/fct_i_topology_flows_dctcp.npy 87/ns3/flow_to_links.txt /data1/lichenni/projects/per-flow-sim/flowsim/config.yaml test_link.npy 1
+gdb --args build/flowsim ./m4_validate/ns3 /data1/lichenni/projects/per-flow-sim/flowsim/config.yaml test_m4.npy 1
