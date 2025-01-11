@@ -4,6 +4,7 @@
 #include "Type.h"
 #include <vector>
 #include <string>
+#include <chrono>
 #include <filesystem>
 #include <torch/torch.h>
 #include <torch/script.h>
@@ -142,7 +143,7 @@ void setup_m4(torch::Device device) {
 
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/model/";
+        const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/new_model/";
         try {
             lstmcell_time = torch::jit::load(model_dir + "lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "lstmcell_rate.pt", device);
@@ -203,7 +204,6 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
     fct_tensor = torch::from_blob(fct.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
     sldn_tensor = torch::div(fct_tensor, i_fct_tensor);
     params_tensor = torch::from_blob(params.data(), {13}, options_double).to(torch::kFloat32).to(device);
-    //sldn_flowsim_tensor = torch::from_blob(sldn_flowsim, {n_flows}, options_float).to(device); // TODO: what is this set to?
 
     // Convert flowid_to_linkid to tensors
     flowid_to_linkid_flat_tensor = torch::from_blob(flowid_to_linkid_flat.data(), {n_edges}, options_int32).to(device);
@@ -472,7 +472,6 @@ void step_m4() {
 
         // Update rate using lstmcell_rate
         auto h_vec_rate_updated = gnn_output_2.slice(0,0,n_flows_active_cur);
-        //auto h_vec_rate_link = gnn_output_2.slice(0, 0, n_flows_active_cur); // TODO: this is probably not the right thing to look at
         auto h_vec_rate_link = gnn_output_2.slice(0, n_flows_active_cur, gnn_output_2.size(0));
 
         auto params_data = params_tensor.repeat({n_flows_active_cur, 1});
@@ -509,6 +508,8 @@ int main(int argc, char *argv[]) {
     const std::string write_path = argv[3];
     const bool use_m4 = std::stoi(argv[4]);
     const uint32_t mode = std::stoi(argv[5]); // 0 - arrival times, 1 - independent, 2 - flowsim uses m4
+
+    std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
  
     npy::npy_data d_fat = npy::read_npy<int64_t>(fat_path);
     std::vector<int64_t> arrival_times = d_fat.data;
@@ -517,7 +518,7 @@ int main(int argc, char *argv[]) {
     std::vector<int64_t> flow_sizes = d_fsize.data;
 
     limit = arrival_times.size();
-    n_flows = 2000; //arrival_times.size();
+    n_flows = arrival_times.size();
 
     for (int i = 0; i < arrival_times.size() & i < limit; i++) {
         int64_t flow_size = flow_sizes.at(i);
@@ -609,6 +610,8 @@ int main(int argc, char *argv[]) {
     float latency = topology->get_latency(); //TODO: replace this with actual estimation
     //EventTime current_time = 0;
     //n_flows = fat.size();
+
+    //while (flow_index < fat.size() || flows_completed < fat.size()) 
     while (flow_index < n_flows || flows_completed < n_flows) {
         //event_queue->proceed();
         EventTime arrival_time = std::numeric_limits<uint64_t>::max();
@@ -683,12 +686,17 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (false) {
+    if (true) {
         std::vector<float> times;
             for (int i = 0; i < n_flows; i++) {
-                    float prop_delay = (float) routing.at(i).size() * (float) latency;
-                    times.push_back(std::max((prop_delay + (float) fct_map[i]) / (float) fct_i.at(i), (float) 1.0));
+                    float float_delay = ((float) routing.at(i).size() - 1) * (float) latency;
+                    float trans_delay = (float) fct_map[i];
+                    float ideal_delay = (float) fct_i.at(i);
+                    times.push_back(std::max((float_delay + trans_delay) / ideal_delay, (float) 0.0));
+                    //std::cout << float_delay << " " << trans_delay << " " << ideal_delay << " " << times.at(i) << "\n";
+                    //std::cout << prop_delay + (float) fct_map[i] << " " << (float) fct_i.at(i) << " " << times.at(i) << "\n";
             }
+
             sldn_flowsim_tensor = torch::from_blob(times.data(), {n_flows}, options_float).to(device);
         flow_index = 0;
         flows_completed = 0;
@@ -704,13 +712,11 @@ int main(int argc, char *argv[]) {
     }
 
     std::vector<float> fct_vector;
-    if (use_m4) {
-        std::cout << "cat\n";
+    if (true || use_m4) {
         for (int i = 0; i < res_fct_tensor.sizes()[0]; i++) {
             fct_vector.push_back(res_fct_tensor[i][0].item<float>());
         }
     } else {
-        std::cout << "bonob\n";
         for (int i = 0; i < arrival_times.size() & i < limit; i++) {
             int64_t prop_delay = (int64_t) routing.at(i).size() * (int64_t) latency;
             fct_vector.push_back(fct_map[i] + prop_delay);
@@ -718,12 +724,26 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    std::vector<float> flowsim_vector;
+    for (int i = 0; i < arrival_times.size() & i < limit; i++) {
+        flowsim_vector.push_back(fct_map[i]);
+    }
+
     npy::npy_data<float> d;
     d.data = fct_vector;
     d.shape = {limit};
     d.fortran_order = false;
 
+    npy::npy_data<float> d_flowsim;
+    d_flowsim.data = flowsim_vector;
+    d_flowsim.shape = {limit};
+    d_flowsim.fortran_order = false;
+    const std::string flowsim_pt = "./flowsim_fct.npy";
+    npy::write_npy(flowsim_pt, d_flowsim);
+
     npy::write_npy(write_path, d);
 
+    std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();    
+    std::cout << std::chrono::duration_cast<std::chrono::seconds>(time_end - time_start).count() << " seconds\n";
 }
 

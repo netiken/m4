@@ -1,1 +1,1 @@
-gdb --args build/flowsim ./m4_validate/ns3 /data1/lichenni/projects/per-flow-sim/flowsim/config.yaml test_m4.npy 1
+gdb --args build/flowsim ./eval_test/ns3 /data1/lichenni/projects/per-flow-sim/flowsim/new_config.yaml test_m4.npy 0 0

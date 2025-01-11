@@ -227,8 +227,9 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
     n_links_passed = np.array([len(path) for path in link_info])
     base_delay = get_base_delay_path(size, n_links_passed, lr)
     i_fcts_flowsim = get_base_delay_transmission(size, lr) + base_delay
-    fcts_flowsim = np.load(f"{dir_input_tmp}/flowsim_fct.npy") + base_delay
-    sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
+    fcts_flowsim = np.load(f"{dir_input_tmp}/flowsim_fct.npy") + 1000 * n_links_passed # + base_delay
+    #sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
+    sldn_flowsim = np.divide(fcts_flowsim, i_fct)
     flowid_to_linkid = [flowid_to_linkid[i] for i in flowid_to_linkid]
 
     param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
@@ -544,7 +545,7 @@ def main():
         training_config = config_info["training"]
         data_config = config_info["dataset"]
 
-    n_flows_total = 2000
+    n_flows_total = 100
     input_dir = args.input
     input_dir = "./flowsim"
     if args.flowsim:
@@ -567,7 +568,7 @@ def main():
             for nflows in [n_flows_total]:
                 for nhosts in [32]:
                     try:
-                        spec = "validate_m4/ns3"  # f"{shard}/ns3"
+                        spec = "eval_test/ns3"  # f"{shard}/ns3"
                         (
                             size,
                             fat,
@@ -585,7 +586,7 @@ def main():
                             lr=data_config["lr"],
                             max_inflight_flows=max_inflight_flows,
                         )
-                        #n_flows_total = len(size)
+                        n_flows_total = len(size)
                         if not args.flowsim:
                             res_fct, res_sldn = interactive_inference(
                                 inference,
