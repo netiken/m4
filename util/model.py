@@ -61,11 +61,9 @@ class SeqCell(nn.Module):
     def __init__(self, input_size, hidden_size):
         super(SeqCell, self).__init__()
         self.seq_cell = nn.GRUCell(input_size, hidden_size)
-        # self.norm_layer = nn.LayerNorm(hidden_size)  # Normalize the hidden state
 
     def forward(self, x, h_t):
         h_t = self.seq_cell(x, h_t)
-        # h_t = self.norm_layer(h_t)  # Apply normalization
         return h_t
 
 
@@ -154,24 +152,19 @@ class FlowSimLstm(LightningModule):
                 nn.Dropout(p=dropout),
                 nn.Linear(hidden_size, output_size),  # Second layer
             )
-            model_scaling_factor = 1
             if self.enable_remainsize:
                 self.remain_size_layer = nn.Sequential(
-                    nn.Linear(
-                        hidden_size, hidden_size // model_scaling_factor
-                    ),  # First layer
+                    nn.Linear(hidden_size, hidden_size),  # First layer
                     nn.ReLU(),  # Non-linearity
                     nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size // model_scaling_factor, 1),  # Second layer
+                    nn.Linear(hidden_size, 1),  # Second layer
                 )
             if self.enable_queuelen:
                 self.queue_len_layer = nn.Sequential(
-                    nn.Linear(
-                        hidden_size, hidden_size // model_scaling_factor
-                    ),  # First layer
+                    nn.Linear(hidden_size, hidden_size),  # First layer
                     nn.ReLU(),  # Non-linearity
                     nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size // model_scaling_factor, 1),  # Second layer
+                    nn.Linear(hidden_size, 1),  # Second layer
                 )
         elif enable_gnn:
             logging.info(f"GNN enabled")
@@ -344,9 +337,6 @@ class FlowSimLstm(LightningModule):
                                 loss_queue[queue_link_idx, 0] += torch.abs(
                                     queue_len_est - queue_len_gt
                                 )
-                                # loss_queue[queue_link_idx, 0] += (
-                                #     queue_len_est - queue_len_gt
-                                # ) ** 2
                                 loss_queue_num[queue_link_idx, 0] += 1
                                 if enable_test:
                                     res_queue_est.extend(

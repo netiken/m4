@@ -56,7 +56,6 @@ def collate_fn(batch):
                     if (
                         flow_active_matrix[j][k, 0] == i
                         and (queuelen_matrix[j][k]).any()
-                        # and np.count_nonzero(queuelen_matrix[j][k]) > len(queuelen_matrix[j][k]) // 4
                     ):
                         tmp.append(queuelen_matrix[j][k])
                         link_idx = queuelen_link_matrix[j][k]
@@ -546,15 +545,6 @@ class DataModulePerFlow(LightningDataModule):
                                             len_per_period_active = len_per_period_stats
 
                                         len_per_period = len_per_period_stats
-
-                                        # len_per_period = [
-                                        #     (
-                                        #         len_per_period[i]
-                                        #         if len_per_period_stats[i] < 10000
-                                        #         else 0
-                                        #     )
-                                        #     for i in range(len(len_per_period))
-                                        # ]
 
                                         if np.sum(len_per_period) > 0:
                                             data_list_per_period = [
@@ -1449,7 +1439,6 @@ class TopoFctSldnSegment(Dataset):
                 allow_pickle=True,
             ).item()
             queuelen_list = [np.array(queuelen_list_total[i]) for i in fid]
-            # queuelen_list = [np.log2(x + 1) for x in queuelen_list]
             queuelen_list = [np.power(x + 1e-6, 1 / 3) for x in queuelen_list]
             queuelen_link_list = link_info
         else:

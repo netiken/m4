@@ -524,7 +524,7 @@ def plot_box_by_config(
         plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
 
 
-def plot_box_by_group(
+def plot_box(
     bucketed_data,
     bucket_labels,
     legend_list,
@@ -579,7 +579,7 @@ def plot_box_by_group(
         ax.legend(handles, legend_list, loc=loc, prop=legend_properties, frameon=False)
 
     plt.tight_layout()
-
+    plt.grid(True)
     if title:
         ax.set_title(title, fontsize=fontsize - 5)
 
