@@ -556,8 +556,8 @@ def main():
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
         # ("eval_test_50k", 100, 50000),
-        # ("eval_test", 100, 20000),
-        ("eval_test", 3, 20000),
+        ("eval_test", 100, 20000),
+        # ("eval_test", 3, 20000),
     ]
     model_list = [
         # ("m4", 10, 4000),
@@ -582,8 +582,10 @@ def main():
         # ("new_loss01_mlp1_noflowsim", 10, 4000),
         # ("new_debug", 10, 4000),
         # ("new_debug_noflowsim", 10, 4000),
+        # ("new_debug_noflowsim_noqueue", 9, 4000),
+        ("new_debug_noflowsim_nosize", 10, 4000),
         # test
-        ("new_debug_noflowsim_noqueue", 12, 4000),
+        # ("new_debug_noflowsim_noqueue", 12, 4000),
         # ("new_debug_noflowsim_noqueue", 11, 4000),
         # ("new_debug_noflowsim_noqueue", 10, 4000),
         # ("new_debug_noflowsim_noqueue", 9, 4000),
