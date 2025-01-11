@@ -580,17 +580,17 @@ def main():
         # ("new_loss01_mlp1_noqueue", 9, 4000),
         # ("new_loss01_mlp1_nosize", 9, 4000),
         # ("new_loss01_mlp1_noflowsim", 10, 4000),
+        # ("new_debug", 10, 4000),
+        ("new_debug_noflowsim", 10, 4000),
         # test
-        # ("new_loss01_mlp1", 14, 4000),
-        # ("new_loss01_mlp1", 13, 4000),
-        # ("new_loss015_mlp1", 12, 4000),
-        # ("new_loss015_mlp1", 11, 4000),
-        # ("new_loss015_mlp1", 10, 4000),
-        # ("new_loss015_mlp1", 9, 4000),
-        # ("new_loss015_mlp1", 8, 4000),
-        # ("new_loss015_mlp1", 7, 4000),
-        # ("new_loss015_mlp1", 6, 4000),
-        # ("new_loss015_mlp1", 5, 4000),
+        # ("new_debug_noflowsim", 12, 4000),
+        # ("new_debug_noflowsim", 11, 4000),
+        # ("new_debug_noflowsim", 10, 4000),
+        # ("new_debug_noflowsim", 9, 4000),
+        # ("new_debug_noflowsim", 8, 4000),
+        # ("new_debug_noflowsim", 7, 4000),
+        # ("new_debug_noflowsim", 6, 4000),
+        # ("new_debug_noflowsim", 5, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")

@@ -122,7 +122,7 @@ def plot_cdf(
     # plt.tight_layout(pad=0.5, w_pad=0.04, h_pad=0.01)
     plt.yticks(fontsize=_fontsize)
     plt.xticks(fontsize=_fontsize)
-    # plt.grid(True)
+    plt.grid(True)
 
     if rotate_xaxis:
         plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
@@ -130,6 +130,93 @@ def plot_cdf(
         plt.title(title, fontsize=_fontsize - 5)
     if file_name:
         plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
+
+
+def plot_bars(
+    data,
+    x_labels,
+    file_name,
+    bar_labels,
+    x_label,
+    y_label,
+    figsize=(5, 2.0),
+    fontsize=15,
+    legend_font=15,
+    loc=2,
+    ylim=None,
+    ylim_bottom=None,
+    legend_cols=1,
+    title=None,
+    colors=None,
+    patterns=None,  # Added parameter for bar patterns
+    edgecolor="black",  # Added parameter for bar edge color
+    width=0.25,
+    fig_idx=0,
+    log_switch=False,
+):
+    """
+    Plots grouped bar charts for the given datasets.
+
+    Parameters:
+    - data: List of lists containing bar heights for each group (scenario).
+    - x_labels: Labels for the x-axis categories (slowdown ranges).
+    - file_name: Name of the file to save the plot.
+    - bar_labels: Labels for each bar group (scenarios).
+    - x_label: Label for the x-axis.
+    - y_label: Label for the y-axis.
+    - figsize: Size of the figure.
+    - fontsize: Font size for axis labels and title.
+    - legend_font: Font size for the legend.
+    - loc: Legend location.
+    - ylim: Tuple specifying y-axis limits.
+    - title: Title of the plot.
+    - colors: List of colors for the bars.
+    - patterns: List of patterns for the bars (optional).
+    - edgecolor: Color of the edges of the bars (default: black).
+    - width: Width of each bar.
+    - log_switch: Whether to use logarithmic scaling for the y-axis.
+    """
+    colors = colors if colors else color_list
+    x = np.arange(len(x_labels))
+
+    fig = plt.figure(fig_idx, figsize=figsize)
+    ax = fig.add_subplot(111)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    for idx, scenario_data in enumerate(data):
+        ax.bar(
+            x + idx * width,
+            scenario_data,
+            width,
+            color=colors[idx % len(colors)],
+            edgecolor=edgecolor,
+            hatch=patterns[idx % len(patterns)] if patterns else None,  # Apply patterns
+            label=bar_labels[idx],
+        )
+
+    plt.xlabel(x_label, fontsize=fontsize)
+    plt.ylabel(y_label, fontsize=fontsize)
+    plt.xticks(x + (width * (len(data) - 1)) / 2, x_labels, fontsize=fontsize)
+    plt.yticks(fontsize=fontsize)
+    plt.legend(prop={"size": legend_font}, frameon=False, loc=loc, ncol=legend_cols)
+    plt.grid(True)
+
+    if ylim:
+        plt.ylim(top=ylim)
+    if ylim_bottom:
+        plt.ylim(bottom=ylim_bottom)
+
+    if log_switch:
+        ax.set_yscale("log")
+
+    if title:
+        plt.title(title, fontsize=fontsize)
+
+    plt.tight_layout()
+    if file_name:
+        plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
+    plt.show()
 
 
 def plot_lines(
@@ -174,7 +261,7 @@ def plot_lines(
     - title: Title of the plot.
     - fig_idx: Figure index for the plot.
     """
-    colors=colors if colors else color_list
+    colors = colors if colors else color_list
     _fontsize = fontsize
     fig = plt.figure(fig_idx, figsize=fig_size)
     ax = fig.add_subplot(111)
@@ -232,6 +319,7 @@ def plot_lines(
 
     plt.yticks(fontsize=_fontsize)
     plt.xticks(fontsize=_fontsize)
+    plt.grid(True)
 
     if rotate_xaxis:
         plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
@@ -239,6 +327,100 @@ def plot_lines(
         plt.title(title, fontsize=_fontsize - 5)
     if file_name:
         plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
+
+
+def plot_grouped_boxplots(
+    bucketed_data,
+    bucket_labels,
+    scenario_labels=None,  # Default to None for optional legend
+    file_name=None,
+    x_label="Slowdown Range",
+    y_label="Relative Error (%)",
+    title=None,
+    fontsize=15,
+    legend_font=15,
+    loc="upper right",
+    colors=None,
+    fig_size=(7, 4),
+    box_width=0.2,
+    fig_idx=0,
+    y_ticklabel_fontsize=None,  # Added parameter for y tick label size
+):
+    """
+    Plots grouped boxplots for multiple scenarios.
+
+    Parameters:
+    - bucketed_data: Nested list of errors for each slowdown range and scenario.
+                     Format: [[scenario1_data, scenario2_data, ...], ...]
+    - bucket_labels: Labels for each slowdown range (x-axis).
+    - scenario_labels: Optional labels for each scenario (legend entries).
+    - file_name: Name of the file to save the plot (optional).
+    - x_label: Label for the x-axis.
+    - y_label: Label for the y-axis.
+    - title: Title of the plot.
+    - fontsize: Font size for axis labels and title.
+    - legend_font: Font size for the legend.
+    - loc: Legend location.
+    - colors: List of colors for the scenarios.
+    - fig_size: Size of the figure.
+    - box_width: Width of each box in the plot.
+    - fig_idx: Figure index for the plot.
+    - y_ticklabel_fontsize: Font size for the y-axis tick labels.
+    """
+    colors = colors if colors else color_list
+    x_positions = np.arange(len(bucket_labels))  # Positions for each slowdown range
+
+    # Create the plot
+    fig = plt.figure(fig_idx, figsize=fig_size)
+    ax = fig.add_subplot(111)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    # Plot boxplots for each scenario in each slowdown range
+    handles = []
+    for j in range(len(bucketed_data[0])):  # Iterate over scenarios
+        scenario_data = [bucketed_data[i][j] for i in range(len(bucket_labels))]
+        positions = (
+            x_positions + j * box_width - (box_width * (len(bucketed_data[0]) - 1)) / 2
+        )
+        bp = ax.boxplot(
+            scenario_data,
+            positions=positions,
+            widths=box_width,
+            patch_artist=True,
+            boxprops=dict(facecolor=colors[j % len(colors)], color="black"),
+            medianprops=dict(color="black"),
+            showfliers=False,
+        )
+        handles.append(bp["boxes"][0])
+
+    # Configure x-axis labels and ticks
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(bucket_labels, fontsize=fontsize)
+    ax.set_xlabel(x_label, fontsize=fontsize)
+    ax.set_ylabel(y_label, fontsize=fontsize)
+
+    # Set y-axis tick label size
+    if y_ticklabel_fontsize:
+        ax.tick_params(axis="y", labelsize=y_ticklabel_fontsize)
+
+    # Add legend only if scenario_labels is provided
+    if scenario_labels and len(scenario_labels) > 0:
+        ax.legend(
+            handles,
+            scenario_labels,
+            fontsize=legend_font,
+            loc=loc,
+            frameon=False,
+        )
+    if title:
+        ax.set_title(title, fontsize=fontsize)
+
+    # Final adjustments and save/show the plot
+    plt.tight_layout()
+    if file_name:
+        plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
+    plt.show()
 
 
 def plot_box_by_config(
