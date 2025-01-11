@@ -17,7 +17,7 @@ dataset:
   enable_topo: True
   flow_size_threshold: 100000000
   enable_flowsim_gt: False
-  enable_flowsim_diff: False
+  enable_flowsim_diff: True
   enable_remainsize: True
   enable_queuelen: True
   # current_period_len_idx: 0
@@ -41,7 +41,7 @@ model:
 
 # Training parameters
 training:
-  gpu: [2]
+  gpu: [3]
   n_epochs: 15
   batch_size: 2
   learning_rate: 0.0001
