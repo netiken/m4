@@ -583,16 +583,19 @@ def main():
         # ("new_debug", 10, 4000),
         # ("new_debug_noflowsim", 10, 4000),
         # ("new_debug_noflowsim_noqueue", 9, 4000),
-        ("new_debug_noflowsim_nosize", 10, 4000),
+        # ("new_debug_noflowsim_nosize", 10, 4000),
+        # ("m4", 11, 4000),
+        # ("m4", 8, 4000),
+        ("m4_noflowsim", 7, 4000),
         # test
-        # ("new_debug_noflowsim_noqueue", 12, 4000),
-        # ("new_debug_noflowsim_noqueue", 11, 4000),
-        # ("new_debug_noflowsim_noqueue", 10, 4000),
-        # ("new_debug_noflowsim_noqueue", 9, 4000),
-        # ("new_debug_noflowsim_noqueue", 8, 4000),
-        # ("new_debug_noflowsim_noqueue", 7, 4000),
-        # ("new_debug_noflowsim_noqueue", 6, 4000),
-        # ("new_debug_noflowsim_noqueue", 5, 4000),
+        # ("m4", 12, 4000),
+        # ("m4_noflowsim", 12, 4000),
+        # ("m4_noflowsim", 10, 4000),
+        # ("m4_noflowsim", 9, 4000),
+        # ("m4_noflowsim", 8, 4000),
+        # ("m4_noflowsim", 7, 4000),
+        # ("m4_noflowsim", 6, 4000),
+        # ("m4_noflowsim", 5, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
