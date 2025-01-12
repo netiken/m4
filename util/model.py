@@ -165,7 +165,7 @@ class FlowSimLstm(LightningModule):
             self.lstmcell_rate = SeqCell(
                 input_size=hidden_size + lstmcell_rate_extra, hidden_size=hidden_size
             )
-            self.linear_rate = nn.Linear(hidden_size + lstmcell_rate_extra, hidden_size)
+            # self.linear_rate = nn.Linear(hidden_size + lstmcell_rate_extra, hidden_size)
             self.lstmcell_time = SeqCell(input_size=1, hidden_size=hidden_size)
 
             if self.enable_link_state:
@@ -408,18 +408,18 @@ class FlowSimLstm(LightningModule):
                     z_t_tmp_link = x_combined[n_flows_active:]
 
                     z_t_tmp = torch.cat([z_t_tmp, x[active_flow_idx, 3:]], dim=1)
-                    # batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
-                    #     z_t_tmp, batch_h_state[active_flow_idx, :]
-                    # )
-                    batch_h_state[active_flow_idx, :] = self.linear_rate(z_t_tmp)
+                    batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
+                        z_t_tmp, batch_h_state[active_flow_idx, :]
+                    )
+                    # batch_h_state[active_flow_idx, :] = self.linear_rate(z_t_tmp)
                     if self.enable_link_state:
-                        # batch_h_state_link[active_link_idx, :] = (
-                        #     self.lstmcell_rate_link(
-                        #         z_t_tmp_link,
-                        #         batch_h_state_link[active_link_idx, :],
-                        #     )
-                        # )
-                        batch_h_state_link[active_link_idx, :] = z_t_tmp_link
+                        batch_h_state_link[active_link_idx, :] = (
+                            self.lstmcell_rate_link(
+                                z_t_tmp_link,
+                                batch_h_state_link[active_link_idx, :],
+                            )
+                        )
+                        # batch_h_state_link[active_link_idx, :] = z_t_tmp_link
 
             if self.enable_flowsim_diff:
                 input_tmp = torch.cat([x, batch_h_state], dim=1)
@@ -619,7 +619,7 @@ class FlowSimLstm(LightningModule):
                 + list(self.lstmcell_time.parameters())
                 + list(self.output_layer.parameters())
             )
-            parameters += list(self.linear_rate.parameters())
+            # parameters += list(self.linear_rate.parameters())
             for gcn_layer in self.gcn_layers:
                 parameters += list(gcn_layer.parameters())
             if self.enable_link_state:
