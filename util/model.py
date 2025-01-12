@@ -34,36 +34,13 @@ def MLP(input_size, hidden_size, output_size, dropout):
     )
 
 
-# class HomoGNNLayer(nn.Module):
-#     def __init__(self, c_in, c_out, dropout=0.2):
-#         super(HomoGNNLayer, self).__init__()
-#         self.homogeneous_layer = HomoNetGNN(c_in=c_in, c_out=c_out, dropout=dropout)
-
-#     def forward(self, x, edge_index):
-#         out_combined = self.homogeneous_layer(x, edge_index)
-
-#         return out_combined
-
-
-# class HomoNetGNN(nn.Module):
-#     def __init__(self, c_in, c_out, dropout=0.2):
-#         super(HomoNetGNN, self).__init__()
-#         self.conv = SAGEConv(c_in, c_out, aggr="sum", project=True)
-#         self.norm = torch.nn.LayerNorm(c_out)
-
-#     def forward(self, x, edge_index):
-#         out = self.conv(x, edge_index)
-#         out = self.norm(out)  # Apply normalization
-#         return out
-
-
 class HomoGNNLayer(nn.Module):
     def __init__(self, c_in, c_out, dropout=0.2):
         super(HomoGNNLayer, self).__init__()
-        self.homogeneous_layer = HomoNetGNN(c_in=c_in + 1, c_out=c_out, dropout=dropout)
+        self.homogeneous_layer = HomoNetGNN(c_in=c_in, c_out=c_out, dropout=dropout)
 
-    def forward(self, x, edge_index, time_deltas):
-        out_combined = self.homogeneous_layer(x, edge_index, time_deltas)
+    def forward(self, x, edge_index):
+        out_combined = self.homogeneous_layer(x, edge_index)
 
         return out_combined
 
@@ -74,14 +51,37 @@ class HomoNetGNN(nn.Module):
         self.conv = SAGEConv(c_in, c_out, aggr="sum", project=True)
         self.norm = torch.nn.LayerNorm(c_out)
 
-    def forward(self, x, edge_index, time_delta):
-        repeat_count = np.ceil(x.size(0) / time_delta.size(0)).astype(int)
-        time_delta_expanded = time_delta.repeat(repeat_count, 1)[: x.size(0), :]
-
-        x = torch.cat([x, time_delta_expanded], dim=1)
+    def forward(self, x, edge_index):
         out = self.conv(x, edge_index)
         out = self.norm(out)  # Apply normalization
         return out
+
+
+# class HomoGNNLayer(nn.Module):
+#     def __init__(self, c_in, c_out, dropout=0.2):
+#         super(HomoGNNLayer, self).__init__()
+#         self.homogeneous_layer = HomoNetGNN(c_in=c_in + 1, c_out=c_out, dropout=dropout)
+
+#     def forward(self, x, edge_index, time_deltas):
+#         out_combined = self.homogeneous_layer(x, edge_index, time_deltas)
+
+#         return out_combined
+
+
+# class HomoNetGNN(nn.Module):
+#     def __init__(self, c_in, c_out, dropout=0.2):
+#         super(HomoNetGNN, self).__init__()
+#         self.conv = SAGEConv(c_in, c_out, aggr="sum", project=True)
+#         self.norm = torch.nn.LayerNorm(c_out)
+
+#     def forward(self, x, edge_index, time_delta):
+#         repeat_count = np.ceil(x.size(0) / time_delta.size(0)).astype(int)
+#         time_delta_expanded = time_delta.repeat(repeat_count, 1)[: x.size(0), :]
+
+#         x = torch.cat([x, time_delta_expanded], dim=1)
+#         out = self.conv(x, edge_index)
+#         out = self.norm(out)  # Apply normalization
+#         return out
 
 
 class SeqCell(nn.Module):
@@ -313,18 +313,18 @@ class FlowSimLstm(LightningModule):
 
                     time_deltas = time_deltas_full[active_flow_idx, j]
 
-                    # if (time_deltas > self.rtt).all():
-                    #     batch_h_state[active_flow_idx, :] = self.lstmcell_time(
-                    #         time_deltas, batch_h_state[active_flow_idx, :]
-                    #     )
-                    #     if self.enable_link_state:
-                    #         time_deltas_link = time_deltas_full_link[active_link_idx, j]
-                    #         batch_h_state_link[active_link_idx, :] = (
-                    #             self.lstmcell_time_link(
-                    #                 time_deltas_link,
-                    #                 batch_h_state_link[active_link_idx, :],
-                    #             )
-                    #         )
+                    if (time_deltas > self.rtt).all():
+                        batch_h_state[active_flow_idx, :] = self.lstmcell_time(
+                            time_deltas, batch_h_state[active_flow_idx, :]
+                        )
+                        if self.enable_link_state:
+                            time_deltas_link = time_deltas_full_link[active_link_idx, j]
+                            batch_h_state_link[active_link_idx, :] = (
+                                self.lstmcell_time_link(
+                                    time_deltas_link,
+                                    batch_h_state_link[active_link_idx, :],
+                                )
+                            )
 
                     if self.enable_remainsize and len(remainsize_matrix[j]) == len(
                         active_flow_idx
@@ -402,7 +402,8 @@ class FlowSimLstm(LightningModule):
                     )
 
                     for gcn in self.gcn_layers:
-                        x_combined = gcn(x_combined, edge_index, time_deltas)
+                        # x_combined = gcn(x_combined, edge_index, time_deltas)
+                        x_combined = gcn(x_combined, edge_index)
 
                     z_t_tmp = x_combined[:n_flows_active]
                     z_t_tmp_link = x_combined[n_flows_active:]
