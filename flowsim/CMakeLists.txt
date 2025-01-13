@@ -51,13 +51,19 @@ set(SOURCES
     Type.h
 )
 
+SET(NOFLOWSIM_SOURCES
+    main_m4_noflowsim.cpp
+)
+
 set(CMAKE_BUILD_TYPE Debug)
 
 # Add executable target (only main.cpp)
 add_executable(flowsim ${SOURCES})
+add_executable(no_flowsim ${NOFLOWSIM_SOURCES})
 
 # Link the Torch library and inference_shared to inference_executable
 target_link_libraries(flowsim "${TORCH_LIBRARIES}")
+target_link_libraries(no_flowsim "${TORCH_LIBRARIES}")
 
 #add_subdirectory(rapidyaml/ext/c4core)
 add_subdirectory(rapidyaml)
@@ -65,21 +71,19 @@ add_subdirectory(rapidyaml)
 target_include_directories(flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
 target_link_libraries(flowsim ryml)
 
-#link_directories("/data1/lichenni/projects/per-flow-sim/flowsim/yaml-cpp/src/")
-#target_include_directories(flowsim PUBLIC "/data1/lichenni/projects/per-flow-sim/flowsim/yaml-cpp/include")
-#target_link_libraries(flowsim yaml-cpp)
-
-# Link the Torch library to inference_shared
-#target_link_libraries(flowsim "${TORCH_LIBRARIES}")
+target_include_directories(no_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
+target_link_libraries(no_flowsim ryml)
 
 # Enable link-time optimization
 #set_property(TARGET inference_shared PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 set_property(TARGET flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+set_property(TARGET no_flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 # CUDA-specific optimizations (if using GPU)
 if (TORCH_CUDA_ARCH_LIST)
     #set_target_properties(inference_shared PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
     set_target_properties(flowsim PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
+    set_target_properties(no_flowsim PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
 endif()
 
 # Set RPATH to find Torch libraries at runtime
@@ -89,6 +93,11 @@ endif()
 #)
 
 set_target_properties(flowsim PROPERTIES
+    BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib"
+    INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
+)
+
+set_target_properties(no_flowsim PROPERTIES
     BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib"
     INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
 )

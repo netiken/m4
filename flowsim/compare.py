@@ -5,8 +5,9 @@ import math
 new_m4 = np.load("test_m4.npy")
 m4 = np.load("validate.npy")
 ns3 = np.load("eval_test/ns3/fct_topology_flows.npy")
-flowsim = np.load("eval_test/ns3/flowsim_fct.npy")
-script_flowsim = np.load("flowsim_fct.npy")
+test_m4_no = np.load("test_m4_no.npy")
+#flowsim = np.load("eval_test/ns3/flowsim_fct.npy")
+#script_flowsim = np.load("flowsim_fct.npy")
 ideal = np.load("eval_test/ns3/fct_i_topology_flows.npy")
 #m4_with_new_flowsim = np.load("validate_new_flowsim.npy")
 #m4_with_flowsim = np.load("test_m4.npy")
@@ -39,13 +40,20 @@ _, ax = plt.subplots()
 #    if math.isnan(new_m4[i]):
 #        print(i)
 
+print(len(new_m4))
+print(len(m4))
+
+baseline = np.load("/data1/lichenni/projects/per-flow-sim/res/m4_noflowsim_7eval_test.npz")
+baseline = baseline["fct"][0, :, 0]
 
 ax.ecdf(new_m4 / ideal, label="new m4")
 ax.ecdf(ns3 / ideal, label="ns3")
-ax.ecdf(flowsim / ideal, label="flowsim")
+#ax.ecdf(flowsim / ideal, label="flowsim")
 ax.ecdf(m4 / ideal, label="m4")
-ax.ecdf(script_flowsim / ideal, label="script flowsim", linestyle='dashed')
-
+ax.ecdf(test_m4_no / ideal, label="m4 no flowsim")
+ax.ecdf(baseline / ideal, label="canon", linestyle='dashed')
+#ax.ecdf(script_flowsim / ideal, label="script flowsim", linestyle='dashed')
+plt.xscale('log')
 #ax.ecdf(m4_with_flowsim / ideal, label="m4 with flowsim")
 #ax.ecdf(m4_with_new_flowsim / ideal, label="m4 with new flowsim")
 
