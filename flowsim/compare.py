@@ -45,6 +45,8 @@ print(len(m4))
 
 baseline = np.load("/data1/lichenni/projects/per-flow-sim/res/m4_noflowsim_7eval_test.npz")
 baseline = baseline["fct"][0, :, 0]
+new_new_m4 = np.load("test_m4_flowsim.npy")
+m4_state = np.load("m4_noflowsim.npy")
 
 ax.ecdf(new_m4 / ideal, label="new m4")
 ax.ecdf(ns3 / ideal, label="ns3")
@@ -52,6 +54,8 @@ ax.ecdf(ns3 / ideal, label="ns3")
 ax.ecdf(m4 / ideal, label="m4")
 ax.ecdf(test_m4_no / ideal, label="m4 no flowsim")
 ax.ecdf(baseline / ideal, label="canon", linestyle='dashed')
+ax.ecdf(new_new_m4 / ideal, label="new new m4", linestyle='dashed')
+ax.ecdf(m4_state / ideal, label="m4 validation", linestyle='dashed')
 #ax.ecdf(script_flowsim / ideal, label="script flowsim", linestyle='dashed')
 plt.xscale('log')
 #ax.ecdf(m4_with_flowsim / ideal, label="m4 with flowsim")

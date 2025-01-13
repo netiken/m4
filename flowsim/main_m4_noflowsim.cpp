@@ -51,7 +51,6 @@ torch::Tensor fat_tensor;
 torch::Tensor fct_tensor;
 torch::Tensor i_fct_tensor;
 torch::Tensor sldn_tensor;
-torch::Tensor sldn_flowsim_tensor;
 torch::Tensor params_tensor;
 
 torch::Tensor flowid_to_linkid_flat_tensor;
@@ -236,15 +235,12 @@ void update_times_m4() {
         auto h_vec_active = h_vec.index_select(0, flowid_active_indices);
 
         auto size_cur = size_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
-        auto sldn_flowsim_cur = sldn_flowsim_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
         auto nlinks_cur = flowid_to_nlinks_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
         auto params_data_cur = params_tensor.repeat({n_flows_active, 1});
         //auto input_tensor = torch::cat({size_cur, sldn_flowsim_cur, nlinks_cur, params_data_cur, h_vec_active}, 1); // [n_active, 3 + h_vec_dim]
         auto input_tensor = torch::cat({nlinks_cur, params_data_cur, h_vec_active}, 1);
 
         // Perform inference
-        std::cout << size_cur.size(1) << " " << sldn_flowsim_cur.size(1) << " " << nlinks_cur.size(1) << " " << params_data_cur.size(1) <<  " " << h_vec_active.size(1) << "\n";
-        std::cout << input_tensor.size(0) << " " << input_tensor.size(1) << "\n";
         sldn_est = output_layer.forward({ input_tensor }).toTensor().view(-1);; // [n_active]
 
         sldn_est = torch::clamp(sldn_est, 1.0f, std::numeric_limits<float>::infinity());
@@ -474,8 +470,7 @@ int main(int argc, char *argv[]) {
     const std::string fct_i_path = scenario_path + "/fct_i_topology_flows.npy";
     const std::string flow_link_path = scenario_path + "/flow_to_links.txt";
     const std::string config_path = argv[2];
-    //const std::string config_path = "./new_config.yaml"; //argv[8];
-    const std::string param_path = "validate_m4/ns3/param_topology_flows.npy";
+    const std::string param_path = scenario_path + "/param_topology_flows.npy";
     const std::string write_path = argv[3];
 
     std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();

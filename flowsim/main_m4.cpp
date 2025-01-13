@@ -503,11 +503,10 @@ int main(int argc, char *argv[]) {
     const std::string fct_path = scenario_path + "/fct_topology_flows.npy";
     const std::string fct_i_path = scenario_path + "/fct_i_topology_flows.npy";
     const std::string flow_link_path = scenario_path + "/flow_to_links.txt";
-    const std::string config_path = "./new_config.yaml"; //argv[8];
+    const std::string config_path = argv[2]; //"./new_config.yaml"; //argv[8];
     const std::string param_path = "validate_m4/ns3/param_topology_flows.npy";
     const std::string write_path = argv[3];
-    const bool use_m4 = std::stoi(argv[4]);
-    const uint32_t mode = std::stoi(argv[5]); // 0 - arrival times, 1 - independent, 2 - flowsim uses m4
+    const bool use_m4 = true;
 
     std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
  
