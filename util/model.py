@@ -138,8 +138,8 @@ class FlowSimLstm(LightningModule):
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
         self.enable_log_norm = enable_log_norm
-        self.loss_efficiency_size = 0.015
-        self.loss_efficiency_queue = 0.015
+        self.loss_efficiency_size = 0.005
+        self.loss_efficiency_queue = 0.005
         if enable_path:
             self.n_links = 12
         elif enable_topo:
