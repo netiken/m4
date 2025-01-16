@@ -183,42 +183,13 @@ balance_size_bins_label = [
 ]
 
 
-class QueueEvent(Enum):
-    ARRIVAL_FIRST_PKT = 1
-    ARRIVAL_LAST_PKT = 2
-    QUEUE_START = 3
-    QUEUE_END = 4
+# class QueueEvent(Enum):
+#     ARRIVAL_FIRST_PKT = 1
+#     ARRIVAL_LAST_PKT = 2
+#     QUEUE_START = 3
+#     QUEUE_END = 4
 
-
-# SIZE_BUCKET_LIST_LABEL = [
-#     "(0, 0.25MTU)",
-#     "(0.25MTU, 0.5MTU)",
-#     "(0.5MTU, 0.75MTU)",
-#     "(0.75MTU, MTU)",
-#     "(MTU, 0.2BDP)",
-#     "(0.2BD, 0.5BDP)",
-#     "(0.5BDP, 0.75BDP)",
-#     "(0.75BDP, BDP)",
-#     "(BDP, 5BDP)",
-#     "(5BDP, INF)",
-# ]
-
-# SIZE_BUCKET_LIST_LABEL_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, INF)"]
-
-# LINK_TO_DELAY_DICT={
-#     3:np.array([0,0,0]),
-#     5:np.array([0,0,1*DELAY_PROPAGATION_BASE,0,0]),
-#     7:np.array([0,0,1*DELAY_PROPAGATION_BASE,2*DELAY_PROPAGATION_BASE,1*DELAY_PROPAGATION_BASE,0,0]),
-# }
-
-P99_PERCENTILE_LIST = np.arange(10, 101, 10)
-PERCENTILE_METHOD = "nearest"
-N_BACKGROUND = 58
-# BDP_DICT = {
-#     3: 5 * MTU,
-#     5: 10 * MTU,
-#     7: 15 * MTU,
-# }
+# P99_PERCENTILE_LIST = np.arange(10, 101, 10)
 
 
 def get_base_delay(
@@ -243,24 +214,6 @@ def get_base_delay(
 
 def get_base_delay_transmission(sizes, lr_bottleneck):
     return (sizes + np.ceil(sizes / MTU) * HEADER_SIZE) * BYTE_TO_BIT / lr_bottleneck
-
-
-# def get_size_bucket_list(mtu, bdp):
-#     return np.array(
-#         [
-#             mtu // 4,
-#             mtu // 2,
-#             mtu * 3 // 4,
-#             mtu,
-#             bdp // 5,
-#             bdp // 2,
-#             bdp * 3 // 4,
-#             bdp,
-#             5 * bdp,
-#         ]
-#     )
-# def get_size_bucket_list_output(mtu, bdp):
-#     return np.array([mtu, bdp, 5 * bdp])
 
 
 def get_base_delay_pmn(
