@@ -18,6 +18,12 @@ std::vector<double> params;
 std::unordered_map<int, int64_t> fct_map;
 uint64_t limit;
 
+std::vector<int> host_ids;
+uint32_t flow_limit;
+std::unordered_map<uint32_t, uint32_t> flow_counts;
+std::queue<uint32_t> flow_queue;
+std::unordered_map<uint32_t, std::queue<uint32_t>> tor_queue;
+
 int32_t n_flows;
 
 std::vector<int32_t> flowid_to_linkid_flat;
@@ -91,6 +97,10 @@ int min_idx;
 
 float flow_arrival_time;
 float flow_completion_time;
+
+int get_tor(int flow_id) {
+    return host_ids.at(flow_id) / 16;
+}
 
 void setup_m4(torch::Device device) {
     if (!torch::cuda::is_available()) {
@@ -226,7 +236,34 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
 void update_times_m4() {
     torch::NoGradGuard no_grad;
     // Determine next flow arrival and completion times
-    flow_arrival_time = (flow_id_in_prop < n_flows) ? fat_tensor[flow_id_in_prop].item<float>() : std::numeric_limits<float>::infinity();
+    if (flow_limit == 0) {
+        flow_arrival_time = (flow_id_in_prop < n_flows) ? fat_tensor[flow_id_in_prop].item<float>() : std::numeric_limits<float>::infinity();
+    } else {
+        flow_arrival_time = std::numeric_limits<float>::infinity();
+        if (!flow_queue.empty()) {
+            flow_arrival_time = fat_tensor[flow_queue.front()].item<float>();
+            flow_queue.pop();
+        }
+        /*
+        for (auto it = flow_queue.begin(); it != flow_queue.end(); it++){
+            if (flow_counts[get_tor(*it)]) {
+                flow_arrival_time = fat_tensor[*it].item<float>();
+                break;
+            }
+        } */
+        else {
+            for (int i = flow_id_in_prop; i < n_flows; i++) {
+                int tor = get_tor(i);
+                if (flow_counts[tor] < flow_limit) {
+                    flow_arrival_time = fat_tensor[i].item<float>();
+                } else {
+                    tor_queue[get_tor(i)].push(i);
+                    flow_id_in_prop++;
+                }
+            }
+        }
+    }
+    //flow_arrival_time = (flow_id_in_prop < n_flows) ? fat_tensor[flow_id_in_prop].item<float>() : std::numeric_limits<float>::infinity();
     flow_completion_time = std::numeric_limits<float>::infinity();
 
     if (n_flows_active > 0) {
@@ -321,6 +358,7 @@ void step_m4() {
             // Increment the graph ID counter for the next assignment
             graph_id_counter += 1;
         }
+        flow_counts[get_tor(flow_id_in_prop)] += 1;
         n_flows_active += 1;
         flow_id_in_prop += 1;
     }
@@ -338,6 +376,11 @@ void step_m4() {
         // Decrement the count of active flows and increment completed flows
         n_flows_active--;
         n_flows_completed++;
+        flow_counts[get_tor(completed_flow_id)] -= 1;
+        if (!tor_queue[get_tor(completed_flow_id)].empty()) {
+            flow_queue.push(tor_queue[get_tor(completed_flow_id)].front());
+            tor_queue[get_tor(completed_flow_id)].pop();
+        }
         std::cout << "m4: flow completed " << completed_flow_id << "\n";
 
         // Get graph ID of the completed flow
@@ -472,6 +515,12 @@ int main(int argc, char *argv[]) {
     const std::string config_path = argv[2];
     const std::string param_path = scenario_path + "/param_topology_flows.npy";
     const std::string write_path = argv[3];
+    flow_limit = std::stoi(argv[4]);
+
+    for (uint32_t i = 0; i < 16; i++) {
+        flow_counts[i] = 0;
+        //tor_queue[i] = new std::queue<uint32_t>();
+    }
 
     std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
  
@@ -510,6 +559,9 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < num_links; i++) {
             int32_t link;
             infile >> link;
+            if (i == 0) {
+                host_ids.push_back(link);
+            }
             flowid_to_linkid_flat.push_back(link);
             offset++;
 
