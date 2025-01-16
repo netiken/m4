@@ -563,5 +563,8 @@ int main(int argc, char *argv[]) {
 
     std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();    
     std::cout << std::chrono::duration_cast<std::chrono::seconds>(time_end - time_start).count() << " seconds\n";
+
+    //torch::cuda::synchronize();
+    //torch::cuda::emptyCache();
 }
 
