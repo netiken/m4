@@ -558,6 +558,7 @@ def main():
         # ("eval_test_50k", 100, 50000),
         ("eval_test", 100, 20000),
         # ("eval_test", 3, 20000),
+        # ("eval_test_app", 10, 20000),
     ]
     model_list = [
         # ("m4", 10, 4000),
@@ -591,17 +592,25 @@ def main():
         # ("m4_noflowsim_nosize", 9, 4000),
         # ("m4_noflowsim_noqueue", 12, 4000),
         # ("m4_noflowsim_noqueue", 10, 4000),
-        ("m4_noflowsim_loss015", 10, 4000),
-        ("m4_noflowsim_loss015", 7, 4000),
-        # test
-        # ("m4_noflowsim_loss015", 12, 4000),
-        # ("m4_noflowsim_loss015", 11, 4000),
         # ("m4_noflowsim_loss015", 10, 4000),
-        # ("m4_noflowsim_loss015", 9, 4000),
-        # ("m4_noflowsim_loss015", 8, 4000),
         # ("m4_noflowsim_loss015", 7, 4000),
-        # ("m4_noflowsim_loss015", 6, 4000),
-        # ("m4_noflowsim_loss015", 5, 4000),
+        # ("m4_noflowsim_loss005", 11, 4000),
+        # ("m4_noflowsim_loss005", 9, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 12, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 11, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 10, 4000),
+        ("m4_noflowsim_loss005_nosize", 12, 4000),
+        ("m4_noflowsim_loss005_nosize", 11, 4000),
+        ("m4_noflowsim_loss005_nosize", 10, 4000),
+        # test
+        # ("m4_noflowsim_loss005_noqueue", 12, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 11, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 10, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 9, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 8, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 7, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 6, 4000),
+        # ("m4_noflowsim_loss005_noqueue", 5, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
