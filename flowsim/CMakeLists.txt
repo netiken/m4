@@ -55,7 +55,7 @@ SET(NOFLOWSIM_SOURCES
     main_m4_noflowsim.cpp
 )
 
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
 
 # Add executable target (only main.cpp)
 add_executable(flowsim ${SOURCES})
