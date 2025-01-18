@@ -18,6 +18,9 @@ std::vector<double> params;
 std::unordered_map<int, int64_t> fct_map;
 uint64_t limit;
 
+uint32_t num_tors = 70;
+uint32_t num_per_tor = 16;
+
 std::vector<int> host_ids;
 uint32_t flow_limit;
 std::unordered_map<uint32_t, uint32_t> flow_counts;
@@ -89,6 +92,7 @@ int graph_id_counter;
 int graph_id_cur;
 
 int flow_id_in_prop;
+int current_flow;
 int n_flows_active;
 int n_flows_completed;
 float time_clock;
@@ -99,7 +103,7 @@ float flow_arrival_time;
 float flow_completion_time;
 
 int get_tor(int flow_id) {
-    return host_ids.at(flow_id) / 16;
+    return host_ids.at(flow_id) / num_per_tor;
 }
 
 void setup_m4(torch::Device device) {
@@ -224,6 +228,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
 
     // Initialize counters
     flow_id_in_prop = 0;
+    current_flow = 0;
     n_flows_active = 0;
     n_flows_completed = 0;
     time_clock = 0.0f;
@@ -239,9 +244,18 @@ void update_times_m4() {
     if (flow_limit == 0) {
         flow_arrival_time = (flow_id_in_prop < n_flows) ? fat_tensor[flow_id_in_prop].item<float>() : std::numeric_limits<float>::infinity();
     } else {
+        flow_id_in_prop = -1;
         flow_arrival_time = std::numeric_limits<float>::infinity();
+        int queue_size = 0;
+        for (int i = 0; i < num_tors; i++) {
+            queue_size += tor_queue[i].size();
+        }
+        std::cout << "waiting in queue " << queue_size << " " << flow_queue.size() << "\n";
         if (!flow_queue.empty()) {
-            flow_arrival_time = fat_tensor[flow_queue.front()].item<float>();
+            std::cout << "flow queue " << flow_queue.front() << "\n";
+            flow_id_in_prop = flow_queue.front();
+            flow_arrival_time = fat_tensor[flow_id_in_prop].item<float>();
+            //flow_counts[get_tor(flow_queue.front())] += 1;
             flow_queue.pop();
         }
         /*
@@ -252,18 +266,24 @@ void update_times_m4() {
             }
         } */
         else {
-            for (int i = flow_id_in_prop; i < n_flows; i++) {
+            std::cout << "checking flow\n";
+            for (int i = current_flow; i < n_flows; i++) {
                 int tor = get_tor(i);
                 if (flow_counts[tor] < flow_limit) {
+                    std::cout << "taking flow " << i << "\n";
+                    flow_id_in_prop = i;
+                    current_flow = i;
+                    //current_flow = i + 1;
                     flow_arrival_time = fat_tensor[i].item<float>();
+                    break;
                 } else {
+                    std::cout << "pushing flow " << i << "\n";
                     tor_queue[get_tor(i)].push(i);
-                    flow_id_in_prop++;
+                    current_flow++;
                 }
             }
         }
     }
-    //flow_arrival_time = (flow_id_in_prop < n_flows) ? fat_tensor[flow_id_in_prop].item<float>() : std::numeric_limits<float>::infinity();
     flow_completion_time = std::numeric_limits<float>::infinity();
 
     if (n_flows_active > 0) {
@@ -271,10 +291,11 @@ void update_times_m4() {
         auto flowid_active_indices = torch::nonzero(flowid_active_mask).flatten();
         auto h_vec_active = h_vec.index_select(0, flowid_active_indices);
 
-        auto size_cur = size_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
+        //auto size_cur = size_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
         auto nlinks_cur = flowid_to_nlinks_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
         auto params_data_cur = params_tensor.repeat({n_flows_active, 1});
         //auto input_tensor = torch::cat({size_cur, sldn_flowsim_cur, nlinks_cur, params_data_cur, h_vec_active}, 1); // [n_active, 3 + h_vec_dim]
+        std::cout << nlinks_cur.size(0) << " " << params_data_cur.size(0) << " " << h_vec_active.size(0) << "\n";
         auto input_tensor = torch::cat({nlinks_cur, params_data_cur, h_vec_active}, 1);
 
         // Perform inference
@@ -300,8 +321,12 @@ void step_m4() {
     auto options_float = torch::TensorOptions().dtype(torch::kFloat32);
     
     // Decide whether the next event is a flow arrival or completion
+    std::cout << flow_id_in_prop << " " << fat.at(flow_id_in_prop) << " " << flow_arrival_time << " " << flow_completion_time << "\n";
     if (flow_arrival_time < flow_completion_time) {
         // New flow arrives before the next completion
+
+        std::cout << flow_id_in_prop << " arrived\n";
+
         time_clock = flow_arrival_time;
 
         flowid_active_mask[flow_id_in_prop] = true;
@@ -360,7 +385,11 @@ void step_m4() {
         }
         flow_counts[get_tor(flow_id_in_prop)] += 1;
         n_flows_active += 1;
-        flow_id_in_prop += 1;
+        if (flow_id_in_prop == current_flow) {
+            current_flow++;
+        }
+        //current_flow += 1;
+        //flow_id_in_prop += 1;
     }
     else {
         // Flow completes before the next arrival
@@ -517,7 +546,7 @@ int main(int argc, char *argv[]) {
     const std::string write_path = argv[3];
     flow_limit = std::stoi(argv[4]);
 
-    for (uint32_t i = 0; i < 16; i++) {
+    for (uint32_t i = 0; i < num_tors; i++) {
         flow_counts[i] = 0;
         //tor_queue[i] = new std::queue<uint32_t>();
     }
@@ -593,6 +622,10 @@ int main(int argc, char *argv[]) {
     int flow_index = 0;
     int flows_completed = 0;
     while (flow_index < n_flows || flows_completed < n_flows) {
+        std::cout << "provoking " << flow_index << " " << flows_completed << "\n";
+        if (flows_completed > n_flows) {
+            return 0;
+        }
         update_times_m4();
         if (flow_arrival_time < flow_completion_time) {
             flow_index++;
