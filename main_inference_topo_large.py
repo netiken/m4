@@ -576,7 +576,8 @@ def main():
         # ("new_loss01_mlp1", 10, 4000),
         # ("m4_noflowsim_loss005", 11, 4000),
         # ("m4_noflowsim_loss005", 9, 4000),
-        ("m4_hope01", 10, 4000),
+        # ("m4_hope01", 10, 4000),
+        ("m4", 10, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
