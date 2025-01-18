@@ -556,8 +556,8 @@ def main():
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
         # ("eval_test_50k", 100, 50000),
-        # ("eval_test", 100, 20000),
-        ("eval_test", 3, 20000),
+        ("eval_test", 100, 20000),
+        # ("eval_test", 3, 20000),
         # ("eval_test_app", 10, 20000),
     ]
     model_list = [
@@ -602,17 +602,18 @@ def main():
         # ("m4_noflowsim_loss005_nosize", 12, 4000),
         # ("m4_noflowsim_loss005_nosize", 11, 4000),
         # ("m4_noflowsim_loss005_nosize", 10, 4000),
+        ("m4_hope01", 10, 4000),
         # test
         # ("m4_hope005", 14, 4000),
         # ("m4_hope005", 13, 4000),
         # ("m4_hope005", 12, 4000),
-        # ("m4_hope005", 11, 4000),
-        ("m4_hope01", 10, 4000),
-        ("m4_hope01", 9, 4000),
-        ("m4_hope01", 8, 4000),
-        ("m4_hope01", 7, 4000),
-        ("m4_hope01", 6, 4000),
-        ("m4_hope01", 5, 4000),
+        # ("m4_hope01", 11, 4000),
+        # ("m4_hope01", 10, 4000),
+        # ("m4_hope01", 9, 4000),
+        # ("m4_hope01", 8, 4000),
+        # ("m4_hope01", 7, 4000),
+        # ("m4_hope01", 6, 4000),
+        # ("m4_hope01", 5, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
