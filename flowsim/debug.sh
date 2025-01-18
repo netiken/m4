@@ -1,1 +1,1 @@
-gdb --args build/no_flowsim ./eval_test/ns3 /data1/lichenni/projects/per-flow-sim/flowsim/topo_config.yaml m4_noflowsim.npy
+gdb --args build/no_flowsim ./1/ns3 /data1/lichenni/projects/per-flow-sim/config/test_config_lstm_topo_eval.yaml two.npy 2

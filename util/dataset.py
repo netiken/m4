@@ -1464,8 +1464,7 @@ class TopoFctSldnSegment(Dataset):
                 if sum(active_flow_idx) == len(receivedsize):
                     total_size = sizes[active_flow_idx]
                     # remain size ratio
-                    # remainsize_tmp = (total_size - receivedsize) / total_size
-                    remainsize_tmp = receivedsize / total_size
+                    remainsize_tmp = (total_size - receivedsize) / total_size
                     if not (remainsize_tmp >= 0).all():
                         remainsize_list.append([])
                     else:
