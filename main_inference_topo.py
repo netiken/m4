@@ -603,16 +603,16 @@ def main():
         # ("m4_noflowsim_loss005_nosize", 11, 4000),
         # ("m4_noflowsim_loss005_nosize", 10, 4000),
         # test
-        ("m4_noflowsim_loss005_sizer", 14, 4000),
-        ("m4_noflowsim_loss005_sizer", 13, 4000),
-        ("m4_noflowsim_loss005_sizer", 12, 4000),
-        ("m4_noflowsim_loss005_sizer", 11, 4000),
-        ("m4_noflowsim_loss005_sizer", 10, 4000),
-        # ("m4_noflowsim_loss005_sizer", 9, 4000),
-        # ("m4_noflowsim_loss005_sizer", 8, 4000),
-        # ("m4_noflowsim_loss005_sizer", 7, 4000),
-        # ("m4_noflowsim_loss005_sizer", 6, 4000),
-        # ("m4_noflowsim_loss005_sizer", 5, 4000),
+        # ("m4_hope005", 14, 4000),
+        # ("m4_hope005", 13, 4000),
+        # ("m4_hope005", 12, 4000),
+        # ("m4_hope005", 11, 4000),
+        ("m4_hope01", 10, 4000),
+        ("m4_hope01", 9, 4000),
+        ("m4_hope01", 8, 4000),
+        ("m4_hope01", 7, 4000),
+        ("m4_hope01", 6, 4000),
+        ("m4_hope01", 5, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
