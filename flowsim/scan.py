@@ -12,4 +12,5 @@ for i in range(20000):
     if not i in flows:
         missing.append(i)
 
+print(len(missing))
 print(missing)

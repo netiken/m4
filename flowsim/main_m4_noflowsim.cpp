@@ -8,6 +8,8 @@
 #include <ryml_std.hpp>
 #include <ryml.hpp>
 
+#include <iomanip>
+
 
 // flowsim parameters
 std::vector<int64_t> fat;
@@ -61,6 +63,8 @@ torch::Tensor fct_tensor;
 torch::Tensor i_fct_tensor;
 torch::Tensor sldn_tensor;
 torch::Tensor params_tensor;
+
+torch::Tensor release_time_tensor;
 
 torch::Tensor flowid_to_linkid_flat_tensor;
 torch::Tensor flowid_to_linkid_offsets_tensor;
@@ -220,7 +224,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
     time_last = torch::zeros({n_flows}, options_float).to(device);
     flowid_active_mask = torch::zeros({n_flows}, options_bool).to(device);
 
-
+    release_time_tensor = torch::zeros({n_flows}, options_float).to(device);
 
     // Initialize result tensors
     res_fct_tensor = torch::zeros({n_flows, 2}, options_float).to(device); //torch::from_blob(res_fct.data(), {n_flows, 2}, options_float).to(device);
@@ -242,7 +246,14 @@ void update_times_m4() {
     torch::NoGradGuard no_grad;
     // Determine next flow arrival and completion times
     if (flow_limit == 0) {
-        flow_arrival_time = (flow_id_in_prop < n_flows) ? fat_tensor[flow_id_in_prop].item<float>() : std::numeric_limits<float>::infinity();
+        if (current_flow < n_flows) {
+            flow_arrival_time = fat_tensor[current_flow].item<float>();
+            flow_id_in_prop = current_flow;
+        } else {
+            flow_arrival_time = std::numeric_limits<float>::infinity();
+            flow_id_in_prop = -1;
+        }
+        //flow_arrival_time = (flow_id_in_prop < n_flows) ? fat_tensor[flow_id_in_prop].item<float>() : std::numeric_limits<float>::infinity();
     } else {
         flow_id_in_prop = -1;
         flow_arrival_time = std::numeric_limits<float>::infinity();
@@ -254,7 +265,7 @@ void update_times_m4() {
         if (!flow_queue.empty()) {
             std::cout << "flow queue " << flow_queue.front() << "\n";
             flow_id_in_prop = flow_queue.front();
-            flow_arrival_time = fat_tensor[flow_id_in_prop].item<float>();
+            flow_arrival_time = -1; //time_clock; //fat_tensor[flow_id_in_prop].item<float>();
             //flow_counts[get_tor(flow_queue.front())] += 1;
             flow_queue.pop();
         }
@@ -277,7 +288,7 @@ void update_times_m4() {
                     flow_arrival_time = fat_tensor[i].item<float>();
                     break;
                 } else {
-                    std::cout << "pushing flow " << i << "\n";
+                    std::cout << "pushing flow " << i << " " << " " << host_ids.at(i) << " " << get_tor(i) << " " << tor_queue[get_tor(i)].size() << "\n";
                     tor_queue[get_tor(i)].push(i);
                     current_flow++;
                 }
@@ -303,7 +314,9 @@ void update_times_m4() {
 
         sldn_est = torch::clamp(sldn_est, 1.0f, std::numeric_limits<float>::infinity());
 
-        auto fct_stamp_est = fat_tensor.index_select(0, flowid_active_indices) + sldn_est * i_fct_tensor.index_select(0, flowid_active_indices); // [n_active]
+        //auto fct_stamp_est = fat_tensor.index_select(0, flowid_active_indices) + sldn_est * i_fct_tensor.index_select(0, flowid_active_indices); // [n_active]
+        auto fct_stamp_est = release_time_tensor.index_select(0, flowid_active_indices) + sldn_est * i_fct_tensor.index_select(0, flowid_active_indices);
+        // should this be updated for the application?
 
         // Find the flow with the minimum estimated completion time
         min_idx = torch::argmin(fct_stamp_est).item<int>();
@@ -321,17 +334,24 @@ void step_m4() {
     auto options_float = torch::TensorOptions().dtype(torch::kFloat32);
     
     // Decide whether the next event is a flow arrival or completion
-    std::cout << flow_id_in_prop << " " << fat.at(flow_id_in_prop) << " " << flow_arrival_time << " " << flow_completion_time << "\n";
+    //std::cout << flow_id_in_prop << " " << fat.at(flow_id_in_prop) << " " << std::setprecision(15) << flow_arrival_time <<  " " << std::setprecision(15) << flow_completion_time << "\n";
     if (flow_arrival_time < flow_completion_time) {
         // New flow arrives before the next completion
 
         std::cout << flow_id_in_prop << " arrived\n";
+
+        if (flow_arrival_time == -1) {
+            flow_arrival_time = time_clock;
+        } else {
+            current_flow++;
+        }
 
         time_clock = flow_arrival_time;
 
         flowid_active_mask[flow_id_in_prop] = true;
         
         time_last[flow_id_in_prop] = time_clock;
+        release_time_tensor.index_put_({flow_id_in_prop}, flow_arrival_time);
 
         // Assign graph IDs
         int start_idx = flowid_to_linkid_offsets[flow_id_in_prop];
@@ -385,9 +405,9 @@ void step_m4() {
         }
         flow_counts[get_tor(flow_id_in_prop)] += 1;
         n_flows_active += 1;
-        if (flow_id_in_prop == current_flow) {
-            current_flow++;
-        }
+        //if (flow_id_in_prop == current_flow) {
+        //    current_flow++;
+        //}
         //current_flow += 1;
         //flow_id_in_prop += 1;
     }
@@ -407,6 +427,7 @@ void step_m4() {
         n_flows_completed++;
         flow_counts[get_tor(completed_flow_id)] -= 1;
         if (!tor_queue[get_tor(completed_flow_id)].empty()) {
+            std::cout << "tor push " << get_tor(completed_flow_id) << " " << tor_queue[get_tor(completed_flow_id)].front() << "\n";
             flow_queue.push(tor_queue[get_tor(completed_flow_id)].front());
             tor_queue[get_tor(completed_flow_id)].pop();
         }
@@ -588,9 +609,6 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < num_links; i++) {
             int32_t link;
             infile >> link;
-            if (i == 0) {
-                host_ids.push_back(link);
-            }
             flowid_to_linkid_flat.push_back(link);
             offset++;
 
@@ -600,6 +618,18 @@ int main(int argc, char *argv[]) {
         flow_id++;
     }
     flowid_to_linkid_offsets.push_back(offset);
+
+    std::filesystem::path routing_fs = std::filesystem::current_path() / routing_path;
+    std::ifstream infile_routing(routing_fs);
+    int num_hops;
+    while (infile_routing >> num_hops) {
+        int host_id;
+        infile_routing >> host_id;
+        host_ids.push_back(host_id);
+        for (int i = 1; i < num_hops; i++) {
+            infile_routing >> host_id;
+        }
+    }
 
     uint32_t n_edges = flowid_to_linkid_flat.size();
 
