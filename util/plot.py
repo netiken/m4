@@ -45,7 +45,7 @@ def plot_cdf(
     group_size=1,
     colors=None,
     fig_idx=0,
-    fig_size=(5, 2.0),
+    fig_size=(5, 2.3),
 ):
     _fontsize = fontsize
     fig = plt.figure(fig_idx, figsize=fig_size)  # 2.5 inch for 1/3 double column width
@@ -139,7 +139,7 @@ def plot_bars(
     bar_labels,
     x_label,
     y_label,
-    figsize=(5, 2.0),
+    figsize=(5, 2.3),
     fontsize=15,
     legend_font=15,
     loc=2,
@@ -240,7 +240,7 @@ def plot_lines(
     fig_idx=0,
     linewidth=2,
     colors=None,
-    fig_size=(5, 2.0),
+    fig_size=(5, 2.3),
 ):
     """
     Plots multiple line plots for the given datasets.
