@@ -65,6 +65,7 @@ torch::Tensor sldn_tensor;
 torch::Tensor params_tensor;
 
 torch::Tensor release_time_tensor;
+bool queued;
 
 torch::Tensor flowid_to_linkid_flat_tensor;
 torch::Tensor flowid_to_linkid_offsets_tensor;
@@ -98,6 +99,7 @@ int graph_id_cur;
 int flow_id_in_prop;
 int current_flow;
 int n_flows_active;
+int n_flows_arrived;
 int n_flows_completed;
 float time_clock;
 int completed_flow_id;
@@ -234,6 +236,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
     flow_id_in_prop = 0;
     current_flow = 0;
     n_flows_active = 0;
+    n_flows_arrived = 0;
     n_flows_completed = 0;
     time_clock = 0.0f;
     completed_flow_id = -1; // Initialize with invalid ID
@@ -265,9 +268,10 @@ void update_times_m4() {
         if (!flow_queue.empty()) {
             std::cout << "flow queue " << flow_queue.front() << "\n";
             flow_id_in_prop = flow_queue.front();
-            flow_arrival_time = -1; //time_clock; //fat_tensor[flow_id_in_prop].item<float>();
+            flow_arrival_time = fat_tensor[flow_id_in_prop].item<float>() < time_clock ? time_clock : fat_tensor[flow_id_in_prop].item<float>(); //time_clock; //fat_tensor[flow_id_in_prop].item<float>();
             //flow_counts[get_tor(flow_queue.front())] += 1;
-            flow_queue.pop();
+            //flow_queue.pop();
+            queued = true; // one error: we should not necessarily take it. if it was queued, only pop when accepting it
         }
         /*
         for (auto it = flow_queue.begin(); it != flow_queue.end(); it++){
@@ -278,21 +282,23 @@ void update_times_m4() {
         } */
         else {
             std::cout << "checking flow\n";
-            for (int i = current_flow; i < n_flows; i++) {
-                int tor = get_tor(i);
+            while (current_flow < n_flows) {
+            //for (int i = current_flow; i < n_flows; i++) {
+                int tor = get_tor(current_flow);
                 if (flow_counts[tor] < flow_limit) {
-                    std::cout << "taking flow " << i << "\n";
-                    flow_id_in_prop = i;
-                    current_flow = i;
+                    std::cout << "taking flow " << current_flow << "\n";
+                    flow_id_in_prop = current_flow;
+                    //current_flow = i;
                     //current_flow = i + 1;
-                    flow_arrival_time = fat_tensor[i].item<float>();
+                    flow_arrival_time = fat_tensor[current_flow].item<float>();
                     break;
                 } else {
-                    std::cout << "pushing flow " << i << " " << " " << host_ids.at(i) << " " << get_tor(i) << " " << tor_queue[get_tor(i)].size() << "\n";
-                    tor_queue[get_tor(i)].push(i);
+                    std::cout << "pushing flow " << current_flow << " " << " " << host_ids.at(current_flow) << " " << get_tor(current_flow) << " " << tor_queue[get_tor(current_flow)].size() << "\n";
+                    tor_queue[get_tor(current_flow)].push(current_flow);
                     current_flow++;
                 }
             }
+            queued = false;
         }
     }
     flow_completion_time = std::numeric_limits<float>::infinity();
@@ -335,13 +341,15 @@ void step_m4() {
     
     // Decide whether the next event is a flow arrival or completion
     //std::cout << flow_id_in_prop << " " << fat.at(flow_id_in_prop) << " " << std::setprecision(15) << flow_arrival_time <<  " " << std::setprecision(15) << flow_completion_time << "\n";
+    //if (queued || flow_arrival_time < flow_completion_time) {
     if (flow_arrival_time < flow_completion_time) {
         // New flow arrives before the next completion
 
         std::cout << flow_id_in_prop << " arrived\n";
 
-        if (flow_arrival_time == -1) {
-            flow_arrival_time = time_clock;
+        if (queued) {
+            //flow_arrival_time = time_clock;
+            flow_queue.pop();
         } else {
             current_flow++;
         }
@@ -352,6 +360,7 @@ void step_m4() {
         
         time_last[flow_id_in_prop] = time_clock;
         release_time_tensor.index_put_({flow_id_in_prop}, flow_arrival_time);
+        n_flows_arrived++;
 
         // Assign graph IDs
         int start_idx = flowid_to_linkid_offsets[flow_id_in_prop];
@@ -405,17 +414,12 @@ void step_m4() {
         }
         flow_counts[get_tor(flow_id_in_prop)] += 1;
         n_flows_active += 1;
-        //if (flow_id_in_prop == current_flow) {
-        //    current_flow++;
-        //}
-        //current_flow += 1;
-        //flow_id_in_prop += 1;
     }
     else {
         // Flow completes before the next arrival
         time_clock = flow_completion_time;
         // Actual FCT and SLDN
-        res_fct_tensor[completed_flow_id][0] = flow_completion_time - fat_tensor[completed_flow_id];
+        res_fct_tensor[completed_flow_id][0] = flow_completion_time - release_time_tensor[completed_flow_id].item<float>(); //fat_tensor[completed_flow_id];
         res_fct_tensor[completed_flow_id][1] = fct[completed_flow_id];
         res_sldn_tensor[completed_flow_id][0] = sldn_est[min_idx];
         res_sldn_tensor[completed_flow_id][1] = sldn_tensor[completed_flow_id];
@@ -427,11 +431,11 @@ void step_m4() {
         n_flows_completed++;
         flow_counts[get_tor(completed_flow_id)] -= 1;
         if (!tor_queue[get_tor(completed_flow_id)].empty()) {
-            std::cout << "tor push " << get_tor(completed_flow_id) << " " << tor_queue[get_tor(completed_flow_id)].front() << "\n";
+            std::cout << "tor push " << completed_flow_id << " " << get_tor(completed_flow_id) << " " << tor_queue[get_tor(completed_flow_id)].front() << "\n";
             flow_queue.push(tor_queue[get_tor(completed_flow_id)].front());
             tor_queue[get_tor(completed_flow_id)].pop();
         }
-        std::cout << "m4: flow completed " << completed_flow_id << "\n";
+        std::cout << "m4: flow completed " << completed_flow_id <<  " " << get_tor(completed_flow_id) << "\n";
 
         // Get graph ID of the completed flow
         graph_id_cur = flow_to_graph_id[completed_flow_id].item<int64_t>();
@@ -457,8 +461,8 @@ void step_m4() {
         auto ones = torch::ones({no_flow_links_tensor.size(0)}, options_float).to(device);
 
         auto slice = z_t_link.index({no_flow_links_tensor, torch::indexing::Slice()});
-        std::cout << slice.size(0) << " " << slice.size(1) << "\n";
-        std::cout << reset_values.size(0) << " " << reset_values.size(1) << "\n";
+        //std::cout << slice.size(0) << " " << slice.size(1) << "\n";
+        //std::cout << reset_values.size(0) << " " << reset_values.size(1) << "\n";
         
         z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice()}, reset_values);
         z_t_link.index_put_({no_flow_links_tensor, 1}, ones);
@@ -651,17 +655,14 @@ int main(int argc, char *argv[]) {
 
     int flow_index = 0;
     int flows_completed = 0;
-    while (flow_index < n_flows || flows_completed < n_flows) {
-        std::cout << "provoking " << flow_index << " " << flows_completed << "\n";
-        if (flows_completed > n_flows) {
-            return 0;
-        }
+    while (n_flows_arrived < n_flows || n_flows_completed < n_flows) {
+        std::cout << "provoking " << n_flows_arrived << " " << n_flows_completed << "\n";
         update_times_m4();
-        if (flow_arrival_time < flow_completion_time) {
-            flow_index++;
-        } else {
-            flows_completed++;
-        }
+        //if (queued || flow_arrival_time < flow_completion_time) {
+        //    flow_index++;
+        //} else {
+        //    flows_completed++;
+        //}
         step_m4();
     }
 
@@ -676,7 +677,7 @@ int main(int argc, char *argv[]) {
     d.fortran_order = false;
     npy::write_npy(write_path, d);
 
-    std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();    
+    std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::seconds>(time_end - time_start).count() << " seconds\n";
 
     //torch::cuda::synchronize();
