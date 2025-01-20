@@ -8,7 +8,7 @@ Chunk::Chunk(int id, ChunkSize chunk_size, Route route, Callback callback, Callb
         
         assert(chunk_size > 0);
         assert(!this->route.empty());
-        assert(callback != nullptr);
+        //assert(callback != nullptr);
 
       }
 
@@ -65,7 +65,7 @@ void Chunk::set_rate(double rate) noexcept {
 void Chunk::invoke_callback() noexcept {
     // std::cerr << "Debug: Invoking callback for chunk ID: " << completion_event_id_ << std::endl;
     
-    (*callback)(callback_arg);
+    //(*callback)(callback_arg);
 
     // std::cerr << "Debug: Callback invoked for chunk ID: " << completion_event_id_ << std::endl;
 }

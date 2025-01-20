@@ -53,6 +53,25 @@ set(SOURCES
     Type.h
 )
 
+set(FLOWSIM
+    flowsim.cpp
+    Device.h
+    Device.cpp
+    Chunk.h
+    Chunk.cpp
+    Event.h
+    Event.cpp
+    EventQueue.h 
+    EventQueue.cpp 
+    Link.h 
+    Link.cpp 
+    TopologyBuilder.h 
+    TopologyBuilder.cpp 
+    Topology.h 
+    Topology.cpp 
+    Type.h
+)
+
 SET(NOFLOWSIM_SOURCES
     main_m4_noflowsim.cpp
 )
@@ -60,6 +79,7 @@ SET(NOFLOWSIM_SOURCES
 # Add executable target (only main.cpp)
 add_executable(flowsim ${SOURCES})
 add_executable(no_flowsim ${NOFLOWSIM_SOURCES})
+add_executable(pure_flowsim ${FLOWSIM})
 
 # Link the Torch library and inference_shared to inference_executable
 target_link_libraries(flowsim "${TORCH_LIBRARIES}")
@@ -74,10 +94,13 @@ target_link_libraries(flowsim ryml)
 target_include_directories(no_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
 target_link_libraries(no_flowsim ryml)
 
+target_include_directories(pure_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
+
 # Enable link-time optimization
 #set_property(TARGET inference_shared PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 set_property(TARGET flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 set_property(TARGET no_flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+set_property(TARGET pure_flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 # CUDA-specific optimizations (if using GPU)
 if (TORCH_CUDA_ARCH_LIST)
