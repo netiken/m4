@@ -249,7 +249,7 @@ def get_base_delay_path(sizes, n_links_passed, lr_bottleneck, switch_to_host=1):
     pkt_head = np.clip(sizes, a_min=0, a_max=MTU)
     delay_propagation = DELAY_PROPAGATION_BASE["path"] * n_links_passed
     pkt_size = (pkt_head + HEADER_SIZE) * BYTE_TO_BIT
-    delay_transmission = pkt_size / lr_bottleneck + +pkt_size / (
+    delay_transmission = pkt_size / lr_bottleneck + pkt_size / (
         lr_bottleneck * switch_to_host
     ) * (n_links_passed - 2)
 
