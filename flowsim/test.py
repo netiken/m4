@@ -13,33 +13,27 @@ import math
 #two = np.load("flowsim_two.npy")
 #valid = np.load("valid.npy")
 
+fid = np.load("app/ns3/fid_topology_flows.npy")
 ideal = np.load("app/ns3/fct_i_topology_flows.npy")
 ns3 = np.load("app/ns3/fct_topology_flows.npy")
-flowsim = np.load("app_flowsim.npy")
-m4 = np.load("app_m4.npy")
+#flowsim = np.load("app_flowsim.npy")
+#m4 = np.load("app_m4.npy")
+m4 = np.load("re_app.npy")[fid]
+flowsim = np.load("app_flowsim_1.npy")[fid]
+#limit = np.load("app_flowsim_1.npy")
+
+norm_flowsim = flowsim / ideal
+norm_m4 = m4 / ideal
 
 _, ax = plt.subplots()
 
 ax.ecdf(ns3 / ideal, label="ns3")
-ax.ecdf(flowsim / ideal, label="flowsim")
-ax.ecdf(m4 / ideal, label="m4")
-
-#baseline = np.load("/data1/lichenni/projects/per-flow-sim/res/m4_noflowsim_7_large0.npz")
-#baseline = np.load("/data1/lichenni/projects/per-flow-sim/res/new_loss01_mlp1_10_large0.npz")
-#baseline = baseline["fct"][1, :, 0]
-
-#test = np.load("large_test.npy")
-
-#print(min(limit))
-
-#ax.ecdf(ns3 / ideal, label="ns3")
-#ax.ecdf(m4 / ideal, label="m4")
+ax.ecdf(np.where(norm_flowsim < 1.0, 1.0, norm_flowsim), label="flowsim")
+ax.ecdf(np.where(norm_m4 < 1.0, 1.0, norm_m4), label="m4")
 #ax.ecdf(flowsim / ideal, label="flowsim")
-#ax.ecdf(test_flowsim / ideal, label="zero", linestyle='dashed')
-#ax.ecdf(two / ideal, label="two")
-#ax.ecdf(baseline / ideal, label="canon", linestyle='dashed')
-#ax.ecdf(limit / ideal, label="limit", linestyle='dashed')
-#ax.ecdf(valid / ideal, label="validation", linestyle='dashed')
+#ax.ecdf(m4 / ideal, label="m4")
+#ax.ecdf(test / ideal, label="m4 again", linestyle='dashed')
+#ax.ecdf(limit / ideal, label="flowsim limit", linestyle='dashed')
 plt.xscale('log')
 
 plt.legend()

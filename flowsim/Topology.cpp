@@ -74,6 +74,7 @@ void Topology::connect(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency
     assert(bandwidth > 0);
     assert(latency >= 0);
 
+    this->bandwidth = bandwidth;
     this->latency = latency;
 
     auto link = std::make_shared<Link>(bandwidth, latency);
@@ -98,6 +99,10 @@ void Topology::connect(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency
 
 float Topology::get_latency() {
     return latency;
+}
+
+float Topology::get_bandwidth() {
+    return bandwidth;
 }
 
 std::shared_ptr<Node> Topology::get_device(int index) {

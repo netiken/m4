@@ -7,6 +7,9 @@
 #include <torch/script.h>
 #include <ryml_std.hpp>
 #include <ryml.hpp>
+#include "Topology.h"
+#include "TopologyBuilder.h"
+#include "Type.h"
 
 #include <iomanip>
 
@@ -14,10 +17,12 @@
 // flowsim parameters
 std::vector<int64_t> fat;
 std::vector<int64_t> fsize;
-std::vector<int64_t> fct;
+//std::vector<int64_t> fct;
 std::vector<int64_t> fct_i;
 std::vector<double> params;
 std::unordered_map<int, int64_t> fct_map;
+std::vector<int64_t> fid;
+torch::Tensor fid_tensor;
 uint64_t limit;
 
 uint32_t num_tors = 70;
@@ -59,9 +64,9 @@ static torch::jit::script::Module gnn_layer_2;
 // m4 tensors
 torch::Tensor size_tensor;
 torch::Tensor fat_tensor;
-torch::Tensor fct_tensor;
+//torch::Tensor fct_tensor;
 torch::Tensor i_fct_tensor;
-torch::Tensor sldn_tensor;
+//torch::Tensor sldn_tensor;
 torch::Tensor params_tensor;
 
 torch::Tensor release_time_tensor;
@@ -129,7 +134,7 @@ void setup_m4(torch::Device device) {
     static bool models_loaded = false;
     if (!models_loaded) {
         //const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/new_model/";
-        const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/model_no_flowsim/";
+        const std::string model_dir = "/data1/lichenni/projects/per-flow-sim/flowsim/final/";
         try {
             lstmcell_time = torch::jit::load(model_dir + "lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "lstmcell_rate.pt", device);
@@ -187,9 +192,11 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
     //i_fct_tensor = torch::from_blob(i_fct, {n_flows}, options_float).to(device);
     i_fct_tensor = torch::from_blob(fct_i.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
     //fct_tensor = torch::from_blob(fct, {n_flows}, options_float).to(device);
-    fct_tensor = torch::from_blob(fct.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
-    sldn_tensor = torch::div(fct_tensor, i_fct_tensor);
+    //fct_tensor = torch::from_blob(fct.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
+    //sldn_tensor = torch::div(fct_tensor, i_fct_tensor);
     params_tensor = torch::from_blob(params.data(), {13}, options_double).to(torch::kFloat32).to(device);
+
+    fid_tensor = torch::from_blob(fid.data(), {n_flows}, options_int64).to(device);
 
     // Convert flowid_to_linkid to tensors
     flowid_to_linkid_flat_tensor = torch::from_blob(flowid_to_linkid_flat.data(), {n_edges}, options_int32).to(device);
@@ -420,9 +427,9 @@ void step_m4() {
         time_clock = flow_completion_time;
         // Actual FCT and SLDN
         res_fct_tensor[completed_flow_id][0] = flow_completion_time - release_time_tensor[completed_flow_id].item<float>(); //fat_tensor[completed_flow_id];
-        res_fct_tensor[completed_flow_id][1] = fct[completed_flow_id];
+        //res_fct_tensor[completed_flow_id][1] = fct[completed_flow_id];
         res_sldn_tensor[completed_flow_id][0] = sldn_est[min_idx];
-        res_sldn_tensor[completed_flow_id][1] = sldn_tensor[completed_flow_id];
+        //res_sldn_tensor[completed_flow_id][1] = sldn_tensor[completed_flow_id];
         // Update active flow mask to mark the flow as completed
         flowid_active_mask[completed_flow_id] = false;
 
@@ -563,13 +570,19 @@ int main(int argc, char *argv[]) {
     const std::string fsize_path = scenario_path + "/fsize.npy";
     const std::string topo_path = scenario_path + "/topology.txt";
     const std::string routing_path = scenario_path + "/flow_to_path.txt";
-    const std::string fct_path = scenario_path + "/fct_topology_flows.npy";
+    //const std::string fct_path = scenario_path + "/fct_topology_flows.npy";
     const std::string fct_i_path = scenario_path + "/fct_i_topology_flows.npy";
     const std::string flow_link_path = scenario_path + "/flow_to_links.txt";
+    const std::string fid_path = scenario_path + "/fid_topology_flows.npy";
     const std::string config_path = argv[2];
     const std::string param_path = scenario_path + "/param_topology_flows.npy";
     const std::string write_path = argv[3];
     flow_limit = std::stoi(argv[4]);
+    std::string release_path;
+    if (argc == 6) {
+        release_path = argv[5];
+    }
+    
 
     for (uint32_t i = 0; i < num_tors; i++) {
         flow_counts[i] = 0;
@@ -584,6 +597,9 @@ int main(int argc, char *argv[]) {
     npy::npy_data d_fsize = npy::read_npy<int64_t>(fsize_path);
     std::vector<int64_t> flow_sizes = d_fsize.data;
 
+    npy::npy_data d_fid = npy::read_npy<int64_t>(fid_path);
+    fid = d_fid.data;
+
     limit = arrival_times.size();
     n_flows = arrival_times.size();
 
@@ -593,11 +609,39 @@ int main(int argc, char *argv[]) {
         fsize.push_back(flow_size);
     }
 
-    npy::npy_data d_fct = npy::read_npy<int64_t>(fct_path);
-    fct = d_fct.data;
+    //npy::npy_data d_fct_i = npy::read_npy<int64_t>(fct_i_path);
+    //fct_i = d_fct_i.data;
 
-    npy::npy_data d_fct_i = npy::read_npy<int64_t>(fct_i_path);
-    fct_i = d_fct_i.data;
+    const double BYTES_PER_HEADER = 48;
+    const double MTU = 1000;
+    std::shared_ptr<Topology> topology = construct_fat_tree_topology(topo_path);
+
+    float latency = topology->get_latency();
+    float bandwidth = topology->get_bandwidth();
+
+    std::vector<Route> routing;
+    std::filesystem::path routing_fs = std::filesystem::current_path() / routing_path;
+    std::ifstream infile_routing(routing_fs);
+    int num_hops;
+    while (infile_routing >> num_hops) {
+        int host_id;
+        auto route = Route();
+        infile_routing >> host_id;
+        host_ids.push_back(host_id);
+        route.push_back(topology->get_device(host_id));
+        for (int i = 1; i < num_hops; i++) {
+            infile_routing >> host_id;
+            route.push_back(topology->get_device(host_id));
+        }
+        routing.push_back(route);
+    }
+
+    for (int i = 0; i < fat.size(); i++) {
+        double prop_delay = latency * (routing.at(i).size() - 1);
+        double trans_delay = (((fsize.at(i) + std::ceil(fsize.at(i) / MTU) * BYTES_PER_HEADER)) / bandwidth);
+        double first_packet = (std::min(MTU, (double) fsize.at(i)) + BYTES_PER_HEADER) / bandwidth * (routing.at(i).size() - 2);
+        fct_i.push_back(trans_delay + prop_delay + first_packet);
+    }
 
     npy::npy_data d_param = npy::read_npy<double>(param_path);
     params = d_param.data;
@@ -622,18 +666,6 @@ int main(int argc, char *argv[]) {
         flow_id++;
     }
     flowid_to_linkid_offsets.push_back(offset);
-
-    std::filesystem::path routing_fs = std::filesystem::current_path() / routing_path;
-    std::ifstream infile_routing(routing_fs);
-    int num_hops;
-    while (infile_routing >> num_hops) {
-        int host_id;
-        infile_routing >> host_id;
-        host_ids.push_back(host_id);
-        for (int i = 1; i < num_hops; i++) {
-            infile_routing >> host_id;
-        }
-    }
 
     uint32_t n_edges = flowid_to_linkid_flat.size();
 
@@ -676,6 +708,19 @@ int main(int argc, char *argv[]) {
     d.shape = {limit};
     d.fortran_order = false;
     npy::write_npy(write_path, d);
+
+    if (argc == 6) {
+        std::vector<float> release_times;
+        for (int i = 0; i < limit; i++) {
+            release_times.push_back(release_time_tensor[i].item<float>());
+        }
+
+        npy::npy_data<float> d_release;
+        d_release.data = release_times;
+        d_release.shape = {limit};
+        d_release.fortran_order = false;
+        npy::write_npy(release_path, d_release);
+    }
 
     std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::seconds>(time_end - time_start).count() << " seconds\n";

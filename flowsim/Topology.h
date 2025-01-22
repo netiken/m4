@@ -52,6 +52,8 @@ class Topology {
   EventTime get_current_time();
 
   float get_latency();
+  float get_bandwidth();
+  float bandwidth;
   float latency;
 
 
