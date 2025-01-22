@@ -38,6 +38,10 @@ int main(int argc, char *argv[]) {
     const std::string write_path = argv[2];
     uint32_t tor_limit = std::stoi(argv[3]);
     const bool use_m4 = true;
+    std::string release_path;
+    if (argc == 5) {
+        release_path = argv[4];
+    }
 
     std::chrono::steady_clock::time_point time_start = std::chrono::steady_clock::now();
  
@@ -103,6 +107,17 @@ int main(int argc, char *argv[]) {
 
         bool arrival;
         bool queued;
+
+        /*
+        if (flow_counter < n_flows) {
+            arrival_time = fat.at(flow_counter);
+            flow_index = flow_counter;
+            queued = false;
+        }
+        */
+        
+
+        
         if (flow_queue.size() > 0) {
             flow_index = flow_queue.front();
             arrival_time = fat.at(flow_index) < topology->get_current_time() ? topology->get_current_time() : fat.at(flow_index); //-1; //fat.at(flow_index);
@@ -121,10 +136,6 @@ int main(int argc, char *argv[]) {
             }
             queued = false;
         }
-        
-        //if (flow_index < n_flows) {
-        //    arrival_time = fat.at(flow_index);
-        //}
 
         if (topology->has_completion_time()) {
             completion_time = topology->get_next_completion_time();
@@ -137,7 +148,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (arrival) {
-            std::cout << "flow arrival " << flow_index << " " << get_tor(flow_index) << "\n";
+            std::cout << arrival_time << " flow arrival " << flow_index << " " << get_tor(flow_index) << "\n";
             release_times[flow_index] = arrival_time;
             topology->set_time(arrival_time);
             Route route = routing.at(flow_index);
@@ -146,19 +157,19 @@ int main(int argc, char *argv[]) {
             topology->send(std::move(chunk));
             //flow_index++;
 
+            //flow_counter++;
             int tor = get_tor(flow_index);
             flow_counts[tor]++;
-            //flow_queue.pop();
             if (queued) {
                 flow_queue.pop();
             } else {
                 flow_counter++;
             }
         } else {
-            std::cout << "flow completed " << chunk_id << " " << get_tor(chunk_id) << "\n";
+            std::cout << completion_time << " flow completed " << chunk_id << " " << get_tor(chunk_id) << "\n";
             topology->set_time(completion_time);
             //int64_t fct_value = topology->get_current_time() - fat.at(chunk_id) + routing.at(chunk_id).size() * latency;
-            int64_t fct_value = topology->get_current_time() - release_times.at(chunk_id) + routing.at(chunk_id).size() * latency;
+            int64_t fct_value = topology->get_current_time() - release_times.at(chunk_id) + (routing.at(chunk_id).size() - 1) * latency;
             fct_map[chunk_id] = fct_value;
             topology->chunk_completion(chunk_id);
             flows_completed++;
@@ -167,7 +178,6 @@ int main(int argc, char *argv[]) {
             if (tor_map[tor].size() > 0) {
                 int flow_id = tor_map[tor].front();
                 flow_queue.push(flow_id);
-                //flow_queue.push({flow_id, fat.at(flow_id)});
                 tor_map[tor].pop();
             }
         }
@@ -175,7 +185,7 @@ int main(int argc, char *argv[]) {
 
     std::vector<float> fct_vector;
     for (int i = 0; i < arrival_times.size() & i < limit; i++) {
-        fct_vector.push_back(fct_map[i]);
+        fct_vector.push_back(std::max(0, (int) fct_map[i]));
     }
 
     npy::npy_data<float> d;
@@ -184,6 +194,18 @@ int main(int argc, char *argv[]) {
     d.fortran_order = false;
 
     npy::write_npy(write_path, d);
+
+    if (argc == 5) {
+        std::vector<float> release_float;
+        for (int i = 0; i < limit; i++) {
+            release_float.push_back((float) release_times.at(i));
+        }
+        npy::npy_data<float> d;
+        d.data = release_float;
+        d.shape = {limit};
+        d.fortran_order = false;
+        npy::write_npy(release_path, d);
+    }
 
     std::chrono::steady_clock::time_point time_end = std::chrono::steady_clock::now();    
     std::cout << std::chrono::duration_cast<std::chrono::seconds>(time_end - time_start).count() << " seconds\n";

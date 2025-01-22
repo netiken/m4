@@ -74,6 +74,21 @@ set(FLOWSIM
 
 SET(NOFLOWSIM_SOURCES
     main_m4_noflowsim.cpp
+    Device.h
+    Device.cpp
+    Chunk.h
+    Chunk.cpp
+    Event.h
+    Event.cpp
+    EventQueue.h 
+    EventQueue.cpp 
+    Link.h 
+    Link.cpp 
+    TopologyBuilder.h 
+    TopologyBuilder.cpp 
+    Topology.h 
+    Topology.cpp 
+    Type.h
 )
 
 # Add executable target (only main.cpp)
