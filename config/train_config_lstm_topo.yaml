@@ -19,7 +19,7 @@ dataset:
   enable_flowsim_gt: False
   enable_flowsim_diff: False
   enable_remainsize: True
-  enable_queuelen: False
+  enable_queuelen: True
   # current_period_len_idx: 0
 
 # Model parameters
@@ -30,7 +30,7 @@ model:
   gcn_n_layer: 3
   loss_fn_type: "l1"
   hidden_size: 200
-  gcn_hidden_size: 300
+  gcn_hidden_size: 200
   dropout: 0.2
   enable_bidirectional: True
   enable_positional_encoding: False

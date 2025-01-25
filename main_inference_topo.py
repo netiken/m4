@@ -59,6 +59,7 @@ class Inference:
         self.z_t_link = torch.zeros((self.n_link, self.hidden_size), device=self.device)
         self.z_t_link[:, 1] = 1.0
         self.z_t_link[:, 2] = 1.0
+        self.save_models("./flowsim/final")
 
     def save_models(self, directory="./inference/models_topo"):
         if not os.path.exists(directory):
@@ -199,7 +200,7 @@ def load_data(dir_input, spec, topo_type, lr=10, max_inflight_flows=0):
     fat = np.load(f"{dir_input_tmp}/fat.npy")
     fat = fat - fat[0]
     fct = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")
-    i_fct = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
+    # i_fct = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")
 
     link_list = np.load(
         f"{dir_input_tmp}/flink.npy",
@@ -603,7 +604,7 @@ def main():
         # ("m4_hope01", 10, 4000),
         # ("m4", 10, 4000),
         # ("m4_nosize", 10, 4000),
-        ("m4_noqueue", 10, 4000),
+        ("m4", 10, 4000),
         # test
         # ("m4_hope01_noqueue", 13, 4000),
         # ("m4_hope01_noqueue", 12, 4000),
@@ -699,6 +700,7 @@ def main():
                     checkpoint_path=checkpoint,
                 )
                 print(f"Loaded model: {model_instance}/{model_name_loaded}")
+                return
                 fct_list, sldn_list = [], []
                 for shard in np.arange(n_shards):
                     try:
