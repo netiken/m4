@@ -39,7 +39,7 @@ python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=
 
 python main_train.py --train_config=./config/train_config_lstm_topo_empirical.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_empirical --dir_output=/data2/lichenni/output_perflow --note topo_512_flowsim_input_empirical_remainsize
 
-python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note m4_queuegt
+python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note m4_supervision
 
 python main_train.py --test_config=./config/test_config_lstm_topo.yaml --mode=test --version_id 0 --dir_input=/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data --dir_output=/data2/lichenni/output_perflow --test_on_train --note=final
 
@@ -100,9 +100,13 @@ dhall-to-json --file cluster_1_to_1_eval.dhall > cluster_1_to_1_eval.json
 dhall-to-json --file cluster_2_to_1_eval.dhall > cluster_2_to_1_eval.json
 dhall-to-json --file cluster_4_to_1_eval.dhall > cluster_4_to_1_eval.json
 
-dhall-to-json --file cluster_1_to_1_eval_large.dhall > cluster_1_to_1_eval_large.json
-dhall-to-json --file cluster_2_to_1_eval_large.dhall > cluster_2_to_1_eval_large.json
-dhall-to-json --file cluster_4_to_1_eval_large.dhall > cluster_4_to_1_eval_large.json
+dhall-to-json --file cluster_1_to_1_eval_app.dhall > cluster_1_to_1_eval_app.json
+dhall-to-json --file cluster_2_to_1_eval_app.dhall > cluster_2_to_1_eval_app.json
+dhall-to-json --file cluster_4_to_1_eval_app.dhall > cluster_4_to_1_eval_app.json
+
+dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_12k.dhall > ../../../workload/topologies/cluster_b_2_to_1_12k.json
+dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_24k.dhall > ../../../workload/topologies/cluster_b_2_to_1_24k.json
+dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_48k.dhall > ../../../workload/topologies/cluster_b_2_to_1_48k.json
 
 ## step-2: 
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/src/bin
@@ -110,13 +114,19 @@ cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-
 
 cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec/cluster_1_to_1_eval.json
 
-cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec/cluster_1_to_1_eval_large.json
+cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/spec/cluster_1_to_1_eval_app.json
+
+cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_12k.json
+cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_24k.json
+cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_48k.json
 
 # gen spatial matrix for fat-tree topology
 cd /data1/lichenni/projects/parsimon-eval-all/workload/src
 cargo run --bin downsample -- --spatial /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_c.json --nr-pods 2 --nr-tors-per-pod 4 --out /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_c_2_4.json
 
-cargo run --bin downsample -- --spatial /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_c.json --nr-pods 4 --nr-tors-per-pod 16 --out /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_c_large.json
+cargo run --bin downsample -- --spatial /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_b.json --nr-pods 4 --nr-tors-per-pod 4 --out /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_b_4_4.json
+
+cargo run --bin downsample -- --spatial /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_c.json --nr-pods 2 --nr-tors-per-pod 8 --out /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_c_2_8.json
 
 cargo run --bin downsample -- --spatial /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_b.json --nr-pods 4 --nr-tors-per-pod 16 --out /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_b_large.json
 
@@ -158,6 +168,7 @@ cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
 cargo run --release -- --root=./eval_debug --mixes spec/eval_debug.mix.json ns3
 cargo run --release -- --root=./eval_test_trace --mixes spec/eval_test_trace.mix.json ns3
 cargo run --release -- --root=./eval_test_app --mixes spec/eval_test_app.mix.json --enable-app ns3
+cargo run --release -- --root=./eval_test_app_small --mixes spec/eval_test_app_small.mix.json --enable-app ns3
 cargo run --release -- --root=./eval_test_app --mixes spec/eval_test_app.mix.json --enable-app mlsys
 cargo run --release -- --root=./eval_test_app --mixes spec/0.mix.json ns3
 
@@ -166,12 +177,15 @@ cargo run --release -- --root=./test --mixes spec/0.mix.json ns3
 
 # run exps fig 7
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_7
-cargo run --release -- --root=./test --mix spec/0.mix.json ns3
-cargo run --release -- --root=./data_debug --mix spec/1.mix.json ns3
-cargo run --release -- --root=./data_debug --mix spec/2.mix.json ns3
+cargo run --release -- --root=./data --mix spec/0.mix.json ns3
+cargo run --release -- --root=./data --mix spec/1.mix.json ns3
+cargo run --release -- --root=./data --mix spec/2.mix.json ns3
+cargo run --release -- --root=./data --mix spec/3.mix.json ns3
+cargo run --release -- --root=./data --mix spec/4.mix.json ns3
+cargo run --release -- --root=./data --mix spec/5.mix.json ns3
 
 # git large file
-git filter-branch --tree-filter 'rm -f plot_simulation.ipynb' HEAD
+git filter-branch --tree-filter 'rm -f workload/spatials/cluster_b_48k.json' HEAD
 
 python run_m4.py --root /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_test_config/3/ns3 --base_rtt 14400 --topo topology --trace flows --bw 10 --bfsz 20 --fwin 10000 --shard_cc 0 --random_seed 0 --enable_pfc 1 --cc dctcp --param_1 20 --param_2 0 --enable_tr 0 --enable_debug 0 --max_inflight_flows 0 > /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/data_test_config/3/ns3/log_sim.txt
 
@@ -191,3 +205,5 @@ make
 
 cd /data1/lichenni/projects/per-flow-sim/inference/python
 python main_inference.py
+
+git add . --exclude=flowsim

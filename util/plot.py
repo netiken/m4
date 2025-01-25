@@ -329,6 +329,117 @@ def plot_lines(
         plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
 
 
+def plot_scatter(
+    raw_data,
+    file_name,
+    linelabels,
+    x_label,
+    y_label,
+    log_switch=False,
+    log_switch_x=False,
+    rotate_xaxis=False,
+    ylim=None,
+    xlim=None,
+    ylim_bottom=None,
+    fontsize=15,
+    legend_font=15,
+    loc=2,
+    legend_cols=1,
+    title=None,
+    format_idx=None,
+    fig_idx=0,
+    marker_size=50,
+    colors=None,
+    fig_size=(5, 2.3),
+):
+    """
+    Plots multiple scatter plots for the given datasets.
+
+    Parameters:
+    - raw_data: List of datasets (each dataset is a tuple of x and y values).
+    - file_name: Name of the file to save the plot.
+    - linelabels: List of labels for the scatter plots.
+    - x_label: Label for the x-axis.
+    - y_label: Label for the y-axis.
+    - log_switch: Whether to use logarithmic scaling on the y-axis.
+    - log_switch_x: Whether to use logarithmic scaling on the x-axis.
+    - rotate_xaxis: Whether to rotate x-axis tick labels.
+    - ylim: Tuple specifying y-axis limits.
+    - xlim: Tuple specifying x-axis limits.
+    - fontsize: Font size for axis labels and title.
+    - legend_font: Font size for the legend.
+    - loc: Legend location.
+    - title: Title of the plot.
+    - fig_idx: Figure index for the plot.
+    """
+    colors = colors if colors else color_list
+    _fontsize = fontsize
+    fig = plt.figure(fig_idx, figsize=fig_size)
+    ax = fig.add_subplot(111)
+    ax.spines["right"].set_visible(False)
+    ax.spines["top"].set_visible(False)
+
+    ax.tick_params(axis="y", direction="in")
+    ax.tick_params(axis="x", direction="in")
+    if log_switch:
+        ax.set_yscale("log")
+    if log_switch_x:
+        ax.set_xscale("log")
+
+    plt.ylabel(y_label, fontsize=_fontsize)
+    plt.xlabel(x_label, fontsize=_fontsize)
+    linelabels = ["\n".join(wrap(l, 30)) for l in linelabels]
+
+    for i in range(len(raw_data)):
+        x, y = raw_data[i]
+        if len(x) == 0 or len(y) == 0:
+            continue
+        idx_selected = format_idx[i] if format_idx else i
+        if i < len(linelabels):
+            plt.scatter(
+                x,
+                y,
+                color=colors[idx_selected % len(colors)],
+                label=linelabels[i],
+                s=marker_size,
+                marker=markertype_list[idx_selected % len(markertype_list)],
+            )
+        else:
+            plt.scatter(
+                x,
+                y,
+                color=colors[idx_selected % len(colors)],
+                s=marker_size,
+                marker=markertype_list[idx_selected % len(markertype_list)],
+            )
+
+    legend_properties = {"size": legend_font}
+    plt.legend(
+        prop=legend_properties,
+        frameon=False,
+        loc=loc,
+        ncol=legend_cols,
+    )
+
+    if ylim:
+        plt.ylim(top=ylim)
+    if ylim_bottom:
+        plt.ylim(bottom=ylim_bottom)
+    if xlim:
+        plt.xlim(right=xlim)
+
+    plt.yticks(fontsize=_fontsize)
+    plt.xticks(fontsize=_fontsize)
+    plt.grid(True)
+
+    if rotate_xaxis:
+        plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
+    if title:
+        plt.title(title, fontsize=_fontsize - 5)
+    if file_name:
+        plt.savefig(file_name, bbox_inches="tight", pad_inches=0)
+
+
 def plot_grouped_boxplots(
     bucketed_data,
     bucket_labels,

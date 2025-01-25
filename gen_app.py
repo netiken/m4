@@ -41,7 +41,7 @@ def assign_clients_to_storage(matrix_size):
 
 # Load JSON file
 with open(
-    "/data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_b_4_16.json",
+    "/data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_b_2_8.json",
     "r",
 ) as f:
     data = json.load(f)
@@ -57,7 +57,7 @@ data["matrix"]["inner"] = new_matrix.tolist()
 
 # Save the updated JSON
 with open(
-    "/data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_d_4_16.json",
+    "/data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/spatials/cluster_d_2_8.json",
     "w",
 ) as f:
     json.dump(data, f, indent=2)
