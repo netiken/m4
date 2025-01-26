@@ -59,7 +59,7 @@ class Inference:
         self.z_t_link = torch.zeros((self.n_link, self.hidden_size), device=self.device)
         self.z_t_link[:, 1] = 1.0
         self.z_t_link[:, 2] = 1.0
-        self.save_models("./flowsim/final")
+        # self.save_models("./flowsim/final")
 
     def save_models(self, directory="./inference/models_topo"):
         if not os.path.exists(directory):
@@ -557,8 +557,8 @@ def main():
         # ("_eval_sweep", 100, 30000),
         # ("eval_train", 2000, 2000),
         # ("eval_test_50k", 100, 50000),
-        ("eval_test", 100, 20000),
-        # ("eval_test", 3, 20000),
+        # ("eval_test", 100, 20000),
+        ("eval_test", 3, 20000),
         # ("eval_test_app", 10, 20000),
     ]
     model_list = [
@@ -604,17 +604,16 @@ def main():
         # ("m4_hope01", 10, 4000),
         # ("m4", 10, 4000),
         # ("m4_nosize", 10, 4000),
-        ("m4", 10, 4000),
+        # ("m4", 10, 4000),
         # test
-        # ("m4_hope01_noqueue", 13, 4000),
-        # ("m4_hope01_noqueue", 12, 4000),
-        # ("m4_hope01_noqueue", 11, 4000),
-        # ("m4_hope01_noqueue", 10, 4000),
-        # ("m4_hope01_noqueue", 9, 4000),
-        # ("m4_hope01_noqueue", 8, 4000),
-        # ("m4_hope01_noqueue", 7, 4000),
-        # ("m4_hope01_noqueue", 6, 4000),
-        # ("m4_hope01_noqueue", 5, 4000),
+        ("m4_small", 12, 4000),
+        ("m4_small", 11, 4000),
+        ("m4_small", 10, 4000),
+        ("m4_small", 9, 4000),
+        ("m4_small", 8, 4000),
+        ("m4_small", 7, 4000),
+        ("m4_small", 6, 4000),
+        ("m4_small", 5, 4000),
     ]
     if args.flowsim:
         print("Running flow simulation")
@@ -700,7 +699,7 @@ def main():
                     checkpoint_path=checkpoint,
                 )
                 print(f"Loaded model: {model_instance}/{model_name_loaded}")
-                return
+                # return
                 fct_list, sldn_list = [], []
                 for shard in np.arange(n_shards):
                     try:
