@@ -106,6 +106,7 @@ dhall-to-json --file cluster_4_to_1_eval_app.dhall > cluster_4_to_1_eval_app.jso
 
 dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_12k.dhall > ../../../workload/topologies/cluster_b_2_to_1_12k.json
 dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_24k.dhall > ../../../workload/topologies/cluster_b_2_to_1_24k.json
+dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_36k.dhall > ../../../workload/topologies/cluster_b_2_to_1_36k.json
 dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_48k.dhall > ../../../workload/topologies/cluster_b_2_to_1_48k.json
 
 ## step-2: 
@@ -118,6 +119,7 @@ cargo run --bin contiguousify -- /data1/lichenni/projects/per-flow-sim/parsimon-
 
 cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_12k.json
 cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_24k.json
+cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_36k.json
 cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_48k.json
 
 # gen spatial matrix for fat-tree topology
@@ -178,8 +180,8 @@ cargo run --release -- --root=./test --mixes spec/0.mix.json ns3
 # run exps fig 7
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mix spec/0.mix.json ns3
-cargo run --release -- --root=./data --mix spec/1.mix.json ns3
-cargo run --release -- --root=./data --mix spec/2.mix.json ns3
+cargo run --release -- --root=./data_cap --mix spec/1.mix.json ns3
+cargo run --release -- --root=./data_cap --mix spec/2.mix.json ns3
 cargo run --release -- --root=./data --mix spec/3.mix.json ns3
 cargo run --release -- --root=./data --mix spec/4.mix.json ns3
 cargo run --release -- --root=./data --mix spec/5.mix.json ns3
@@ -206,4 +208,4 @@ make
 cd /data1/lichenni/projects/per-flow-sim/inference/python
 python main_inference.py
 
-git add . --exclude=flowsim
+git add . ':!flowsim/'
