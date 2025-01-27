@@ -5,7 +5,8 @@ dataset:
   n_flows_list: [2000]
   # n_links_max: 96
   # n_links_max: 768
-  n_links_max: 16896
+  # n_links_max: 16896
+  n_links_max: 33792
   n_hosts_list: [32]
   shard: 0
   shard_list: [0,4000,4000] # [start, end, num]
@@ -33,7 +34,7 @@ model:
   gcn_n_layer: 3
   loss_fn_type: "l1"
   hidden_size: 200
-  gcn_hidden_size: 200
+  gcn_hidden_size: 300
   dropout: 0.0
   enable_bidirectional: True
   enable_positional_encoding: False
@@ -44,7 +45,7 @@ model:
 
 # Training parameters
 training:
-  gpu: [3]
+  gpu: [2]
   n_epochs: 5
   batch_size: 1
   learning_rate: 0.0001
