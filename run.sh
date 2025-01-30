@@ -108,6 +108,7 @@ dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_12k.dhall > .
 dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_24k.dhall > ../../../workload/topologies/cluster_b_2_to_1_24k.json
 dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_36k.dhall > ../../../workload/topologies/cluster_b_2_to_1_36k.json
 dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_48k.dhall > ../../../workload/topologies/cluster_b_2_to_1_48k.json
+dhall-to-json --file ../../../workload/topologies/cluster_b_2_to_1_60k.dhall > ../../../workload/topologies/cluster_b_2_to_1_60k.json
 
 ## step-2: 
 cd /data1/lichenni/projects/per-flow-sim/parsimon-eval/workload/src/bin
@@ -121,6 +122,7 @@ cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_12k.json
 cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_24k.json
 cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_36k.json
 cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_48k.json
+cargo run --bin contiguousify -- ../../topologies/cluster_b_2_to_1_60k.json
 
 # gen spatial matrix for fat-tree topology
 cd /data1/lichenni/projects/parsimon-eval-all/workload/src
@@ -186,6 +188,10 @@ cargo run --release -- --root=./data_cap --mix spec/2.mix.json ns3
 cargo run --release -- --root=./data --mix spec/3.mix.json ns3
 cargo run --release -- --root=./data --mix spec/4.mix.json ns3
 cargo run --release -- --root=./data --mix spec/5.mix.json ns3
+cargo run --release -- --root=./data --mix spec/6.mix.json ns3
+cargo run --release -- --root=./data --mix spec/7.mix.json ns3
+cargo run --release -- --root=./data --mix spec/8.mix.json ns3
+cargo run --release -- --root=./data --mix spec/9.mix.json ns3
 
 # git large file
 git filter-branch --tree-filter 'rm -f workload/spatials/cluster_b_48k.json' HEAD

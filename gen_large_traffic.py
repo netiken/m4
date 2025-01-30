@@ -34,7 +34,13 @@ def generate_idx2name(total_indices):
 
 input_file = "./parsimon-eval/workload/spatials/cluster_b.json"
 
-output_file_str_list = [("_12k", 16), ("_24k", 32), ("_36k", 48), ("_48k", 64)]
+output_file_str_list = [
+    ("_12k", 16),
+    ("_24k", 32),
+    ("_36k", 48),
+    ("_48k", 64),
+    ("_60k", 80),
+]
 nr_racks_per_pod = 48  # Example value
 
 for output_file_str, nr_pods in output_file_str_list:

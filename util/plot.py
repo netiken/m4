@@ -192,7 +192,7 @@ def plot_bars(
             color=colors[idx % len(colors)],
             edgecolor=edgecolor,
             hatch=patterns[idx % len(patterns)] if patterns else None,  # Apply patterns
-            label=bar_labels[idx],
+            label=bar_labels[idx] if idx < len(bar_labels) else None,
         )
 
     plt.xlabel(x_label, fontsize=fontsize)
@@ -455,6 +455,7 @@ def plot_grouped_boxplots(
     fig_size=(7, 4),
     box_width=0.2,
     fig_idx=0,
+    ylim=None,
     y_ticklabel_fontsize=None,  # Added parameter for y tick label size
 ):
     """
@@ -526,7 +527,8 @@ def plot_grouped_boxplots(
         )
     if title:
         ax.set_title(title, fontsize=fontsize)
-
+    if ylim:
+        plt.ylim(top=ylim)
     # Final adjustments and save/show the plot
     plt.tight_layout()
     if file_name:
