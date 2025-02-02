@@ -86,7 +86,15 @@ Then reproduce the results in the script `plot_eval.ipynb`.
 
 1. To generate data for training and testing your own model, run:
 
-3. For training the model, ensure you're using the Python 3 environment and configure settings in `config/train_config_path.yaml`. Then execute:
+```bash
+cd ./parsimon-eval/expts/fig_8
+cargo run --release -- --root={dir_to_data} --mixes={config_for_sim_scenarios} ns3
+
+e.g., 
+cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
+```
+
+2. For training the model, ensure you're using the Python 3 environment and configure settings in `config/train_config_lstm_topo.yaml`. Then execute:
 
 ```bash
 cd m4
