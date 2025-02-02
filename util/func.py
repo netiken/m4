@@ -23,5 +23,3 @@ def create_logger(log_name):
         level=logging.INFO,
         handlers=[logging.FileHandler(log_name, mode="a"), logging.StreamHandler()],
     )
-    for handler in logging.root.handlers:
-        handler.addFilter(fileFilter())
