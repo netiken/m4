@@ -1,75 +1,67 @@
-# m4: Modeling Flow-level Network Dynamics from Data
+# m4: A Learned Flow-level Network Simulator
 
-This GitHub repository houses the scripts and guidance needed to replicate the experiments presented in our paper, "m4: Modeling Flow-level Network Dynamics from Data". It offers all necessary tools to reproduce the experimental results documented in sections 5.2, 5.3, and 5.4 of our study.
+This GitHub repository houses the scripts and guidance needed to replicate the experiments presented in our paper, "m4: A Learned Flow-level Network Simulator". It offers all necessary tools to reproduce the experimental results documented in sections 5.2 and 5.3 of our study.
 
 ## Contents
 
-- [m4: Modeling Flow-level Network Dynamics from Data](#m4-precise-estimation-of-flow-level-performance-via-machine-learning)
-  - [Contents](#contents)
-  - [Setup Instructions](#setup-instructions)
+- [Quick Reproduction](#quick-reproduction)
+- [From Scratch](#from-scratch)
+- [Train your own model](#train-your-own-model)
 - [Repository Structure](#repository-structure)
 - [Citation Information](#citation-information)
 - [Acknowledgments](#acknowledgments)
 - [Getting in Touch](#getting-in-touch)
 
-## Setup Instructions
+First, clone the repository and install the necessary dependencies. To install m3, execute: 
+```bash
+git clone https://github.com/netiken/m4.git
+cd m4
+# Initialize the submodules, including parsimon-eval and HPCC
+git submodule update --init --recursive
+```
+## Quick Reproduction
+The following steps provide a quick guide to reproduce the results in the paper.
 
-Before you begin, ensure you have installed: Python 3, Rust, Cargo, gcc-9, and gcc-5. Use `environment.yml` conda environment files for Python setup, and follow additional instructions for other packages.
+1. To replicate paper results in Section 5.2 and 5.4, run the notebook `plot_eval.ipynb`.
+
+## From Scratch
+1. Ensure you have installed: Python 3, Rust, Cargo, and gcc-9. Use `environment.yml` conda environment files for Python setup, and follow additional instructions for other packages.
 
 ```bash
 conda env create -f environment.yml
 ```
 
-1. To install m4, execute: 
 ```bash
-git clone https://github.com/netiken/m4.git
-cd m4
+# Install Rust and Cargo, https://www.rust-lang.org/tools/install
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# setup the path and check the installation using rustc --version. Then switch to nightly version
+rustup install nightly
+rustup default nightly
+```
+```bash
+# Install gcc-9
+sudo apt-get install gcc-9 g++-9
 ```
 
-2. To initialize the submodules, including parsimon, parsimon-eval, and HPCC:
-
-```bash
-git submodule update --init --recursive
-```
-
-4. For setting up the ns-3 for data generation, follow the detailed instructions in `parsimon/backends/High-Precision-Congestion-Control/simulation/README.md`:
+2. For setting up the ns-3 for data generation, follow the instructions below:
 
 ```bash
 cd High-Precision-Congestion-Control/ns-3.39
 ./configure
 ```
 
-5. For training the model, ensure you're using the Python 3 environment and configure settings in `config/train_config_path.yaml`. Then execute:
+3. The checkpotins for the end-to-end m4 pipeline are available in the `ckpts` directory. You can use them directly for the following steps. Please refer to the section [Train your own model](#train-your-own-model) for training the model from scratch.
 
-```bash
-cd m4
-python main_path.py --train_config=./config/train_config_path.yaml --mode=train --dir_input={dir_to_save_data} --dir_output={dir_to_save_ckpts}
-
-e.g., 
-python main_path.py --train_config=./config/train_config_path.yaml --mode=train --dir_input=/data1/lichenni/m4/parsimon/backends/High-Precision-Congestion-Control/gen_path/data --dir_output=/data1/lichenni/m4/ckpts
-```
-Also, change the configurations for the dataset or model for your specific use case.
-
-6. To create checkpoints for the end-to-end m4 pipeline:
-```bash
-cd m4
-python gen_ckpt.py --dir_output={dir_to_save_ckpts}
-
-e.g., 
-python gen_ckpt.py --dir_output=/data1/lichenni/m4/ckpts
-```
-Note the checkpoints will be saved in the `ckpts` directory, one is for the Llama-2 model and the other is for the 2-layer MLP model.
-
-7. To replicate paper results in Section 5.2, run the following in the `parsimon-eval/expts/fig_8` directory:
+3. To replicate paper results in Section 5.2, run the following in the `parsimon-eval/expts/fig_8` directory:
 
 ```bash
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json mlsys
 ```
 
-Then reproduce the results in the script `plot_m4.ipynb`.
+Then reproduce the results in the script `plot_eval.ipynb`.
 
-8. To replicate paper results in Section 5.3, run the following in the `parsimon-eval/expts/fig_7` directory:
+4. To replicate paper results in Section 5.3, run the following in the `parsimon-eval/expts/fig_7` directory:
 
 ```bash
 cargo run --release -- --root=./data --mix spec/0.mix.json ns3
@@ -77,22 +69,37 @@ cargo run --release -- --root=./data --mix spec/1.mix.json ns3
 cargo run --release -- --root=./data --mix spec/2.mix.json ns3
 ```
 
-Then reproduce the results in the script `plot_m4.ipynb`.
+Then reproduce the results in the script `plot_eval.ipynb`.
 
-9. To replicate paper results in Section 5.4, run the following in the `parsimon-eval/expts/fig_8` directory:
+5. To replicate paper results in Section 5.4, run the following in the `parsimon-eval/expts/fig_8` directory:
 
 ```bash
 cargo run --release -- --root=./eval_test_app --mixes spec/eval_test_app.mix.json ns3
 cargo run --release -- --root=./eval_test_app --mixes spec/eval_test_app.mix.json mlsys
 ```
 
-Then reproduce the results in the script `plot_m4.ipynb`.
+Then reproduce the results in the script `plot_eval.ipynb`.
+
+# Train your own model
+
+* Please use the demo data in `data` in the main directory to test the training process.
+
+1. To generate data for training and testing your own model, run:
+
+3. For training the model, ensure you're using the Python 3 environment and configure settings in `config/train_config_path.yaml`. Then execute:
+
+```bash
+cd m4
+python main_path.py --train_config={path_to_config_file} --mode=train --dir_input={dir_to_save_data} --dir_output={dir_to_save_ckpts} --note={note}
+
+e.g., 
+python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=./parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note m4
+```
+Also, change the configurations for the dataset or model for your specific use case.
 
 # Repository Structure
 
 ```bash
-├── ckpts          # Checkpoints of Llama-2 and 2-layer MLP used in m4
-├── clibs          # C libraries for running the path-level simulation in m4
 ├── config         # Configuration files for training and testing m4
 ├── High-Precision-Congestion-Control   # HPCC repository for data generation
 ├── parsimon-eval  # Scripts to reproduce m4 experiments and comparisons
@@ -104,9 +111,9 @@ Then reproduce the results in the script `plot_m4.ipynb`.
 If our work assists in your research, kindly cite our paper as follows:
 ```bibtex
 @inproceedings{m4,
-    author = {Li, Chenning and Nasr-Esfahany, Arash and Zhao, Kevin and Noorbakhsh, Kimia and Goyal, Prateesh and Alizadeh, Mohammad and Anderson, Thomas},
-    title = {m4: Modeling Flow-level Network Dynamics from Data},
-    year = {2024},
+    author = {Li, Chenning and Zabreyko, Anton and Nasr-Esfahany, Arash and Zhao, Kevin and Goyal, Prateesh and Alizadeh, Mohammad and Anderson, Thomas},
+    title = {m4: A Learned Flow-level Network Simulator},
+    year = {2025},
 }
 ```
 
