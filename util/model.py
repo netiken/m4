@@ -57,33 +57,6 @@ class HomoNetGNN(nn.Module):
         return out
 
 
-# class HomoGNNLayer(nn.Module):
-#     def __init__(self, c_in, c_out, dropout=0.2):
-#         super(HomoGNNLayer, self).__init__()
-#         self.homogeneous_layer = HomoNetGNN(c_in=c_in + 1, c_out=c_out, dropout=dropout)
-
-#     def forward(self, x, edge_index, time_deltas):
-#         out_combined = self.homogeneous_layer(x, edge_index, time_deltas)
-
-#         return out_combined
-
-
-# class HomoNetGNN(nn.Module):
-#     def __init__(self, c_in, c_out, dropout=0.2):
-#         super(HomoNetGNN, self).__init__()
-#         self.conv = SAGEConv(c_in, c_out, aggr="sum", project=True)
-#         self.norm = torch.nn.LayerNorm(c_out)
-
-#     def forward(self, x, edge_index, time_delta):
-#         repeat_count = np.ceil(x.size(0) / time_delta.size(0)).astype(int)
-#         time_delta_expanded = time_delta.repeat(repeat_count, 1)[: x.size(0), :]
-
-#         x = torch.cat([x, time_delta_expanded], dim=1)
-#         out = self.conv(x, edge_index)
-#         out = self.norm(out)  # Apply normalization
-#         return out
-
-
 class SeqCell(nn.Module):
     def __init__(self, input_size, hidden_size):
         super(SeqCell, self).__init__()
@@ -140,12 +113,8 @@ class FlowSimLstm(LightningModule):
         self.enable_log_norm = enable_log_norm
         self.loss_efficiency_size = 0.005
         self.loss_efficiency_queue = 0.005
-        if enable_path:
-            self.n_links = 12
-        elif enable_topo:
+        if enable_topo:
             self.n_links = 96
-        else:
-            self.n_links = 1
         if enable_lstm and enable_gnn:
             logging.info(
                 f"GNN and LSTM enabled, enable_lstm_in_gnn={enable_lstm_in_gnn}, enable_link_state={enable_link_state}, enable_flowsim_diff={enable_flowsim_diff}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
@@ -165,7 +134,6 @@ class FlowSimLstm(LightningModule):
             self.lstmcell_rate = SeqCell(
                 input_size=hidden_size + lstmcell_rate_extra, hidden_size=hidden_size
             )
-            # self.linear_rate = nn.Linear(hidden_size + lstmcell_rate_extra, hidden_size)
             self.lstmcell_time = SeqCell(input_size=1, hidden_size=hidden_size)
 
             if self.enable_link_state:
@@ -194,32 +162,6 @@ class FlowSimLstm(LightningModule):
                     nn.Dropout(p=dropout),
                     nn.Linear(hidden_size, 1),  # Second layer
                 )
-        elif enable_gnn:
-            logging.info(f"GNN enabled")
-            self.gcn_layers = nn.ModuleList(
-                [
-                    HomoGNNLayer(
-                        input_size if i == 0 else gcn_hidden_size,
-                        (gcn_hidden_size if i != gcn_n_layer - 1 else output_size),
-                        dropout=dropout,
-                        enable_lstm_in_gnn=enable_lstm_in_gnn,
-                    )
-                    for i in range(gcn_n_layer)
-                ]
-            )
-        elif enable_lstm:
-            logging.info(f"LSTM enabled")
-            self.model_lstm = LSTMModel(
-                input_size,
-                hidden_size,
-                output_size,
-                n_layer,
-                dropout=dropout,
-                enable_bidirectional=enable_bidirectional,
-                enable_positional_encoding=enable_positional_encoding,
-            )
-        else:
-            assert False, "Either GNN or LSTM must be enabled"
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir
@@ -402,7 +344,6 @@ class FlowSimLstm(LightningModule):
                     )
 
                     for gcn in self.gcn_layers:
-                        # x_combined = gcn(x_combined, edge_index, time_deltas)
                         x_combined = gcn(x_combined, edge_index)
 
                     z_t_tmp = x_combined[:n_flows_active]
@@ -412,7 +353,6 @@ class FlowSimLstm(LightningModule):
                     batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
                         z_t_tmp, batch_h_state[active_flow_idx, :]
                     )
-                    # batch_h_state[active_flow_idx, :] = self.linear_rate(z_t_tmp)
                     if self.enable_link_state:
                         batch_h_state_link[active_link_idx, :] = (
                             self.lstmcell_rate_link(
@@ -420,26 +360,12 @@ class FlowSimLstm(LightningModule):
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
-                        # batch_h_state_link[active_link_idx, :] = z_t_tmp_link
 
-            if self.enable_flowsim_diff:
-                input_tmp = torch.cat([x, batch_h_state], dim=1)
-                res = self.output_layer(input_tmp)
-            else:
-                input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
-                res = self.output_layer(input_tmp)
-                # res = self.output_layer(batch_h_state) + 1.0
+            input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
+            res = self.output_layer(input_tmp)
             if self.enable_remainsize:
-                # loss_size = torch.div(loss_size, loss_size_num)
                 size_info = x[:, 0].cpu().detach().numpy()
-            # if self.enable_queuelen:
-            #     loss_queue = torch.div(loss_queue, loss_queue_num)
 
-        elif self.enable_lstm:
-            res, _ = self.model_lstm(x, lengths)
-            # res, _ = self.model_lstm(x[:, :, [0, 1]], lengths)
-        else:
-            assert False, "Either GNN or LSTM must be enabled"
         if self.enable_remainsize and enable_test:
             res_size = np.array([res_size_est, res_size_gt, res_size_flowidx])
         if self.enable_queuelen and enable_test:
@@ -620,7 +546,6 @@ class FlowSimLstm(LightningModule):
                 + list(self.lstmcell_time.parameters())
                 + list(self.output_layer.parameters())
             )
-            # parameters += list(self.linear_rate.parameters())
             for gcn_layer in self.gcn_layers:
                 parameters += list(gcn_layer.parameters())
             if self.enable_link_state:
