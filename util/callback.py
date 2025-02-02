@@ -1,6 +1,5 @@
 from pytorch_lightning.callbacks import Callback
 import pytorch_lightning as pl
-from .consts import balance_len_bins_list
 
 
 class OverrideEpochStepCallback(Callback):
@@ -9,25 +8,6 @@ class OverrideEpochStepCallback(Callback):
 
     def on_train_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
         self._log_step_as_current_epoch(trainer, pl_module)
-        if trainer.current_epoch == 0:
-            trainer.datamodule.switch_to_other_epochs_logic()
-
-        if pl_module.current_period_len_idx is not None:
-            avg_loss = trainer.callback_metrics.get("train_loss_sync")
-
-            if avg_loss is not None:
-                # Logic to switch flow periods based on the average loss
-                if pl_module.current_period_len_idx < len(balance_len_bins_list) - 1:
-                    if avg_loss.item() < 0.02:  # Loss threshold for switching periods
-                        pl_module.current_period_len_idx += 1
-                        trainer.datamodule.switch_to_next_flow_period(
-                            pl_module.current_period_len_idx
-                        )
-                else:
-                    pl_module.current_period_len_idx = None
-                    trainer.datamodule.switch_to_next_flow_period(
-                        pl_module.current_period_len_idx
-                    )
 
     def on_test_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
         self._log_step_as_current_epoch(trainer, pl_module)
