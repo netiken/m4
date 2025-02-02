@@ -87,6 +87,10 @@ cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mix spec/0.mix.json ns3
 cargo run --release -- --root=./data --mix spec/1.mix.json ns3
 cargo run --release -- --root=./data --mix spec/2.mix.json ns3
+
+cargo run --release -- --root=./data --mix spec/0.mix.json mlsys
+cargo run --release -- --root=./data --mix spec/1.mix.json mlsys
+cargo run --release -- --root=./data --mix spec/2.mix.json mlsys
 ```
 Then, visualize the results using:
 ```bash
@@ -96,8 +100,8 @@ jupyter notebook plot_eval.ipynb
 #### **Section 5.4**
 ```bash
 cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_test_app --mixes spec/eval_test_app.mix.json ns3
-cargo run --release -- --root=./eval_test_app --mixes spec/eval_test_app.mix.json mlsys
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json ns3
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json mlsys
 ```
 Then, visualize the results using:
 ```bash
