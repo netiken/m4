@@ -128,7 +128,7 @@ class DataModulePerFlow(LightningDataModule):
         enable_segmentation=False,
         enable_positional_encoding=False,
         flow_size_threshold=100000,
-        enable_gnn=False,
+        enable_gnn=True,
         enable_abstime=False,
         enable_flowsim_gt=False,
         enable_remainsize=False,
@@ -136,7 +136,7 @@ class DataModulePerFlow(LightningDataModule):
         segments_per_seq=200,
         sampling_method="uniform",  # uniform, weighted, balanced
         enable_path=False,
-        enable_topo=False,
+        enable_topo=True,
         test_on_train=False,
         test_on_empirical=False,
         test_on_manual=False,
@@ -173,8 +173,6 @@ class DataModulePerFlow(LightningDataModule):
             f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}, enable_topo={enable_topo}"
         )
         data_list = []
-        # config_path = os.path.join(dir_input, "../spec/dctcp_sync.mix.json")
-        # config_file = json.load(open(config_path, "r"))
         if mode == "train":
             if enable_segmentation:
                 len_per_period_all = []
@@ -187,12 +185,6 @@ class DataModulePerFlow(LightningDataModule):
                             topo_type_cur = topo_type
                             spec = f"{shard}/ns3"
                             for sample in sample_list:
-                                # config = config_file[shard]
-                                # spatial = config["spatial"].split("/")[-1].split(".")[0]
-                                # if spatial != "cluster_c_2_4":
-                                #     continue
-
-                                # file_suffix = f"s{sample}_i0"
                                 file_suffix = ""
                                 fid = np.load(
                                     f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
@@ -223,21 +215,11 @@ class DataModulePerFlow(LightningDataModule):
 
                                     len_per_period = len_per_period_stats
 
-                                    # filtering
                                     if self.enable_gnn:
                                         len_per_period = [
                                             (
                                                 len_per_period[i]
                                                 if len_per_period_active[i] < 150
-                                                else 0
-                                            )
-                                            for i in range(len(len_per_period))
-                                        ]
-                                    else:
-                                        len_per_period = [
-                                            (
-                                                len_per_period[i]
-                                                if len_per_period_stats[i] < 5000
                                                 else 0
                                             )
                                             for i in range(len(len_per_period))
@@ -276,101 +258,6 @@ class DataModulePerFlow(LightningDataModule):
                                                 data_list_per_period[i]
                                                 for i in sample_indices
                                             ]
-                                        )
-
-                        else:
-                            topo_type_cur = topo_type.replace("-x_", f"-{n_hosts}_")
-                            spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{lr}Gbps"
-                            for sample in sample_list:
-                                file_suffix = f"s{sample}_i0"
-                                fid = np.load(
-                                    f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
-                                )
-                                if (
-                                    len(fid) == len(set(fid))
-                                    and np.all(fid[:-1] <= fid[1:])
-                                    and len(fid) % n_flows == 0
-                                ):
-                                    if enable_segmentation:
-                                        busy_periods = np.load(
-                                            f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
-                                            allow_pickle=True,
-                                        )
-
-                                        remainsize_path = f"{dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy"
-
-                                        len_per_period_stats = [
-                                            len(period) for period in busy_periods
-                                        ]
-
-                                        if os.path.exists(remainsize_path):
-                                            len_per_period = np.load(remainsize_path)
-                                        else:
-                                            len_per_period = len_per_period_stats
-
-                                        # filtering
-                                        if self.enable_gnn:
-                                            len_per_period = [
-                                                (
-                                                    len_per_period[i]
-                                                    if len_per_period_stats[i] < 100
-                                                    else 0
-                                                )
-                                                for i in range(len(len_per_period))
-                                            ]
-                                        else:
-                                            len_per_period = [
-                                                (
-                                                    len_per_period[i]
-                                                    if len_per_period_stats[i] < 5000
-                                                    else 0
-                                                )
-                                                for i in range(len(len_per_period))
-                                            ]
-
-                                        if np.sum(len_per_period) > 0:
-                                            data_list_per_period = [
-                                                (
-                                                    spec,
-                                                    (0, n_hosts - 1),
-                                                    topo_type_cur + file_suffix,
-                                                    int(segment_id),
-                                                )
-                                                for segment_id in range(
-                                                    len(busy_periods)
-                                                )
-                                            ]
-
-                                            sample_indices = np.arange(
-                                                len(len_per_period)
-                                            )
-
-                                            len_per_period_all.extend(
-                                                [
-                                                    len_per_period[i]
-                                                    for i in sample_indices
-                                                ]
-                                            )
-                                            len_per_period_stats_all.extend(
-                                                [
-                                                    len_per_period_stats[i]
-                                                    for i in sample_indices
-                                                ]
-                                            )
-                                            data_list.extend(
-                                                [
-                                                    data_list_per_period[i]
-                                                    for i in sample_indices
-                                                ]
-                                            )
-
-                                    else:
-                                        data_list.append(
-                                            (
-                                                spec,
-                                                (0, n_hosts - 1),
-                                                topo_type_cur + f"s{sample}",
-                                            )
                                         )
 
             if enable_segmentation:
@@ -476,26 +363,6 @@ class DataModulePerFlow(LightningDataModule):
                         shard_list = np.arange(0, 100)
                     n_hosts_list = [32]
                     n_flows_list = [2000]
-                else:
-                    if self.test_on_manual:
-                        if self.enable_path:
-                            shard_list = np.arange(0, 1000)
-                            n_hosts_list = [5]
-                            n_flows_list = [10000]
-                        else:
-                            shard_list = np.arange(0, 1000)
-                            n_hosts_list = [21]
-                            n_flows_list = [2000]
-
-                    elif self.test_on_empirical:
-                        if self.enable_path:
-                            shard_list = np.arange(0, 100)
-                            n_hosts_list = [5]
-                            n_flows_list = [10000]
-                        else:
-                            shard_list = np.arange(0, 100)
-                            n_hosts_list = [21]
-                            n_flows_list = [2000]
 
                 sample_list = [0]
                 if self.enable_segmentation:
@@ -590,107 +457,9 @@ class DataModulePerFlow(LightningDataModule):
                                         assert len(len_per_period_all) == len(
                                             data_list_test
                                         )
-                            else:
-                                topo_type_cur = self.topo_type.replace(
-                                    "-x_", f"-{n_hosts}_"
-                                )
-                                spec = f"shard{shard}_nflows{n_flows}_nhosts{n_hosts}_lr{self.lr}Gbps"
-                                for sample in sample_list:
-                                    # statss = np.load(f'{self.dir_input}/{spec}/stats.npy', allow_pickle=True)
-                                    # if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
 
-                                    file_suffix = f"s{sample}_i0"
-                                    fid = np.load(
-                                        f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
-                                    )
-                                    if (
-                                        len(fid) == len(set(fid))
-                                        and np.all(fid[:-1] <= fid[1:])
-                                        and len(fid) % n_flows == 0
-                                    ):
-                                        if self.enable_segmentation:
-                                            busy_periods = np.load(
-                                                f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
-                                                allow_pickle=True,
-                                            )
-
-                                            len_per_period_stats = [
-                                                len(period) for period in busy_periods
-                                            ]
-
-                                            remainsize_path = f"{self.dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy"
-
-                                            if os.path.exists(remainsize_path):
-                                                len_per_period_active = np.load(
-                                                    f"{self.dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
-                                                )
-                                            else:
-                                                len_per_period_active = (
-                                                    len_per_period_stats
-                                                )
-
-                                            len_per_period = len_per_period_stats
-
-                                            if np.sum(len_per_period) > 0:
-                                                data_list_per_period = [
-                                                    (
-                                                        spec,
-                                                        (0, n_hosts - 1),
-                                                        topo_type_cur + file_suffix,
-                                                        int(segment_id),
-                                                    )
-                                                    for segment_id in range(
-                                                        len(busy_periods)
-                                                    )
-                                                ]
-                                                sample_indices = np.arange(
-                                                    len(len_per_period)
-                                                )
-
-                                                len_per_period_all.extend(
-                                                    [
-                                                        len_per_period[i]
-                                                        for i in sample_indices
-                                                    ]
-                                                )
-                                                len_per_period_stats_all.extend(
-                                                    [
-                                                        len_per_period_stats[i]
-                                                        for i in sample_indices
-                                                    ]
-                                                )
-                                                len_per_period_active_all.extend(
-                                                    [
-                                                        len_per_period_active[i]
-                                                        for i in sample_indices
-                                                    ]
-                                                )
-                                                data_list_test.extend(
-                                                    [
-                                                        data_list_per_period[i]
-                                                        for i in sample_indices
-                                                    ]
-                                                )
-                                            assert len(len_per_period_all) == len(
-                                                data_list_test
-                                            )
-                                        else:
-                                            data_list_test.append(
-                                                (
-                                                    spec,
-                                                    (0, n_hosts - 1),
-                                                    topo_type_cur + f"s{sample}",
-                                                )
-                                            )
                 if self.enable_segmentation:
                     len_per_period_all = np.array(len_per_period_all)
-                    # n_samples = (
-                    #     len(shard_list)
-                    #     * len(n_flows_list)
-                    #     * len(n_hosts_list)
-                    #     * len(sample_list)
-                    #     * self.segments_per_seq
-                    # )
                     n_samples = 1000
 
                     if self.sampling_method == "uniform":
@@ -765,21 +534,6 @@ class DataModulePerFlow(LightningDataModule):
             )
             logging.info(f"#tracks: test-{len(data_list_test)}")
 
-    def switch_to_other_epochs_logic(self):
-        self.train.use_first_epoch_logic = False
-
-    def switch_to_next_flow_period(self, current_period_len_idx):
-        # Define the current flow period based on the model's progress
-        self.current_period_len_idx = current_period_len_idx
-        if self.current_period_len_idx is None and len(self.data_list) > 2000:
-            n_idx = np.random.choice(
-                np.arange(0, len(self.data_list)),
-                2000,
-                replace=False,
-            )
-            self.data_list = [self.data_list[i] for i in n_idx]
-        self.setup("fit")
-
     def train_dataloader(self):
         """
         Returns a PyTorch DataLoader for the training data.
@@ -849,21 +603,8 @@ class DataModulePerFlow(LightningDataModule):
         enable_remainsize = self.enable_remainsize
         enable_queuelen = self.enable_queuelen
 
-        if current_period_len_idx is not None:
-
-            # Filter data_list to only include busy periods with the specified flow count
-            data_list_filtered = [
-                data
-                for data in data_list
-                if data[4] >= balance_len_bins_list[current_period_len_idx]
-                and data[4] < balance_len_bins_list[current_period_len_idx + 1]
-            ]
-            logging.info(
-                f"Switching to next flow period {balance_len_bins_list[current_period_len_idx]}, {balance_len_bins_list[current_period_len_idx + 1]} with {len(data_list_filtered)} samples"
-            )
-        else:
-            data_list_filtered = data_list
-            logging.info(f"Using all samples: {len(data_list_filtered)}")
+        data_list_filtered = data_list
+        logging.info(f"Using all samples: {len(data_list_filtered)}")
 
         if self.enable_segmentation:
             if self.enable_topo:
@@ -873,29 +614,6 @@ class DataModulePerFlow(LightningDataModule):
                     enable_positional_encoding,
                     flow_size_threshold,
                     enable_gnn,
-                    enable_flowsim_gt,
-                    enable_remainsize=enable_remainsize,
-                    enable_queuelen=enable_queuelen,
-                )
-            elif self.enable_path:
-                return PathFctSldnSegment(
-                    data_list_filtered,
-                    dir_input,
-                    enable_positional_encoding,
-                    flow_size_threshold,
-                    enable_gnn,
-                    enable_flowsim_gt,
-                    enable_remainsize=enable_remainsize,
-                    enable_queuelen=enable_queuelen,
-                )
-            else:
-                return LinkFctSldnSegment(
-                    data_list_filtered,
-                    dir_input,
-                    enable_positional_encoding,
-                    flow_size_threshold,
-                    enable_gnn,
-                    enable_abstime,
                     enable_flowsim_gt,
                     enable_remainsize=enable_remainsize,
                     enable_queuelen=enable_queuelen,
@@ -913,415 +631,6 @@ class DataModulePerFlow(LightningDataModule):
     def __read_data_list(self, path):
         f = open(f"{path}/data_list.json", "r")
         return json.loads(f.read())
-
-
-class LinkFctSldnSegment(Dataset):
-    def __init__(
-        self,
-        data_list,
-        dir_input,
-        enable_positional_encoding,
-        flow_size_threshold,
-        enable_gnn,
-        enable_abstime,
-        enable_flowsim_gt=False,
-        enable_remainsize=False,
-        enable_queuelen=False,
-    ):
-        self.data_list = data_list
-        self.dir_input = dir_input
-        self.use_first_epoch_logic = True
-        self.lr = 10.0
-        self.enable_positional_encoding = enable_positional_encoding
-        self.flow_size_threshold = flow_size_threshold
-        self.enable_gnn = enable_gnn
-        self.enable_abstime = enable_abstime
-        self.enable_flowsim_gt = enable_flowsim_gt
-        self.enable_remainsize = enable_remainsize
-        logging.info(
-            f"call LinkFctSldnSegment. data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn},enable_abstime={enable_abstime}, enable_flowsim_gt={enable_flowsim_gt}, enable_remainsize={enable_remainsize}"
-        )
-
-    def __len__(self):
-        return len(self.data_list)
-
-    def __getitem__(self, idx):
-        spec, src_dst_pair_target, topo_type, segment_id = self.data_list[idx]
-        src_dst_pair_target_str = (
-            "_".join([str(x) for x in src_dst_pair_target]) + f"_seg{segment_id}"
-        )
-
-        dir_input_tmp = f"{self.dir_input}/{spec}"
-
-        busy_periods = np.load(
-            f"{dir_input_tmp}/period{topo_type}_t{self.flow_size_threshold}.npy",
-            allow_pickle=True,
-        )
-
-        fid = np.array(busy_periods[segment_id])
-        assert np.all(fid[:-1] <= fid[1:])
-        fid_rank = {fid: rank for rank, fid in enumerate(fid)}
-
-        n_flows = len(fid)
-        n_links = 1
-
-        sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
-        fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
-        fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
-
-        n_links_passed = np.ones_like(fcts_flowsim) * 2
-        base_delay = get_base_delay_link(sizes, n_links_passed, self.lr)
-        i_fcts_flowsim = get_base_delay_transmission(sizes, self.lr) + base_delay
-        fcts_flowsim += base_delay
-        sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
-
-        if self.enable_flowsim_gt:
-            fcts = fcts_flowsim
-            i_fcts = i_fcts_flowsim
-        else:
-            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
-            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
-
-        fats = fats - fats[0]
-        fcts_stamp = fats + fcts
-        events = []
-        for i in range(len(fats)):
-            events.append((fats[i], "arrival", fid_rank[fid[i]]))
-            events.append((fcts_stamp[i], "departure", fid_rank[fid[i]]))
-        events.sort(key=lambda x: x[0])
-
-        # Concatenate the arrays
-        flow_active_list = np.zeros((n_flows, 2), dtype=int)
-        time_delta_list = np.zeros((n_flows * 2 - 1, 1), dtype=np.float32)
-        time_last = 0
-        for event_idx, event in enumerate(events):
-            time, event_type, flowid = event
-            if event_type == "arrival":
-                flow_active_list[flowid, 0] = event_idx
-            elif event_type == "departure":
-                flow_active_list[flowid, 1] = event_idx
-            if event_idx != 0:
-                time_delta_list[event_idx - 1] = (time - time_last) / 1000.0
-                time_last = time
-        active_flow_idx_list = [
-            np.logical_and(flow_active_list[:, 0] <= j, flow_active_list[:, 1] > j)
-            for j in range(len(events))
-        ]
-
-        if self.enable_remainsize:
-            busy_periods_remainsize = np.load(
-                f"{dir_input_tmp}/period_remainsize{topo_type}_t{self.flow_size_threshold}.npy",
-                allow_pickle=True,
-            )
-            receivedsize_list = busy_periods_remainsize[segment_id]
-            receivedsize_list = [
-                np.array(receivedsize) for receivedsize in receivedsize_list
-            ]
-            assert (
-                len(receivedsize_list) == 2 * n_flows
-            ), f"len(remain_size): {len(receivedsize_list)}, len(fid): {n_flows}"
-
-            remainsize_tuple = []
-            for event_idx, receivedsize in enumerate(receivedsize_list):
-                active_flow_idx = active_flow_idx_list[event_idx]
-                if sum(active_flow_idx) == len(receivedsize):
-                    total_size = sizes[active_flow_idx]
-                    # remain size ratio
-                    remainsize_list = (total_size - receivedsize) / total_size
-                    assert (remainsize_list >= 0).all()
-                    remainsize_tuple.append(torch.tensor(remainsize_list))
-                else:
-                    remainsize_tuple.append(torch.tensor([]))
-        else:
-            remainsize_tuple = None
-
-        output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
-        assert (output_data >= 1.0).all()
-
-        sizes = np.log2(sizes / 1000.0 + 1)
-        if not self.enable_gnn:
-            fats = np.diff(fats)
-            fats = np.insert(fats, 0, 0)
-            fats = fats / 1000.0
-
-        input_data = np.column_stack(
-            (
-                sizes,
-                sldn_flowsim,
-            )
-        ).astype(np.float32)
-
-        # Compute the adjacency matrix for the bipartite graph
-        if self.enable_gnn:
-            edge_index = self.compute_edge_index(fid)
-            flowid_to_linkid = {k: [] for k in range(n_flows)}
-            for j in range(edge_index.shape[1]):
-                # type_a (flow node) to type_b (link node)
-                flowid_to_linkid[edge_index[0, j]].append(edge_index[1, j])
-            edges_a_to_b_list = []
-            link_active_list = []
-            for event_idx, event in enumerate(events):
-                active_flow_idx = active_flow_idx_list[event_idx]
-                fid_active = np.where(active_flow_idx)[0]
-                link_id_active = set()
-                for flowid in fid_active:
-                    link_id_active.update(flowid_to_linkid[flowid])
-                link_active_list_tmp = list(sorted(link_id_active))
-                link_active_list.append(link_active_list_tmp)
-
-                edges_a_to_b_active = []
-                link_active_index = {
-                    i: idx for idx, i in enumerate(link_active_list_tmp)
-                }
-                for idx, flowid in enumerate(fid_active):
-                    for linkid in flowid_to_linkid[flowid]:
-                        edges_a_to_b_active.append([idx, link_active_index[linkid]])
-                edges_a_to_b_list.append(
-                    torch.tensor(np.array(edges_a_to_b_active).T, dtype=torch.long)
-                )
-        else:
-            edge_index = None
-            edges_a_to_b_list = None
-            link_active_list = None
-
-        return (
-            input_data,
-            output_data,
-            spec + topo_type,
-            src_dst_pair_target_str,
-            remainsize_tuple,
-            flow_active_list,  # (seq_len,2)
-            time_delta_list,  # (seq_len*2-1,1)
-            edges_a_to_b_list,  # (event_idx, 2, num_edges_active)
-            link_active_list,  # (event_idx, num_links_active)
-        )
-
-    def compute_edge_index(self, fid):
-        edge_index = []
-        for i in range(0, len(fid)):
-            # from type_a (flow node) to type_b (link node)
-            edge_index.append([i, 0])
-
-        edge_index = np.array(edge_index).T
-
-        # Sort edge_index by destination node (second row)
-        sorted_indices = np.lexsort((edge_index[0, :], edge_index[1, :]))
-        edge_index = edge_index[:, sorted_indices]
-        return edge_index
-
-
-class PathFctSldnSegment(Dataset):
-    def __init__(
-        self,
-        data_list,
-        dir_input,
-        enable_positional_encoding,
-        flow_size_threshold,
-        enable_gnn,
-        enable_flowsim_gt=False,
-        enable_remainsize=False,
-        enable_queuelen=False,
-    ):
-        self.data_list = data_list
-        self.dir_input = dir_input
-        self.use_first_epoch_logic = True
-        self.lr = 10.0
-        self.enable_positional_encoding = enable_positional_encoding
-        self.flow_size_threshold = flow_size_threshold
-        self.enable_gnn = enable_gnn
-        self.enable_flowsim_gt = enable_flowsim_gt
-        self.enable_remainsize = enable_remainsize
-        logging.info(
-            f"call PathFctSldnSegment. data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn},enable_flowsim_gt={enable_flowsim_gt}, enable_remainsize={enable_remainsize}"
-        )
-
-    def __len__(self):
-        return len(self.data_list)
-
-    def __getitem__(self, idx):
-        spec, src_dst_pair_target, topo_type, segment_id = self.data_list[idx]
-        src_dst_pair_target_str = (
-            "_".join([str(x) for x in src_dst_pair_target]) + f"_seg{segment_id}"
-        )
-
-        # load data
-        dir_input_tmp = f"{self.dir_input}/{spec}"
-
-        n_hosts = int(spec.split("_")[2][6:])
-
-        busy_periods = np.load(
-            f"{dir_input_tmp}/period{topo_type}_t{self.flow_size_threshold}.npy",
-            allow_pickle=True,
-        )
-
-        fid = np.array(busy_periods[segment_id])
-        assert np.all(fid[:-1] <= fid[1:])
-        fid_rank = {fid: rank for rank, fid in enumerate(fid)}
-
-        n_flows = len(fid)
-        n_links = (n_hosts - 1) * 3
-
-        sizes = np.load(f"{dir_input_tmp}/fsize.npy")[fid]
-        fats = np.load(f"{dir_input_tmp}/fat.npy")[fid]
-        fsd = np.load(f"{dir_input_tmp}/fsd.npy")[fid]
-        fcts_flowsim = np.load(f"{dir_input_tmp}/fct_flowsim.npy")[fid]
-
-        # compute propagation delay
-        n_links_passed = abs(fsd[:, 0] - fsd[:, 1]) + 2
-        base_delay = get_base_delay_path(
-            sizes=sizes,
-            n_links_passed=n_links_passed,
-            lr_bottleneck=self.lr,
-        )
-        i_fcts_flowsim = get_base_delay_transmission(sizes, self.lr) + base_delay
-        fcts_flowsim += base_delay
-        sldn_flowsim = np.divide(fcts_flowsim, i_fcts_flowsim)
-
-        if self.enable_flowsim_gt:
-            fcts = fcts_flowsim
-            i_fcts = i_fcts_flowsim
-        else:
-            fcts = np.load(f"{dir_input_tmp}/fct{topo_type}.npy")[fid]
-            i_fcts = np.load(f"{dir_input_tmp}/fct_i{topo_type}.npy")[fid]
-
-        fats = fats - fats[0]
-        fcts_stamp = fats + fcts
-        events = []
-        for i in range(len(fats)):
-            events.append((fats[i], "arrival", fid_rank[fid[i]]))
-            events.append((fcts_stamp[i], "departure", fid_rank[fid[i]]))
-        events.sort(key=lambda x: x[0])
-
-        # Concatenate the arrays
-        flow_active_list = np.zeros((n_flows, 2), dtype=int)
-        time_delta_list = np.zeros((n_flows * 2 - 1, 1), dtype=np.float32)
-        time_last = 0
-        for event_idx, event in enumerate(events):
-            time, event_type, flowid = event
-            if event_type == "arrival":
-                flow_active_list[flowid, 0] = event_idx
-            elif event_type == "departure":
-                flow_active_list[flowid, 1] = event_idx
-            if event_idx != 0:
-                time_delta_list[event_idx - 1] = (time - time_last) / 1000.0
-                time_last = time
-        active_flow_idx_list = [
-            np.logical_and(flow_active_list[:, 0] <= j, flow_active_list[:, 1] > j)
-            for j in range(len(events))
-        ]
-
-        if self.enable_remainsize:
-            busy_periods_remainsize = np.load(
-                f"{dir_input_tmp}/period_remainsize{topo_type}_t{self.flow_size_threshold}.npy",
-                allow_pickle=True,
-            )
-            receivedsize_list = busy_periods_remainsize[segment_id]
-            receivedsize_list = [
-                np.array(receivedsize) for receivedsize in receivedsize_list
-            ]
-            assert (
-                len(receivedsize_list) == 2 * n_flows
-            ), f"len(remain_size): {len(receivedsize_list)}, len(fid): {n_flows}"
-
-            remainsize_tuple = []
-            for idx, receivedsize in enumerate(receivedsize_list):
-                active_flow_idx = active_flow_idx_list[idx]
-                if sum(active_flow_idx) == len(receivedsize):
-                    total_size = sizes[active_flow_idx]
-                    # remain size ratio
-                    remainsize_list = (total_size - receivedsize) / total_size
-                    if not (remainsize_list >= 0).all():
-                        remainsize_tuple.append(torch.tensor([]))
-                    else:
-                        remainsize_tuple.append(torch.tensor(remainsize_list))
-                else:
-                    remainsize_tuple.append(torch.tensor([]))
-        else:
-            remainsize_tuple = None
-
-        output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
-        assert (output_data >= 1.0).all()
-
-        sizes = np.log2(sizes / 1000.0 + 1)
-        if not self.enable_gnn:
-            fats = np.diff(fats)
-            fats = np.insert(fats, 0, 0)
-            fats = fats / 1000.0
-
-        input_data = np.column_stack(
-            (
-                sizes,
-                sldn_flowsim,
-            )
-        ).astype(np.float32)
-
-        # Compute the adjacency matrix for the bipartite graph
-        if self.enable_gnn:
-            edge_index = self.compute_edge_index(n_hosts, fsd)
-            flowid_to_linkid = {k: [] for k in range(n_flows)}
-            for j in range(edge_index.shape[1]):
-                # type_a (flow node) to type_b (link node)
-                flowid_to_linkid[edge_index[0, j]].append(edge_index[1, j])
-            edges_a_to_b_list = []
-            link_active_list = []
-            for event_idx, event in enumerate(events):
-                active_flow_idx = active_flow_idx_list[event_idx]
-                fid_active = np.where(active_flow_idx)[0]
-                link_id_active = set()
-                for flowid in fid_active:
-                    link_id_active.update(flowid_to_linkid[flowid])
-                link_active_list_tmp = list(sorted(link_id_active))
-                link_active_list.append(link_active_list_tmp)
-
-                edges_a_to_b_active = []
-                link_active_index = {
-                    i: idx for idx, i in enumerate(link_active_list_tmp)
-                }
-                for idx, flowid in enumerate(fid_active):
-                    for linkid in flowid_to_linkid[flowid]:
-                        edges_a_to_b_active.append([idx, link_active_index[linkid]])
-                edges_a_to_b_list.append(
-                    torch.tensor(np.array(edges_a_to_b_active).T, dtype=torch.long)
-                )
-        else:
-            edge_index = None
-            edges_a_to_b_list = None
-            link_active_list = None
-
-        return (
-            input_data,
-            output_data,
-            spec + topo_type,
-            src_dst_pair_target_str,
-            remainsize_tuple,
-            flow_active_list,  # (seq_len,2)
-            time_delta_list,  # (seq_len*2-1,1)
-            edges_a_to_b_list,  # (event_idx, 2, num_edges_active)
-            link_active_list,  # (event_idx, num_links_active)
-        )
-
-    def compute_edge_index(self, n_hosts, fsd_flowsim):
-        edge_index = []
-        n_flows = len(fsd_flowsim)
-        for flow_node_idx in range(n_flows):
-            src = fsd_flowsim[flow_node_idx, 0]
-            dst = fsd_flowsim[flow_node_idx, 1]
-            assert src < dst
-
-            edge_index.append([flow_node_idx, src])
-
-            link_node_id_base = n_hosts - 1
-            for link_idx in range(src, dst):
-                edge_index.append([flow_node_idx, link_node_id_base + link_idx])
-
-            edge_index.append([flow_node_idx, link_node_id_base * 2 + dst - 1])
-
-        edge_index = np.array(edge_index).T
-
-        # Sort edge_index by destination node (second row)
-        sorted_indices = np.lexsort((edge_index[0, :], edge_index[1, :]))
-        edge_index = edge_index[:, sorted_indices]
-        return edge_index
 
 
 class TopoFctSldnSegment(Dataset):

@@ -52,13 +52,3 @@ class MyCallback(Callback):
     def training_epoch_end(self, outputs):
         loss_mean = outputs.mean()
         self.log("training_loss_epoch", loss_mean)
-
-    # def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-    # do something with all training_step outputs, for example:
-    # epoch_mean = torch.stack(pl_module.training_step_outputs).mean()
-    # pl_module.log("training_epoch_mean", epoch_mean)
-    # free up the memory
-    # print("clear on_train_batch_end")
-    # pl_module.training_step_outputs.clear()
-    # gc.collect()
-    # torch.cuda.empty_cache()
