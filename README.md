@@ -72,17 +72,6 @@ The pre-trained checkpoints for the full m4 pipeline are available in the `XXX` 
 ### **Replicating Paper Results**
 #### **Section 5.2**
 ```bash
-cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json ns3
-cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json mlsys
-```
-Then, visualize the results using:
-```bash
-jupyter notebook plot_eval.ipynb
-```
-
-#### **Section 5.3**
-```bash
 cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mix spec/0.mix.json ns3
 cargo run --release -- --root=./data --mix spec/1.mix.json ns3
@@ -97,11 +86,22 @@ Then, visualize the results using:
 jupyter notebook plot_eval.ipynb
 ```
 
+#### **Section 5.3**
+```bash
+cd parsimon-eval/expts/fig_8
+cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --NR_FLOWS 20000 ns3
+cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --NR_FLOWS 20000 mlsys
+```
+Then, visualize the results using:
+```bash
+jupyter notebook plot_eval.ipynb
+```
+
 #### **Section 5.4**
 ```bash
 cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json ns3
-cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json mlsys
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --NR_FLOWS 20000 ns3
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --NR_FLOWS 20000 mlsys
 ```
 Then, visualize the results using:
 ```bash
@@ -121,7 +121,7 @@ To train a new model, follow these steps:
    ```
    Example:
    ```bash
-   cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json ns3
+   cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json --NR_FLOWS 2000 ns3
    ```
 
 2. **Train the model**:
