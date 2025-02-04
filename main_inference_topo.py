@@ -524,7 +524,7 @@ def main():
         type=str,
         required=False,
         help="Path to the input data directory",
-        default="/data1/lichenni/projects/per-flow-sim/parsimon-eval/expts/fig_8/",
+        default="./parsimon-eval/expts/fig_8/",
     )
     parser.add_argument(
         "--output",
