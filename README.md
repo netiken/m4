@@ -43,6 +43,7 @@ Ensure you have the following installed:
 1. Set up Python environment:
    ```bash
    conda env create -f environment.yml
+   conda activate m4
    ```
 
 2. Install Rust and Cargo:
