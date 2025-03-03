@@ -1,1 +1,0 @@
-build/flowsim 88/ns3/fat.npy 88/ns3/fsize.npy 88/ns3/topology.txt 88/ns3/flow_to_path.txt 88/ns3/fct_topology_flows_dctcp.npy 88/ns3/fct_i_topology_flows_dctcp.npy 88/ns3/flows_to_links.txt /data1/lichenni/projects/per-flow-sim/config/test_config_lstm_topo_cplusplus.yaml 88/ns3/out.npy
