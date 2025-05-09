@@ -6,18 +6,14 @@ dataset:
   n_hosts_list: [32]
   shard: 0
   shard_list: [0,4000,4000] # [start, end, num]
-  sample_list: [0,1,1] # [start, end, num]
   lr: 10
   train_frac: 0.9
   topo_type: "_topology_flows"
   enable_segmentation: True
-  segments_per_seq: 1
   sampling_method: "balanced" # weighted, uniform, balanced
-  enable_abstime: False
   enable_topo: True
   flow_size_threshold: 100000000
   enable_flowsim_gt: False
-  enable_flowsim_diff: False
   enable_remainsize: True
   enable_queuelen: True
   # current_period_len_idx: 0
@@ -32,7 +28,6 @@ model:
   hidden_size: 200
   gcn_hidden_size: 300
   dropout: 0.2
-  enable_bidirectional: True
   enable_positional_encoding: False
   enable_gnn: True
   enable_lstm: True

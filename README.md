@@ -74,13 +74,13 @@ The pre-trained checkpoints for the full m4 pipeline are available in the `XXX` 
 #### **Section 5.2**
 ```bash
 cd parsimon-eval/expts/fig_7
-cargo run --release -- --root=./data --mix spec/0.mix.json ns3
-cargo run --release -- --root=./data --mix spec/1.mix.json ns3
-cargo run --release -- --root=./data --mix spec/2.mix.json ns3
+cargo run --release -- --root=./data_unison --mix spec/0.mix.json ns3
+cargo run --release -- --root=./data_unison --mix spec/1.mix.json ns3
+cargo run --release -- --root=./data_unison --mix spec/2.mix.json ns3
 
-cargo run --release -- --root=./data --mix spec/0.mix.json mlsys
-cargo run --release -- --root=./data --mix spec/1.mix.json mlsys
-cargo run --release -- --root=./data --mix spec/2.mix.json mlsys
+cargo run --release -- --root=./data_unison --mix spec/0.mix.json mlsys
+cargo run --release -- --root=./data_unison --mix spec/1.mix.json mlsys
+cargo run --release -- --root=./data_unison --mix spec/2.mix.json mlsys
 ```
 Then, visualize the results using:
 ```bash

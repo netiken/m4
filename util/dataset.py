@@ -114,7 +114,6 @@ class DataModulePerFlow(LightningDataModule):
         shard_list,
         n_flows_list,
         n_hosts_list,
-        sample_list,
         batch_size,
         num_workers,
         train_frac,
@@ -127,11 +126,9 @@ class DataModulePerFlow(LightningDataModule):
         enable_positional_encoding=False,
         flow_size_threshold=100000,
         enable_gnn=True,
-        enable_abstime=False,
         enable_flowsim_gt=False,
         enable_remainsize=False,
         enable_queuelen=False,
-        segments_per_seq=200,
         sampling_method="uniform",  # uniform, weighted, balanced
         enable_path=False,
         enable_topo=True,
@@ -155,20 +152,18 @@ class DataModulePerFlow(LightningDataModule):
         self.lr = lr
         self.topo_type = topo_type
         self.enable_segmentation = enable_segmentation
-        self.segments_per_seq = segments_per_seq
         self.sampling_method = sampling_method
         self.enable_path = enable_path
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_gnn = enable_gnn
-        self.enable_abstime = enable_abstime
         self.enable_flowsim_gt = enable_flowsim_gt
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
         self.current_period_len_idx = current_period_len_idx
         self.enable_topo = enable_topo
         logging.info(
-            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, segments_per_seq={segments_per_seq}, sampling_method={sampling_method}, enable_path={enable_path}, enable_topo={enable_topo}"
+            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, sampling_method={sampling_method}, enable_path={enable_path}, enable_topo={enable_topo}"
         )
         data_list = []
         if mode == "train":
@@ -182,81 +177,80 @@ class DataModulePerFlow(LightningDataModule):
                         if enable_topo:
                             topo_type_cur = topo_type
                             spec = f"{shard}/ns3"
-                            for sample in sample_list:
-                                file_suffix = ""
-                                fid = np.load(
-                                    f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+                            file_suffix = ""
+                            fid = np.load(
+                                f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+                            )
+                            if (
+                                len(fid) == len(set(fid))
+                                and np.all(fid[:-1] <= fid[1:])
+                                and len(fid) % n_flows == 0
+                                and os.path.exists(
+                                    f"{dir_input}/{spec}/flowsim_fct.npy"
                                 )
-                                if (
-                                    len(fid) == len(set(fid))
-                                    and np.all(fid[:-1] <= fid[1:])
-                                    and len(fid) % n_flows == 0
-                                    and os.path.exists(
-                                        f"{dir_input}/{spec}/flowsim_fct.npy"
-                                    )
-                                ):
-                                    busy_periods = np.load(
-                                        f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
-                                        allow_pickle=True,
-                                    )
+                            ):
+                                busy_periods = np.load(
+                                    f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
+                                    allow_pickle=True,
+                                )
 
-                                    len_per_period_stats = [
-                                        len(period) for period in busy_periods
+                                len_per_period_stats = [
+                                    len(period) for period in busy_periods
+                                ]
+
+                                remainsize_path = f"{dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy"
+
+                                if os.path.exists(remainsize_path):
+                                    len_per_period_active = np.load(remainsize_path)
+                                else:
+                                    len_per_period_active = len_per_period_stats
+
+                                len_per_period = len_per_period_stats
+
+                                if self.enable_gnn:
+                                    len_per_period = [
+                                        (
+                                            len_per_period[i]
+                                            if len_per_period_active[i] < 150
+                                            else 0
+                                        )
+                                        for i in range(len(len_per_period))
                                     ]
 
-                                    remainsize_path = f"{dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy"
+                                if np.sum(len_per_period) > 0:
+                                    data_list_per_period = [
+                                        (
+                                            spec,
+                                            (0, n_hosts - 1),
+                                            topo_type_cur + file_suffix,
+                                            int(segment_id),
+                                            len_per_period_stats[segment_id],
+                                        )
+                                        for segment_id in range(len(busy_periods))
+                                    ]
+                                    sample_indices = np.arange(len(len_per_period))
 
-                                    if os.path.exists(remainsize_path):
-                                        len_per_period_active = np.load(remainsize_path)
-                                    else:
-                                        len_per_period_active = len_per_period_stats
-
-                                    len_per_period = len_per_period_stats
-
-                                    if self.enable_gnn:
-                                        len_per_period = [
-                                            (
-                                                len_per_period[i]
-                                                if len_per_period_active[i] < 150
-                                                else 0
-                                            )
-                                            for i in range(len(len_per_period))
+                                    len_per_period_all.extend(
+                                        [len_per_period[i] for i in sample_indices]
+                                    )
+                                    len_per_period_stats_all.extend(
+                                        [
+                                            len_per_period_stats[i]
+                                            for i in sample_indices
                                         ]
-
-                                    if np.sum(len_per_period) > 0:
-                                        data_list_per_period = [
-                                            (
-                                                spec,
-                                                (0, n_hosts - 1),
-                                                topo_type_cur + file_suffix,
-                                                int(segment_id),
-                                                len_per_period_stats[segment_id],
-                                            )
-                                            for segment_id in range(len(busy_periods))
+                                    )
+                                    len_per_period_active_all.extend(
+                                        [
+                                            len_per_period_active[i]
+                                            for i in sample_indices
                                         ]
-                                        sample_indices = np.arange(len(len_per_period))
-
-                                        len_per_period_all.extend(
-                                            [len_per_period[i] for i in sample_indices]
-                                        )
-                                        len_per_period_stats_all.extend(
-                                            [
-                                                len_per_period_stats[i]
-                                                for i in sample_indices
-                                            ]
-                                        )
-                                        len_per_period_active_all.extend(
-                                            [
-                                                len_per_period_active[i]
-                                                for i in sample_indices
-                                            ]
-                                        )
-                                        data_list.extend(
-                                            [
-                                                data_list_per_period[i]
-                                                for i in sample_indices
-                                            ]
-                                        )
+                                    )
+                                    data_list.extend(
+                                        [
+                                            data_list_per_period[i]
+                                            for i in sample_indices
+                                        ]
+                                    )
 
             if enable_segmentation:
                 len_per_period_all = np.array(len_per_period_all)
@@ -264,8 +258,6 @@ class DataModulePerFlow(LightningDataModule):
                     len(shard_list)
                     * len(n_flows_list)
                     * len(n_hosts_list)
-                    * len(sample_list)
-                    * segments_per_seq
                 )
                 # Sample indices from the array based on the weights
                 if sampling_method == "uniform":
@@ -362,7 +354,6 @@ class DataModulePerFlow(LightningDataModule):
                     n_hosts_list = [32]
                     n_flows_list = [2000]
 
-                sample_list = [0]
                 if self.enable_segmentation:
                     len_per_period_all = []
                     len_per_period_stats_all = []
@@ -374,87 +365,86 @@ class DataModulePerFlow(LightningDataModule):
                             if self.enable_topo:
                                 topo_type_cur = self.topo_type
                                 spec = f"{shard}/ns3"
-                                for sample in sample_list:
-                                    # statss = np.load(f'{self.dir_input}/{spec}/stats.npy', allow_pickle=True)
-                                    # if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
+                                # statss = np.load(f'{self.dir_input}/{spec}/stats.npy', allow_pickle=True)
+                                # if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
 
-                                    # file_suffix = f"s{sample}_i0"
-                                    file_suffix = ""
-                                    fid = np.load(
-                                        f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+                                # file_suffix = f"s{sample}_i0"
+                                file_suffix = ""
+                                fid = np.load(
+                                    f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+                                )
+                                if (
+                                    len(fid) == len(set(fid))
+                                    and np.all(fid[:-1] <= fid[1:])
+                                    and len(fid) % n_flows == 0
+                                    and os.path.exists(
+                                        f"{self.dir_input}/{spec}/flowsim_fct.npy"
                                     )
-                                    if (
-                                        len(fid) == len(set(fid))
-                                        and np.all(fid[:-1] <= fid[1:])
-                                        and len(fid) % n_flows == 0
-                                        and os.path.exists(
-                                            f"{self.dir_input}/{spec}/flowsim_fct.npy"
-                                        )
-                                    ):
-                                        busy_periods = np.load(
-                                            f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
-                                            allow_pickle=True,
-                                        )
+                                ):
+                                    busy_periods = np.load(
+                                        f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
+                                        allow_pickle=True,
+                                    )
 
-                                        len_per_period_stats = [
-                                            len(period) for period in busy_periods
+                                    len_per_period_stats = [
+                                        len(period) for period in busy_periods
+                                    ]
+
+                                    remainsize_path = f"{self.dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy"
+
+                                    if os.path.exists(remainsize_path):
+                                        len_per_period_active = np.load(
+                                            remainsize_path
+                                        )
+                                    else:
+                                        len_per_period_active = len_per_period_stats
+
+                                    len_per_period = len_per_period_stats
+
+                                    if np.sum(len_per_period) > 0:
+                                        data_list_per_period = [
+                                            (
+                                                spec,
+                                                (0, n_hosts - 1),
+                                                topo_type_cur + file_suffix,
+                                                int(segment_id),
+                                                len_per_period_stats[segment_id],
+                                            )
+                                            for segment_id in range(
+                                                len(busy_periods)
+                                            )
                                         ]
-
-                                        remainsize_path = f"{self.dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy"
-
-                                        if os.path.exists(remainsize_path):
-                                            len_per_period_active = np.load(
-                                                remainsize_path
-                                            )
-                                        else:
-                                            len_per_period_active = len_per_period_stats
-
-                                        len_per_period = len_per_period_stats
-
-                                        if np.sum(len_per_period) > 0:
-                                            data_list_per_period = [
-                                                (
-                                                    spec,
-                                                    (0, n_hosts - 1),
-                                                    topo_type_cur + file_suffix,
-                                                    int(segment_id),
-                                                    len_per_period_stats[segment_id],
-                                                )
-                                                for segment_id in range(
-                                                    len(busy_periods)
-                                                )
-                                            ]
-                                            sample_indices = np.arange(
-                                                len(len_per_period)
-                                            )
-
-                                            len_per_period_all.extend(
-                                                [
-                                                    len_per_period[i]
-                                                    for i in sample_indices
-                                                ]
-                                            )
-                                            len_per_period_stats_all.extend(
-                                                [
-                                                    len_per_period_stats[i]
-                                                    for i in sample_indices
-                                                ]
-                                            )
-                                            len_per_period_active_all.extend(
-                                                [
-                                                    len_per_period_active[i]
-                                                    for i in sample_indices
-                                                ]
-                                            )
-                                            data_list_test.extend(
-                                                [
-                                                    data_list_per_period[i]
-                                                    for i in sample_indices
-                                                ]
-                                            )
-                                        assert len(len_per_period_all) == len(
-                                            data_list_test
+                                        sample_indices = np.arange(
+                                            len(len_per_period)
                                         )
+
+                                        len_per_period_all.extend(
+                                            [
+                                                len_per_period[i]
+                                                for i in sample_indices
+                                            ]
+                                        )
+                                        len_per_period_stats_all.extend(
+                                            [
+                                                len_per_period_stats[i]
+                                                for i in sample_indices
+                                            ]
+                                        )
+                                        len_per_period_active_all.extend(
+                                            [
+                                                len_per_period_active[i]
+                                                for i in sample_indices
+                                            ]
+                                        )
+                                        data_list_test.extend(
+                                            [
+                                                data_list_per_period[i]
+                                                for i in sample_indices
+                                            ]
+                                        )
+                                    assert len(len_per_period_all) == len(
+                                        data_list_test
+                                    )
 
                 if self.enable_segmentation:
                     len_per_period_all = np.array(len_per_period_all)
@@ -596,7 +586,6 @@ class DataModulePerFlow(LightningDataModule):
         enable_positional_encoding = self.enable_positional_encoding
         flow_size_threshold = self.flow_size_threshold
         enable_gnn = self.enable_gnn
-        enable_abstime = self.enable_abstime
         enable_flowsim_gt = self.enable_flowsim_gt
         enable_remainsize = self.enable_remainsize
         enable_queuelen = self.enable_queuelen
