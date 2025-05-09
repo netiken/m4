@@ -41,18 +41,10 @@ if __name__ == "__main__":
     )
     n_flows_list = dataset_config["n_flows_list"]
     n_hosts_list = dataset_config["n_hosts_list"]
-    sample_list_config = dataset_config["sample_list"]
-    sample_list = sorted(
-        np.random.choice(
-            np.arange(sample_list_config[0], sample_list_config[1]),
-            size=sample_list_config[2],
-            replace=False,
-        )
-    )
 
     lr = dataset_config["lr"]
     note_str = f"{args.note}_" if args.note else ""
-    program_name = f"{note_str}shard{len(shard_list)}_nflows{len(n_flows_list)}_nhosts{len(n_hosts_list)}_nsamples{len(sample_list)}_lr{lr}Gbps"
+    program_name = f"{note_str}shard{len(shard_list)}_nflows{len(n_flows_list)}_nhosts{len(n_hosts_list)}_lr{lr}Gbps"
     override_epoch_step_callback = OverrideEpochStepCallback()
     dir_output = args.dir_output
     dir_input = args.dir_input
@@ -90,7 +82,6 @@ if __name__ == "__main__":
             shard_list=shard_list,
             n_flows_list=n_flows_list,
             n_hosts_list=n_hosts_list,
-            sample_list=sample_list,
             batch_size=training_config["batch_size"],
             num_workers=training_config["num_workers"],
             train_frac=dataset_config["train_frac"],
@@ -103,11 +94,9 @@ if __name__ == "__main__":
             ),
             flow_size_threshold=dataset_config.get("flow_size_threshold", False),
             enable_gnn=model_config.get("enable_gnn", False),
-            enable_abstime=dataset_config.get("enable_abstime", False),
             enable_flowsim_gt=dataset_config.get("enable_flowsim_gt", False),
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
-            segments_per_seq=dataset_config.get("segments_per_seq", 200),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
             enable_path=dataset_config.get("enable_path", False),
             enable_topo=dataset_config.get("enable_topo", False),
@@ -185,7 +174,6 @@ if __name__ == "__main__":
                 enable_dist=enable_dist,
                 input_size=model_config["input_size"],
                 output_size=1,
-                enable_bidirectional=model_config.get("enable_bidirectional", False),
                 enable_positional_encoding=model_config.get(
                     "enable_positional_encoding", False
                 ),
@@ -194,7 +182,6 @@ if __name__ == "__main__":
                 current_period_len_idx=current_period_len_idx,
                 enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
                 enable_link_state=model_config.get("enable_link_state", False),
-                enable_flowsim_diff=dataset_config.get("enable_flowsim_diff", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
                 enable_path=dataset_config.get("enable_path", False),
@@ -223,7 +210,6 @@ if __name__ == "__main__":
             shard_list=shard_list,
             n_flows_list=n_flows_list,
             n_hosts_list=n_hosts_list,
-            sample_list=sample_list,
             batch_size=training_config["batch_size"],
             num_workers=training_config["num_workers"],
             train_frac=dataset_config["train_frac"],
@@ -237,11 +223,9 @@ if __name__ == "__main__":
             ),
             flow_size_threshold=dataset_config.get("flow_size_threshold", False),
             enable_gnn=model_config.get("enable_gnn", False),
-            enable_abstime=dataset_config.get("enable_abstime", False),
             enable_flowsim_gt=dataset_config.get("enable_flowsim_gt", False),
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
-            segments_per_seq=dataset_config.get("segments_per_seq", 200),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
             enable_path=dataset_config.get("enable_path", False),
             enable_topo=dataset_config.get("enable_topo", False),
@@ -287,7 +271,6 @@ if __name__ == "__main__":
                 enable_dist=training_config["enable_dist"],
                 input_size=model_config["input_size"],
                 output_size=1,
-                enable_bidirectional=model_config.get("enable_bidirectional", False),
                 enable_positional_encoding=model_config.get(
                     "enable_positional_encoding", False
                 ),
@@ -296,7 +279,6 @@ if __name__ == "__main__":
                 current_period_len_idx=current_period_len_idx,
                 enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
                 enable_link_state=model_config.get("enable_link_state", False),
-                enable_flowsim_diff=dataset_config.get("enable_flowsim_diff", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
                 enable_path=dataset_config.get("enable_path", False),
