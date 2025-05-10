@@ -119,7 +119,6 @@ class DataModulePerFlow(LightningDataModule):
         train_frac,
         dir_output,
         lr,
-        current_period_len_idx,
         topo_type="",
         mode="train",
         enable_segmentation=False,
@@ -160,7 +159,6 @@ class DataModulePerFlow(LightningDataModule):
         self.enable_flowsim_gt = enable_flowsim_gt
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
-        self.current_period_len_idx = current_period_len_idx
         self.enable_topo = enable_topo
         logging.info(
             f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, sampling_method={sampling_method}, enable_path={enable_path}, enable_topo={enable_topo}"
@@ -333,11 +331,9 @@ class DataModulePerFlow(LightningDataModule):
             logging.info(f"#tracks: train-{num_train}, val-{num_val}")
             self.train = self.__create_dataset(
                 self.train_list,
-                current_period_len_idx=self.current_period_len_idx,  # Pass the current flow period
             )
             self.val = self.__create_dataset(
                 self.val_list,
-                current_period_len_idx=self.current_period_len_idx,  # Pass the current flow period
             )
 
             self.__dump_data_list(self.dir_output)
@@ -580,7 +576,6 @@ class DataModulePerFlow(LightningDataModule):
     def __create_dataset(
         self,
         data_list,
-        current_period_len_idx=None,  # Add this to filter by flow period
     ):
         dir_input = self.dir_input
         enable_positional_encoding = self.enable_positional_encoding
