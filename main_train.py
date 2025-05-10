@@ -48,7 +48,6 @@ if __name__ == "__main__":
     override_epoch_step_callback = OverrideEpochStepCallback()
     dir_output = args.dir_output
     dir_input = args.dir_input
-    current_period_len_idx = dataset_config.get("current_period_len_idx", None)
 
     if args.mode == "train":
         tb_logger = TensorBoardLogger(dir_output, name=program_name)
@@ -100,7 +99,6 @@ if __name__ == "__main__":
             sampling_method=dataset_config.get("sampling_method", "uniform"),
             enable_path=dataset_config.get("enable_path", False),
             enable_topo=dataset_config.get("enable_topo", False),
-            current_period_len_idx=current_period_len_idx,
         )
 
         # Init checkpointer
@@ -150,9 +148,6 @@ if __name__ == "__main__":
             # log_every_n_steps=args.n_epochs_every_log,
             log_every_n_steps=10,
             val_check_interval=1.0,
-            # reload_dataloaders_every_n_epochs=(
-            #     1 if current_period_len_idx is not None else 0
-            # ),
             # profiler=SimpleProfiler(),
             # fast_dev_run=args.debug,
             # limit_train_batches=1,
@@ -179,7 +174,6 @@ if __name__ == "__main__":
                 ),
                 enable_gnn=model_config.get("enable_gnn", False),
                 enable_lstm=model_config.get("enable_lstm", False),
-                current_period_len_idx=current_period_len_idx,
                 enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
@@ -229,7 +223,6 @@ if __name__ == "__main__":
             sampling_method=dataset_config.get("sampling_method", "uniform"),
             enable_path=dataset_config.get("enable_path", False),
             enable_topo=dataset_config.get("enable_topo", False),
-            current_period_len_idx=current_period_len_idx,
             mode=args.mode,
             test_on_train=args.test_on_train,
             test_on_empirical=args.test_on_empirical,
@@ -276,7 +269,6 @@ if __name__ == "__main__":
                 ),
                 enable_gnn=model_config.get("enable_gnn", False),
                 enable_lstm=model_config.get("enable_lstm", False),
-                current_period_len_idx=current_period_len_idx,
                 enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),

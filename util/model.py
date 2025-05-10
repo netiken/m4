@@ -82,7 +82,6 @@ class FlowSimLstm(LightningModule):
         enable_val=True,
         output_size=1,
         input_size=2,
-        current_period_len_idx=None,
         enable_positional_encoding=False,
         enable_gnn=False,
         enable_lstm=False,
@@ -103,7 +102,6 @@ class FlowSimLstm(LightningModule):
         self.loss_fn = self._get_loss_fn(loss_fn_type)
         self.enable_gnn = enable_gnn
         self.enable_lstm = enable_lstm
-        self.current_period_len_idx = current_period_len_idx
         self.hidden_size = hidden_size
         self.enable_link_state = enable_link_state
         self.enable_flowsim_diff = enable_flowsim_diff
@@ -133,6 +131,7 @@ class FlowSimLstm(LightningModule):
             self.lstmcell_rate = SeqCell(
                 input_size=hidden_size + lstmcell_rate_extra, hidden_size=hidden_size
             )
+            # self.mlp_rate = nn.Linear(hidden_size + lstmcell_rate_extra, hidden_size)
             self.lstmcell_time = SeqCell(input_size=1, hidden_size=hidden_size)
 
             if self.enable_link_state:
@@ -352,6 +351,7 @@ class FlowSimLstm(LightningModule):
                     batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
                         z_t_tmp, batch_h_state[active_flow_idx, :]
                     )
+                    # batch_h_state[active_flow_idx, :] = self.mlp_rate(z_t_tmp)
                     if self.enable_link_state:
                         batch_h_state_link[active_link_idx, :] = (
                             self.lstmcell_rate_link(
@@ -359,6 +359,7 @@ class FlowSimLstm(LightningModule):
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
+                        # batch_h_state_link[active_link_idx, :] = z_t_tmp_link
 
             input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
             res = self.output_layer(input_tmp)
@@ -488,6 +489,9 @@ class FlowSimLstm(LightningModule):
             for param in self.lstmcell_rate.parameters():
                 if param.grad is not None:
                     lstm_norms.append(param.grad.norm().item())
+            # for param in self.mlp_rate.parameters():
+            #     if param.grad is not None:
+            #         lstm_norms.append(param.grad.norm().item())
             for param in self.lstmcell_time.parameters():
                 if param.grad is not None:
                     lstm_norms.append(param.grad.norm().item())
@@ -505,9 +509,9 @@ class FlowSimLstm(LightningModule):
                 )
             if self.enable_link_state:
                 lstm_norms_link = []
-                for param in self.lstmcell_rate_link.parameters():
-                    if param.grad is not None:
-                        lstm_norms_link.append(param.grad.norm().item())
+                # for param in self.lstmcell_rate_link.parameters():
+                #     if param.grad is not None:
+                #         lstm_norms_link.append(param.grad.norm().item())
                 for param in self.lstmcell_time_link.parameters():
                     if param.grad is not None:
                         lstm_norms_link.append(param.grad.norm().item())
@@ -542,13 +546,14 @@ class FlowSimLstm(LightningModule):
         if self.enable_lstm and self.enable_gnn:
             parameters = (
                 list(self.lstmcell_rate.parameters())
+                # list(self.mlp_rate.parameters())
                 + list(self.lstmcell_time.parameters())
                 + list(self.output_layer.parameters())
             )
             for gcn_layer in self.gcn_layers:
                 parameters += list(gcn_layer.parameters())
             if self.enable_link_state:
-                parameters += list(self.lstmcell_rate_link.parameters())
+                # parameters += list(self.lstmcell_rate_link.parameters())
                 parameters += list(self.lstmcell_time_link.parameters())
             if self.enable_remainsize:
                 parameters += list(self.remain_size_layer.parameters())
