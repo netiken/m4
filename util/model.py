@@ -509,9 +509,9 @@ class FlowSimLstm(LightningModule):
                 )
             if self.enable_link_state:
                 lstm_norms_link = []
-                # for param in self.lstmcell_rate_link.parameters():
-                #     if param.grad is not None:
-                #         lstm_norms_link.append(param.grad.norm().item())
+                for param in self.lstmcell_rate_link.parameters():
+                    if param.grad is not None:
+                        lstm_norms_link.append(param.grad.norm().item())
                 for param in self.lstmcell_time_link.parameters():
                     if param.grad is not None:
                         lstm_norms_link.append(param.grad.norm().item())
@@ -553,7 +553,7 @@ class FlowSimLstm(LightningModule):
             for gcn_layer in self.gcn_layers:
                 parameters += list(gcn_layer.parameters())
             if self.enable_link_state:
-                # parameters += list(self.lstmcell_rate_link.parameters())
+                parameters += list(self.lstmcell_rate_link.parameters())
                 parameters += list(self.lstmcell_time_link.parameters())
             if self.enable_remainsize:
                 parameters += list(self.remain_size_layer.parameters())
