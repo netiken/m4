@@ -125,7 +125,11 @@ class FlowSimLstm(LightningModule):
                     input_size=hidden_size, hidden_size=hidden_size
                 )
                 self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
+        else:
+            self.mlp_rate = nn.Linear(hidden_size + param_extra, hidden_size)
+            
         if enable_gnn:
+            logging.info(f"GNN enabled")
             self.gcn_layers = nn.ModuleList(
                 [
                     HomoGNNLayer(
@@ -136,11 +140,11 @@ class FlowSimLstm(LightningModule):
                     for i in range(gcn_n_layer)
                 ]
             )
-            if not self.enable_lstm:
-                self.mlp_rate = nn.Linear(hidden_size + param_extra, hidden_size)
+        if not enable_gnn and not enable_lstm:
+            raise ValueError("No model enabled")
             
         self.output_layer = nn.Sequential(
-            nn.Linear(hidden_size + param_extra+1, hidden_size),  # First layer
+            nn.Linear(hidden_size + param_extra + 1, hidden_size),  # First layer
             nn.ReLU(),  # Non-linearity
             nn.Dropout(p=dropout),
             nn.Linear(hidden_size, output_size),  # Second layer
@@ -164,7 +168,7 @@ class FlowSimLstm(LightningModule):
         self.save_dir = save_dir
         self.loss_average = loss_average
         logging.info(
-            f"Call FlowSimLstm. model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}"
+            f"Call model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}"
         )
         self.rtt = 0
 
@@ -214,6 +218,7 @@ class FlowSimLstm(LightningModule):
                 res_size_est = []
                 res_size_gt = []
                 res_size_flowidx = []
+                
         if self.enable_queuelen:
             loss_queue = torch.zeros(
                 (batch_size * self.n_links, 1), device=x.device
@@ -289,6 +294,7 @@ class FlowSimLstm(LightningModule):
                         res_size_flowidx.extend(
                             active_flow_idx.cpu().numpy().tolist()
                         )
+                        
                 if self.enable_queuelen:
                     queue_link_idx = queuelen_link_matrix[j]
                     if len(queue_link_idx) > 0:
@@ -332,6 +338,7 @@ class FlowSimLstm(LightningModule):
                     ],
                     dim=0,
                 )
+                
                 if self.enable_gnn:
                     edge_index_b_to_a = torch.stack(
                         [edge_index_a_to_b[1], edge_index_a_to_b[0]], dim=0
@@ -347,12 +354,14 @@ class FlowSimLstm(LightningModule):
                 z_t_tmp_link = x_combined[n_flows_active:]
 
                 z_t_tmp = torch.cat([z_t_tmp, x[active_flow_idx, 3:]], dim=1)
+                
                 if self.enable_lstm:
                     batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
                         z_t_tmp, batch_h_state[active_flow_idx, :]
                     )
                 else:
                     batch_h_state[active_flow_idx, :] = self.mlp_rate(z_t_tmp)
+                    
                 if self.enable_link_state:
                     if self.enable_lstm:
                         batch_h_state_link[active_link_idx, :] = (
@@ -366,6 +375,7 @@ class FlowSimLstm(LightningModule):
 
         input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
         res = self.output_layer(input_tmp)
+        
         if self.enable_remainsize:
             size_info = x[:, 0].cpu().detach().numpy()
 
@@ -554,6 +564,7 @@ class FlowSimLstm(LightningModule):
             
         else:
             parameters += list(self.mlp_rate.parameters())
+            
         if self.enable_gnn:
             for gcn_layer in self.gcn_layers:
                 parameters += list(gcn_layer.parameters())
