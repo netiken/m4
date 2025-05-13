@@ -111,14 +111,13 @@ class FlowSimLstm(LightningModule):
         logging.info(
             f"enable_link_state={enable_link_state}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
         )
-        lstmcell_rate_extra = 13
+        param_extra = 13
         if enable_lstm:
             logging.info(f"Seq Model enabled")
             
             self.lstmcell_rate = SeqCell(
-                input_size=hidden_size + lstmcell_rate_extra, hidden_size=hidden_size
+                input_size=hidden_size + param_extra, hidden_size=hidden_size
             )
-            # self.mlp_rate = nn.Linear(hidden_size + lstmcell_rate_extra, hidden_size)
             self.lstmcell_time = SeqCell(input_size=1, hidden_size=hidden_size)
 
             if self.enable_link_state:
@@ -138,11 +137,10 @@ class FlowSimLstm(LightningModule):
                 ]
             )
             if not self.enable_lstm:
-                self.mlp_rate = nn.Linear(hidden_size + lstmcell_rate_extra, hidden_size)
+                self.mlp_rate = nn.Linear(hidden_size + param_extra, hidden_size)
             
-        dim_flowsim = 14
         self.output_layer = nn.Sequential(
-            nn.Linear(hidden_size + dim_flowsim, hidden_size),  # First layer
+            nn.Linear(hidden_size + param_extra+1, hidden_size),  # First layer
             nn.ReLU(),  # Non-linearity
             nn.Dropout(p=dropout),
             nn.Linear(hidden_size, output_size),  # Second layer
@@ -194,64 +192,65 @@ class FlowSimLstm(LightningModule):
         res_size = None
         res_queue = None
         size_info = None
-        if self.enable_gnn and self.enable_lstm:
-            batch_size, n_events, _ = time_delta_matrix.size()
-            n_flows = x.shape[0]
-            batch_h_state = torch.zeros((n_flows, self.hidden_size), device=x.device)
+        
+        batch_size, n_events, _ = time_delta_matrix.size()
+        n_flows = x.shape[0]
+        batch_h_state = torch.zeros((n_flows, self.hidden_size), device=x.device)
 
-            batch_h_state[:, 0] = 1.0
-            batch_h_state[:, 2] = x[:, 0]  # remain size
-            batch_h_state[:, 3] = x[:, 2]  # # of links
+        batch_h_state[:, 0] = 1.0
+        batch_h_state[:, 2] = x[:, 0]  # remain size
+        batch_h_state[:, 3] = x[:, 2]  # # of links
 
-            batch_h_state_link = torch.zeros(
-                (batch_size * self.n_links, self.hidden_size), device=x.device
+        batch_h_state_link = torch.zeros(
+            (batch_size * self.n_links, self.hidden_size), device=x.device
+        )
+        batch_h_state_link[:, 1] = 1.0
+        batch_h_state_link[:, 2] = 1.0  # const for link bandwidth
+
+        if self.enable_remainsize:
+            loss_size = torch.zeros((n_flows, 1), device=x.device)
+            loss_size_num = torch.ones_like(loss_size)
+            if enable_test:
+                res_size_est = []
+                res_size_gt = []
+                res_size_flowidx = []
+        if self.enable_queuelen:
+            loss_queue = torch.zeros(
+                (batch_size * self.n_links, 1), device=x.device
             )
-            batch_h_state_link[:, 1] = 1.0
-            batch_h_state_link[:, 2] = 1.0  # const for link bandwidth
+            loss_queue_num = torch.ones_like(loss_queue)
+            if enable_test:
+                res_queue_est = []
+                res_queue_gt = []
+                res_queue_linkidx = []
 
-            if self.enable_remainsize:
-                loss_size = torch.zeros((n_flows, 1), device=x.device)
-                loss_size_num = torch.ones_like(loss_size)
-                if enable_test:
-                    res_size_est = []
-                    res_size_gt = []
-                    res_size_flowidx = []
-            if self.enable_queuelen:
-                loss_queue = torch.zeros(
-                    (batch_size * self.n_links, 1), device=x.device
+        flow_start = flow_active_matrix[:, 0].unsqueeze(1)  # (n_flows, 1)
+        flow_end = flow_active_matrix[:, 1].unsqueeze(1)  # (n_flows, 1)
+        event_indices = torch.arange(n_events, device=x.device).unsqueeze(
+            0
+        )  # (1, n_events)
+
+        # Compute activity mask for all flows and events at once
+        flow_activity_mask = (flow_start <= event_indices) & (
+            flow_end > event_indices
+        )  # (n_flows, n_events)
+
+        time_deltas_full = time_delta_matrix[batch_index, :]  # (n_flows, n_events)
+        time_deltas_full_link = time_delta_matrix[batch_index_link, :]
+        for j in range(n_events):
+            active_flow_mask = flow_activity_mask[:, j]  # (n_flows,)
+            if active_flow_mask.any():
+                active_flow_idx = torch.where(active_flow_mask)[0]
+
+                edge_mask = active_flow_mask[edges_a_to_b[0]]
+                edge_index_a_to_b = edges_a_to_b[:, edge_mask]
+                active_link_idx, new_link_indices = torch.unique(
+                    edge_index_a_to_b[1],
+                    return_inverse=True,
+                    sorted=False,
                 )
-                loss_queue_num = torch.ones_like(loss_queue)
-                if enable_test:
-                    res_queue_est = []
-                    res_queue_gt = []
-                    res_queue_linkidx = []
 
-            flow_start = flow_active_matrix[:, 0].unsqueeze(1)  # (n_flows, 1)
-            flow_end = flow_active_matrix[:, 1].unsqueeze(1)  # (n_flows, 1)
-            event_indices = torch.arange(n_events, device=x.device).unsqueeze(
-                0
-            )  # (1, n_events)
-
-            # Compute activity mask for all flows and events at once
-            flow_activity_mask = (flow_start <= event_indices) & (
-                flow_end > event_indices
-            )  # (n_flows, n_events)
-
-            time_deltas_full = time_delta_matrix[batch_index, :]  # (n_flows, n_events)
-            time_deltas_full_link = time_delta_matrix[batch_index_link, :]
-            for j in range(n_events):
-                active_flow_mask = flow_activity_mask[:, j]  # (n_flows,)
-                if active_flow_mask.any():
-                    active_flow_idx = torch.where(active_flow_mask)[0]
-
-                    edge_mask = active_flow_mask[edges_a_to_b[0]]
-                    edge_index_a_to_b = edges_a_to_b[:, edge_mask]
-                    active_link_idx, new_link_indices = torch.unique(
-                        edge_index_a_to_b[1],
-                        return_inverse=True,
-                        sorted=False,
-                    )
-
+                if self.enable_lstm:
                     time_deltas = time_deltas_full[active_flow_idx, j]
 
                     if (time_deltas > self.rtt).all():
@@ -267,74 +266,73 @@ class FlowSimLstm(LightningModule):
                                 )
                             )
 
-                    if self.enable_remainsize and len(remainsize_matrix[j]) == len(
-                        active_flow_idx
-                    ):
-                        remain_size_est = self.remain_size_layer(
-                            batch_h_state[active_flow_idx, :]
+                if self.enable_remainsize and len(remainsize_matrix[j]) == len(
+                    active_flow_idx
+                ):
+                    remain_size_est = self.remain_size_layer(
+                        batch_h_state[active_flow_idx, :]
+                    )[:, 0]
+
+                    remain_size_gt = remainsize_matrix[j]
+
+                    loss_size[active_flow_idx, 0] += torch.abs(
+                        remain_size_est - remain_size_gt
+                    )
+                    loss_size_num[active_flow_idx, 0] += 1
+                    if enable_test:
+                        res_size_est.extend(
+                            remain_size_est.cpu().detach().numpy().tolist()
+                        )
+                        res_size_gt.extend(
+                            remain_size_gt.cpu().detach().numpy().tolist()
+                        )
+                        res_size_flowidx.extend(
+                            active_flow_idx.cpu().numpy().tolist()
+                        )
+                if self.enable_queuelen:
+                    queue_link_idx = queuelen_link_matrix[j]
+                    if len(queue_link_idx) > 0:
+                        queue_len_est = self.queue_len_layer(
+                            batch_h_state_link[queue_link_idx, :]
                         )[:, 0]
 
-                        remain_size_gt = remainsize_matrix[j]
-
-                        loss_size[active_flow_idx, 0] += torch.abs(
-                            remain_size_est - remain_size_gt
-                        )
-                        loss_size_num[active_flow_idx, 0] += 1
-                        if enable_test:
-                            res_size_est.extend(
-                                remain_size_est.cpu().detach().numpy().tolist()
+                        queue_len_gt = queuelen_matrix[j]
+                        if (
+                            len(queue_len_gt)
+                            == len(queue_len_est)
+                            == len(queue_link_idx)
+                        ):
+                            loss_queue[queue_link_idx, 0] += torch.abs(
+                                queue_len_est - queue_len_gt
                             )
-                            res_size_gt.extend(
-                                remain_size_gt.cpu().detach().numpy().tolist()
-                            )
-                            res_size_flowidx.extend(
-                                active_flow_idx.cpu().numpy().tolist()
-                            )
-                    if self.enable_queuelen:
-                        queue_link_idx = queuelen_link_matrix[j]
-                        if len(queue_link_idx) > 0:
-                            queue_len_est = self.queue_len_layer(
-                                batch_h_state_link[queue_link_idx, :]
-                            )[:, 0]
-
-                            queue_len_gt = queuelen_matrix[j]
-                            if (
-                                len(queue_len_gt)
-                                == len(queue_len_est)
-                                == len(queue_link_idx)
-                            ):
-                                loss_queue[queue_link_idx, 0] += torch.abs(
-                                    queue_len_est - queue_len_gt
+                            loss_queue_num[queue_link_idx, 0] += 1
+                            if enable_test:
+                                res_queue_est.extend(
+                                    queue_len_est.cpu().detach().numpy().tolist()
                                 )
-                                loss_queue_num[queue_link_idx, 0] += 1
-                                if enable_test:
-                                    res_queue_est.extend(
-                                        queue_len_est.cpu().detach().numpy().tolist()
-                                    )
-                                    res_queue_gt.extend(
-                                        queue_len_gt.cpu().detach().numpy().tolist()
-                                    )
-                                    res_queue_linkidx.extend(
-                                        queue_link_idx.cpu().numpy().tolist()
-                                    )
+                                res_queue_gt.extend(
+                                    queue_len_gt.cpu().detach().numpy().tolist()
+                                )
+                                res_queue_linkidx.extend(
+                                    queue_link_idx.cpu().numpy().tolist()
+                                )
+                n_flows_active = active_flow_idx.size(0)
+                new_flow_indices = torch.searchsorted(
+                    active_flow_idx, edge_index_a_to_b[0]
+                )
+                new_link_indices += n_flows_active
+                edge_index_a_to_b = torch.stack(
+                    [new_flow_indices, new_link_indices], dim=0
+                )
 
-                    n_flows_active = active_flow_idx.size(0)
-                    new_flow_indices = torch.searchsorted(
-                        active_flow_idx, edge_index_a_to_b[0]
-                    )
-                    new_link_indices += n_flows_active
-                    edge_index_a_to_b = torch.stack(
-                        [new_flow_indices, new_link_indices], dim=0
-                    )
-
-                    x_combined = torch.cat(
-                        [
-                            batch_h_state[active_flow_idx],
-                            batch_h_state_link[active_link_idx],
-                        ],
-                        dim=0,
-                    )
-
+                x_combined = torch.cat(
+                    [
+                        batch_h_state[active_flow_idx],
+                        batch_h_state_link[active_link_idx],
+                    ],
+                    dim=0,
+                )
+                if self.enable_gnn:
                     edge_index_b_to_a = torch.stack(
                         [edge_index_a_to_b[1], edge_index_a_to_b[0]], dim=0
                     )
@@ -345,27 +343,31 @@ class FlowSimLstm(LightningModule):
                     for gcn in self.gcn_layers:
                         x_combined = gcn(x_combined, edge_index)
 
-                    z_t_tmp = x_combined[:n_flows_active]
-                    z_t_tmp_link = x_combined[n_flows_active:]
+                z_t_tmp = x_combined[:n_flows_active]
+                z_t_tmp_link = x_combined[n_flows_active:]
 
-                    z_t_tmp = torch.cat([z_t_tmp, x[active_flow_idx, 3:]], dim=1)
+                z_t_tmp = torch.cat([z_t_tmp, x[active_flow_idx, 3:]], dim=1)
+                if self.enable_lstm:
                     batch_h_state[active_flow_idx, :] = self.lstmcell_rate(
                         z_t_tmp, batch_h_state[active_flow_idx, :]
                     )
-                    # batch_h_state[active_flow_idx, :] = self.mlp_rate(z_t_tmp)
-                    if self.enable_link_state:
+                else:
+                    batch_h_state[active_flow_idx, :] = self.mlp_rate(z_t_tmp)
+                if self.enable_link_state:
+                    if self.enable_lstm:
                         batch_h_state_link[active_link_idx, :] = (
                             self.lstmcell_rate_link(
                                 z_t_tmp_link,
                                 batch_h_state_link[active_link_idx, :],
                             )
                         )
-                        # batch_h_state_link[active_link_idx, :] = z_t_tmp_link
+                    else:
+                        batch_h_state_link[active_link_idx, :] = z_t_tmp_link
 
-            input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
-            res = self.output_layer(input_tmp)
-            if self.enable_remainsize:
-                size_info = x[:, 0].cpu().detach().numpy()
+        input_tmp = torch.cat([x[:, 2:], batch_h_state], dim=1)
+        res = self.output_layer(input_tmp)
+        if self.enable_remainsize:
+            size_info = x[:, 0].cpu().detach().numpy()
 
         if self.enable_remainsize and enable_test:
             res_size = np.array([res_size_est, res_size_gt, res_size_flowidx])
@@ -490,9 +492,7 @@ class FlowSimLstm(LightningModule):
             for param in self.lstmcell_rate.parameters():
                 if param.grad is not None:
                     lstm_norms.append(param.grad.norm().item())
-            # for param in self.mlp_rate.parameters():
-            #     if param.grad is not None:
-            #         lstm_norms.append(param.grad.norm().item())
+            
             for param in self.lstmcell_time.parameters():
                 if param.grad is not None:
                     lstm_norms.append(param.grad.norm().item())
@@ -544,29 +544,25 @@ class FlowSimLstm(LightningModule):
         return self.step(batch, batch_idx, tag="test")
 
     def configure_optimizers(self):
-        if self.enable_lstm and self.enable_gnn:
-            parameters = (
-                list(self.lstmcell_rate.parameters())
-                # list(self.mlp_rate.parameters())
-                + list(self.lstmcell_time.parameters())
-                + list(self.output_layer.parameters())
-            )
-            for gcn_layer in self.gcn_layers:
-                parameters += list(gcn_layer.parameters())
+        parameters = []
+        if self.enable_lstm:
+            parameters += list(self.lstmcell_rate.parameters())
+            parameters += list(self.lstmcell_time.parameters())
             if self.enable_link_state:
                 parameters += list(self.lstmcell_rate_link.parameters())
                 parameters += list(self.lstmcell_time_link.parameters())
-            if self.enable_remainsize:
-                parameters += list(self.remain_size_layer.parameters())
-            if self.enable_queuelen:
-                parameters += list(self.queue_len_layer.parameters())
+            
         else:
-            parameters = []
-            if self.enable_lstm:
-                parameters = list(self.model_lstm.parameters())
-            if self.enable_gnn:
-                for gcn_layer in self.gcn_layers:
-                    parameters += list(gcn_layer.parameters())
+            parameters += list(self.mlp_rate.parameters())
+        if self.enable_gnn:
+            for gcn_layer in self.gcn_layers:
+                parameters += list(gcn_layer.parameters())
+                    
+        parameters += list(self.output_layer.parameters())
+        if self.enable_remainsize:
+            parameters += list(self.remain_size_layer.parameters())
+        if self.enable_queuelen:
+            parameters += list(self.queue_len_layer.parameters())
         optimizer = torch.optim.Adam(parameters, lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, mode="min", factor=0.2, patience=5, min_lr=1e-6
