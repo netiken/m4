@@ -86,11 +86,9 @@ class FlowSimLstm(LightningModule):
         enable_gnn=False,
         enable_lstm=False,
         enable_link_state=False,
-        enable_flowsim_diff=False,
         enable_remainsize=False,
         enable_queuelen=False,
         enable_log_norm=True,
-        enable_path=False,
         enable_topo=False,
         loss_average="perflow",  # perflow, perperiod
         save_dir=None,
@@ -103,7 +101,6 @@ class FlowSimLstm(LightningModule):
         self.enable_lstm = enable_lstm
         self.hidden_size = hidden_size
         self.enable_link_state = enable_link_state
-        self.enable_flowsim_diff = enable_flowsim_diff
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
         self.enable_log_norm = enable_log_norm
@@ -111,22 +108,13 @@ class FlowSimLstm(LightningModule):
         self.loss_efficiency_queue = 0.005
         if enable_topo:
             self.n_links = 96
-        if enable_lstm and enable_gnn:
-            logging.info(
-                f"GNN and LSTM enabled, enable_link_state={enable_link_state}, enable_flowsim_diff={enable_flowsim_diff}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
-            )
-
-            self.gcn_layers = nn.ModuleList(
-                [
-                    HomoGNNLayer(
-                        c_in=hidden_size if i == 0 else gcn_hidden_size,
-                        c_out=hidden_size if i == gcn_n_layer - 1 else gcn_hidden_size,
-                        dropout=dropout,
-                    )
-                    for i in range(gcn_n_layer)
-                ]
-            )
-            lstmcell_rate_extra = 13
+        logging.info(
+            f"enable_link_state={enable_link_state}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
+        )
+        lstmcell_rate_extra = 13
+        if enable_lstm:
+            logging.info(f"Seq Model enabled")
+            
             self.lstmcell_rate = SeqCell(
                 input_size=hidden_size + lstmcell_rate_extra, hidden_size=hidden_size
             )
@@ -138,27 +126,41 @@ class FlowSimLstm(LightningModule):
                     input_size=hidden_size, hidden_size=hidden_size
                 )
                 self.lstmcell_time_link = SeqCell(input_size=1, hidden_size=hidden_size)
-            dim_flowsim = 16 if self.enable_flowsim_diff else 14
-            self.output_layer = nn.Sequential(
-                nn.Linear(hidden_size + dim_flowsim, hidden_size),  # First layer
+        if enable_gnn:
+            self.gcn_layers = nn.ModuleList(
+                [
+                    HomoGNNLayer(
+                        c_in=hidden_size if i == 0 else gcn_hidden_size,
+                        c_out=hidden_size if i == gcn_n_layer - 1 else gcn_hidden_size,
+                        dropout=dropout,
+                    )
+                    for i in range(gcn_n_layer)
+                ]
+            )
+            if not self.enable_lstm:
+                self.mlp_rate = nn.Linear(hidden_size + lstmcell_rate_extra, hidden_size)
+            
+        dim_flowsim = 14
+        self.output_layer = nn.Sequential(
+            nn.Linear(hidden_size + dim_flowsim, hidden_size),  # First layer
+            nn.ReLU(),  # Non-linearity
+            nn.Dropout(p=dropout),
+            nn.Linear(hidden_size, output_size),  # Second layer
+        )
+        if self.enable_remainsize:
+            self.remain_size_layer = nn.Sequential(
+                nn.Linear(hidden_size, hidden_size),  # First layer
                 nn.ReLU(),  # Non-linearity
                 nn.Dropout(p=dropout),
-                nn.Linear(hidden_size, output_size),  # Second layer
+                nn.Linear(hidden_size, 1),  # Second layer
             )
-            if self.enable_remainsize:
-                self.remain_size_layer = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size),  # First layer
-                    nn.ReLU(),  # Non-linearity
-                    nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size, 1),  # Second layer
-                )
-            if self.enable_queuelen:
-                self.queue_len_layer = nn.Sequential(
-                    nn.Linear(hidden_size, hidden_size),  # First layer
-                    nn.ReLU(),  # Non-linearity
-                    nn.Dropout(p=dropout),
-                    nn.Linear(hidden_size, 1),  # Second layer
-                )
+        if self.enable_queuelen:
+            self.queue_len_layer = nn.Sequential(
+                nn.Linear(hidden_size, hidden_size),  # First layer
+                nn.ReLU(),  # Non-linearity
+                nn.Dropout(p=dropout),
+                nn.Linear(hidden_size, 1),  # Second layer
+            )
         self.enable_dist = enable_dist
         self.enable_val = enable_val
         self.save_dir = save_dir

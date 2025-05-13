@@ -96,7 +96,6 @@ if __name__ == "__main__":
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
-            enable_path=dataset_config.get("enable_path", False),
             enable_topo=dataset_config.get("enable_topo", False),
         )
 
@@ -176,7 +175,6 @@ if __name__ == "__main__":
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
-                enable_path=dataset_config.get("enable_path", False),
                 enable_topo=dataset_config.get("enable_topo", False),
                 loss_average=(
                     "perperiod"
@@ -218,7 +216,6 @@ if __name__ == "__main__":
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
-            enable_path=dataset_config.get("enable_path", False),
             enable_topo=dataset_config.get("enable_topo", False),
             mode=args.mode,
             test_on_train=args.test_on_train,
@@ -269,7 +266,6 @@ if __name__ == "__main__":
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
-                enable_path=dataset_config.get("enable_path", False),
                 enable_topo=dataset_config.get("enable_topo", False),
                 loss_average=(
                     "perperiod"

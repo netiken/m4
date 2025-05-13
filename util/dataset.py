@@ -128,7 +128,6 @@ class DataModulePerFlow(LightningDataModule):
         enable_remainsize=False,
         enable_queuelen=False,
         sampling_method="uniform",  # uniform, weighted, balanced
-        enable_path=False,
         enable_topo=True,
         test_on_train=False,
         test_on_empirical=False,
@@ -151,7 +150,6 @@ class DataModulePerFlow(LightningDataModule):
         self.topo_type = topo_type
         self.enable_segmentation = enable_segmentation
         self.sampling_method = sampling_method
-        self.enable_path = enable_path
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_flowsim_gt = enable_flowsim_gt
@@ -159,7 +157,7 @@ class DataModulePerFlow(LightningDataModule):
         self.enable_queuelen = enable_queuelen
         self.enable_topo = enable_topo
         logging.info(
-            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, sampling_method={sampling_method}, enable_path={enable_path}, enable_topo={enable_topo}"
+            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, sampling_method={sampling_method}, enable_topo={enable_topo}"
         )
         data_list = []
         if mode == "train":
