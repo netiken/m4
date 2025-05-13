@@ -106,12 +106,13 @@ def plot_cdf(
                 linewidth=2,
             )
 
-    legend_properties = {"size": legend_font}
-    plt.legend(
-        prop=legend_properties,
-        frameon=False,
-        loc=loc,
-    )
+    if len(linelabels) > 0:
+        legend_properties = {"size": legend_font}
+        plt.legend(
+            prop=legend_properties,
+            frameon=False,
+            loc=loc,
+        )
 
     plt.ylim((ylim_low, 100))
     if xlim_bottom:
@@ -302,13 +303,14 @@ def plot_lines(
                 linewidth=linewidth,
             )
 
-    legend_properties = {"size": legend_font}
-    plt.legend(
-        prop=legend_properties,
-        frameon=False,
-        loc=loc,
-        ncol=legend_cols,
-    )
+    if len(linelabels) > 0:
+        legend_properties = {"size": legend_font}
+        plt.legend(
+            prop=legend_properties,
+            frameon=False,
+            loc=loc,
+            ncol=legend_cols,
+        )
 
     if ylim:
         plt.ylim(top=ylim)
