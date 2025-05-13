@@ -92,7 +92,6 @@ if __name__ == "__main__":
                 "enable_positional_encoding", False
             ),
             flow_size_threshold=dataset_config.get("flow_size_threshold", False),
-            enable_gnn=model_config.get("enable_gnn", False),
             enable_flowsim_gt=dataset_config.get("enable_flowsim_gt", False),
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
@@ -174,7 +173,6 @@ if __name__ == "__main__":
                 ),
                 enable_gnn=model_config.get("enable_gnn", False),
                 enable_lstm=model_config.get("enable_lstm", False),
-                enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
@@ -216,7 +214,6 @@ if __name__ == "__main__":
                 "enable_positional_encoding", False
             ),
             flow_size_threshold=dataset_config.get("flow_size_threshold", False),
-            enable_gnn=model_config.get("enable_gnn", False),
             enable_flowsim_gt=dataset_config.get("enable_flowsim_gt", False),
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
@@ -269,7 +266,6 @@ if __name__ == "__main__":
                 ),
                 enable_gnn=model_config.get("enable_gnn", False),
                 enable_lstm=model_config.get("enable_lstm", False),
-                enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),

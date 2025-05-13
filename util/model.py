@@ -85,7 +85,6 @@ class FlowSimLstm(LightningModule):
         enable_positional_encoding=False,
         enable_gnn=False,
         enable_lstm=False,
-        enable_lstm_in_gnn=False,
         enable_link_state=False,
         enable_flowsim_diff=False,
         enable_remainsize=False,
@@ -114,7 +113,7 @@ class FlowSimLstm(LightningModule):
             self.n_links = 96
         if enable_lstm and enable_gnn:
             logging.info(
-                f"GNN and LSTM enabled, enable_lstm_in_gnn={enable_lstm_in_gnn}, enable_link_state={enable_link_state}, enable_flowsim_diff={enable_flowsim_diff}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
+                f"GNN and LSTM enabled, enable_link_state={enable_link_state}, enable_flowsim_diff={enable_flowsim_diff}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
             )
 
             self.gcn_layers = nn.ModuleList(

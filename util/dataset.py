@@ -124,7 +124,6 @@ class DataModulePerFlow(LightningDataModule):
         enable_segmentation=False,
         enable_positional_encoding=False,
         flow_size_threshold=100000,
-        enable_gnn=True,
         enable_flowsim_gt=False,
         enable_remainsize=False,
         enable_queuelen=False,
@@ -155,7 +154,6 @@ class DataModulePerFlow(LightningDataModule):
         self.enable_path = enable_path
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
-        self.enable_gnn = enable_gnn
         self.enable_flowsim_gt = enable_flowsim_gt
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
@@ -205,15 +203,14 @@ class DataModulePerFlow(LightningDataModule):
 
                                 len_per_period = len_per_period_stats
 
-                                if self.enable_gnn:
-                                    len_per_period = [
-                                        (
-                                            len_per_period[i]
-                                            if len_per_period_active[i] < 150
-                                            else 0
-                                        )
-                                        for i in range(len(len_per_period))
-                                    ]
+                                len_per_period = [
+                                    (
+                                        len_per_period[i]
+                                        if len_per_period_active[i] < 150
+                                        else 0
+                                    )
+                                    for i in range(len(len_per_period))
+                                ]
 
                                 if np.sum(len_per_period) > 0:
                                     data_list_per_period = [
@@ -580,7 +577,6 @@ class DataModulePerFlow(LightningDataModule):
         dir_input = self.dir_input
         enable_positional_encoding = self.enable_positional_encoding
         flow_size_threshold = self.flow_size_threshold
-        enable_gnn = self.enable_gnn
         enable_flowsim_gt = self.enable_flowsim_gt
         enable_remainsize = self.enable_remainsize
         enable_queuelen = self.enable_queuelen
@@ -595,7 +591,6 @@ class DataModulePerFlow(LightningDataModule):
                     dir_input,
                     enable_positional_encoding,
                     flow_size_threshold,
-                    enable_gnn,
                     enable_flowsim_gt,
                     enable_remainsize=enable_remainsize,
                     enable_queuelen=enable_queuelen,
@@ -622,7 +617,6 @@ class TopoFctSldnSegment(Dataset):
         dir_input,
         enable_positional_encoding,
         flow_size_threshold,
-        enable_gnn,
         enable_flowsim_gt=False,
         enable_remainsize=False,
         enable_queuelen=False,
@@ -633,13 +627,12 @@ class TopoFctSldnSegment(Dataset):
         self.lr = 10.0
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
-        self.enable_gnn = enable_gnn
         self.enable_flowsim_gt = enable_flowsim_gt
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
         self.n_links = 96
         logging.info(
-            f"call TopoFctSldnSegment. data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_gnn={enable_gnn},enable_flowsim_gt={enable_flowsim_gt}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
+            f"call TopoFctSldnSegment. data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_flowsim_gt={enable_flowsim_gt}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
         )
 
     def __len__(self):
@@ -769,10 +762,6 @@ class TopoFctSldnSegment(Dataset):
         assert (output_data >= 1.0).all()
 
         sizes = np.log2(sizes / 1000.0 + 1)
-        if not self.enable_gnn:
-            fats = np.diff(fats)
-            fats = np.insert(fats, 0, 0)
-            fats = fats / 1000.0
 
         param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
         param_data_repeat = np.repeat(param_data[:, np.newaxis], n_flows, axis=1).T
@@ -796,10 +785,7 @@ class TopoFctSldnSegment(Dataset):
             ).astype(np.float32)
 
         # Compute the adjacency matrix for the bipartite graph
-        if self.enable_gnn:
-            edge_index = self.compute_edge_index(link_info)
-        else:
-            edge_index = None
+        edge_index = self.compute_edge_index(link_info)
 
         return (
             input_data,  # (n_flows,2)
