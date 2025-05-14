@@ -28,13 +28,13 @@ model:
   gcn_hidden_size: 300
   dropout: 0.2
   enable_positional_encoding: False
-  enable_gnn: True
+  enable_gnn: False
   enable_lstm: True
   enable_link_state: True
 
 # Training parameters
 training:
-  gpu: [0]
+  gpu: [1]
   n_epochs: 15
   batch_size: 2
   learning_rate: 0.0001
