@@ -14,6 +14,7 @@ color_list = [
     "cornflowerblue",
     "blueviolet",
     "seagreen",
+    "mediumpurple",
 ]
 hatch_list = ["o", "x", "/", ".", "*", "-", "\\"]
 linestyle_list = [
