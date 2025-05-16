@@ -85,7 +85,7 @@ jupyter notebook plot_eval.ipynb
 #### **Section 5.3**
 ```bash
 cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
+cargo run --release -- --root=./eval_test_ns3 --mixes spec/0.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
 ```
 Then, visualize the results using:
