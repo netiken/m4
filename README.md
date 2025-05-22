@@ -74,9 +74,10 @@ The pre-trained checkpoints for the full m4 pipeline are available in the `XXX` 
 #### **Section 5.2**
 ```bash
 cd parsimon-eval/expts/fig_7
-cargo run --release -- --root=./data_large --mixes spec/eval_test.mix.json ns3
-cargo run --release -- --root=./data_large --mixes spec/eval_test.mix_large.json ns3
-cargo run --release -- --root=./data_unison --mixes spec/eval_test.mix.json mlsys
+cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
+cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json ns3
+cargo run --release -- --root=./data --mixes spec/eval_test.mix.json mlsys
+cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
 ```
 Then, visualize the results using:
 ```bash
@@ -86,7 +87,7 @@ jupyter notebook plot_eval.ipynb
 #### **Section 5.3**
 ```bash
 cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_test_unison --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
+cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
 ```
 Then, visualize the results using:
