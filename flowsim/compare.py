@@ -1,67 +1,67 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import math
 
-new_m4 = np.load("test_m4.npy")
-m4 = np.load("validate.npy")
-ns3 = np.load("eval_test/ns3/fct_topology_flows.npy")
-test_m4_no = np.load("test_m4_no.npy")
-#flowsim = np.load("eval_test/ns3/flowsim_fct.npy")
-#script_flowsim = np.load("flowsim_fct.npy")
-ideal = np.load("eval_test/ns3/fct_i_topology_flows.npy")
-#m4_with_new_flowsim = np.load("validate_new_flowsim.npy")
-#m4_with_flowsim = np.load("test_m4.npy")
-#new_flowsim = np.load("new_fct.npy")
-#print(len(new_m4))
-#print(len(m4))
-#print(len(ideal))
+fsize = np.load("0/ns3/fsize.npy")
+real = np.load("0/ns3/fct_topology_flows_dctcp.npy")
+ideal = np.load("0/ns3/fct_i_topology_flows_dctcp.npy")
 
-#new_m4 = new_m4[:2000]
-#m4 = m4[:2000]
-#flowsim = flowsim[:2000]
-#ideal = ideal[:2000]
-#ns3 = ns3[:2000]
-#m4_with_new_flowsim = m4_with_new_flowsim[:2000]
-#m4_with_flowsim = m4_with_flowsim[:2000]
+flowsim = np.load("flowsim.npy")
+new_flowsim = np.load("out.npy")
 
+
+#print(real[:10])
+#print(ideal[:10])
+#print(real[:10])
 #print(flowsim[:10])
-#print(script_flowsim[:10])
+#print(flowsim[:10])
 #print(new_flowsim[:10])
-#print(flowsim[:10] / ideal[:10])
-#print(script_flowsim[:10] / ideal[:10])
 
-print((m4 / ideal)[:10])
-print((new_m4 / ideal)[:10])
-#print(flowsim / ideal)
+kb = []
+fifkb = []
+twokb = []
+mb = []
+
+for i in range(len(fsize)):
+    size = fsize[i]
+    if i <= 1000:
+        kb.append(i)
+    elif i <= 50000:
+        fifkb.append(i)
+    elif i <= 200000:
+        twokb.append(i)
+    else:
+        mb.append(i)
 
 _, ax = plt.subplots()
 
-#for i in range(len(new_m4)):
-#    if math.isnan(new_m4[i]):
-#        print(i)
+m4_slowdown = new_flowsim / ideal
+real_slowdown = real / ideal
+flowsim_slowdown = flowsim / ideal
 
-print(len(new_m4))
-print(len(m4))
+print(len(kb))
 
-baseline = np.load("/data1/lichenni/projects/per-flow-sim/res/m4_noflowsim_7eval_test.npz")
-baseline = baseline["fct"][0, :, 0]
-new_new_m4 = np.load("test_m4_flowsim.npy")
-m4_state = np.load("m4_noflowsim.npy")
-check = np.load("check.npy")
+baseline = np.load("baseline.npy")
+new = np.load("new.npy")
 
-ax.ecdf(new_m4 / ideal, label="new m4")
-ax.ecdf(ns3 / ideal, label="ns3")
-#ax.ecdf(flowsim / ideal, label="flowsim")
-ax.ecdf(m4 / ideal, label="m4")
-ax.ecdf(test_m4_no / ideal, label="m4 no flowsim")
-ax.ecdf(baseline / ideal, label="canon", linestyle='dashed')
-ax.ecdf(new_new_m4 / ideal, label="new new m4", linestyle='dashed')
-#ax.ecdf(m4_state / ideal, label="m4 validation", linestyle='dashed')
-ax.ecdf(check / ideal, label="m4 check", linestyle='dashed')
-#ax.ecdf(script_flowsim / ideal, label="script flowsim", linestyle='dashed')
-plt.xscale('log')
-#ax.ecdf(m4_with_flowsim / ideal, label="m4 with flowsim")
-#ax.ecdf(m4_with_new_flowsim / ideal, label="m4 with new flowsim")
-
+ax.ecdf(m4_slowdown, label="new approach: flowsim and m4 together")
+ax.ecdf(real_slowdown, label="ns3")
+ax.ecdf(flowsim_slowdown, label="flowsim")
+ax.ecdf(baseline / ideal, label="current m4")
+#ax.ecdf(new / ideal, label="flowsim into m4")
+plt.xlabel("Slowdown")
+plt.title("CDF of slowdowns")
 plt.legend()
-plt.savefig("valid.png")
+
+plt.savefig("results_kb.png")
+plt.clf()
+
+_, ax = plt.subplots()
+print(len(fifkb))
+
+ax.ecdf(m4_slowdown[fifkb], label="m4+flowsim")
+ax.ecdf(real_slowdown[fifkb], label="ns3")
+ax.ecdf(flowsim_slowdown[fifkb], label="flowsim")
+plt.legend()
+
+plt.savefig("results_fifkb.png")
+

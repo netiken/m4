@@ -59,7 +59,7 @@ std::shared_ptr<Topology> construct_fat_tree_topology(const std::string& topolog
         int src = std::get<0>(link);
         int dest = std::get<1>(link);
         double bandwidth = std::get<2>(link);
-        double latency = std::get<3>(link);
+        float latency = (float) std::get<3>(link);
         bool bidirectional = true; // Assuming bidirectional links
         //std::cerr << "Connecting " << src << " to " << dest << " with bandwidth " << bandwidth << " GBps and latency " << latency << " ns" << std::endl;
         fat_tree_topology->connect(src, dest, bandwidth, latency, bidirectional);

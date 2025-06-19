@@ -12,12 +12,14 @@ class Event {
      * @param callback function pointer
      * @param callback_arg argument of the callback function
      */
-    Event(Callback callback, CallbackArg callback_arg) noexcept;
+    Event(EventTime event_time, Callback callback, CallbackArg callback_arg) noexcept;
 
     /**
      * Invoke the callback function.
      */
     void invoke_event() noexcept;
+
+    EventTime get_time() noexcept;
 
     /**
      * Get the callback function and the argument.
@@ -26,7 +28,11 @@ class Event {
      */
     [[nodiscard]] std::pair<Callback, CallbackArg> get_handler_arg() const noexcept;
 
+
   private:
+
+    EventTime event_time;
+
     /// pointer to the callback function
     Callback callback;
 

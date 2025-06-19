@@ -22,13 +22,15 @@ class Chunk {
    * @param callback_arg: argument of the callback
    */
   Chunk(
+      int id,
       ChunkSize chunk_size,
-      Route route,
+      const Route& route,
       Callback callback,
       CallbackArg callback_arg) noexcept;
 
-  [[nodiscard]] std::shared_ptr<Device> current_device() const noexcept;
-  [[nodiscard]] std::shared_ptr<Device> next_device() const noexcept;
+  int get_id();
+  [[nodiscard]] std::shared_ptr<Node> current_device() const noexcept;
+  [[nodiscard]] std::shared_ptr<Node> next_device() const noexcept;
   void mark_arrived_next_device() noexcept;
   [[nodiscard]] bool arrived_dest() const noexcept;
   [[nodiscard]] ChunkSize get_size() const noexcept;
@@ -45,9 +47,10 @@ class Chunk {
   void set_topology(Topology* topology) noexcept;
   Topology* get_topology() const noexcept;
   [[nodiscard]] const Route& get_route() const noexcept;
-  [[nodiscard]] std::shared_ptr<Device> get_dest_device() const noexcept; // New method
+  [[nodiscard]] std::shared_ptr<Node> get_dest_device() const noexcept; // New method
 
  private:
+  int id;
   ChunkSize chunk_size;
   ChunkSize remaining_size;
   Route route;
