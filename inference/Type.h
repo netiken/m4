@@ -21,7 +21,7 @@ using ChunkSize = uint64_t;
 using Bandwidth = double;
 
 /// Latency in ns
-using Latency = double;
+using Latency = float;
 
 /// Event time in ns
 using EventTime = uint64_t;
@@ -31,11 +31,11 @@ using EventId = uint64_t;
 
 class Chunk;
 class Link;
-class Device;
+class Node;
 class Topology;
 
 
-using Route = std::list<std::shared_ptr<Device>>;
+using Route = std::list<std::shared_ptr<Node>>;
 
 /// Basic multi-dimensional topology building blocks
 enum class TopologyBuildingBlock { Undefined, Ring, FullyConnected, Switch };

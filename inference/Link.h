@@ -1,5 +1,5 @@
 #include <memory>
-#include <list>
+#include <vector>
 #include "Type.h"
 #include "Chunk.h"
 
@@ -26,7 +26,11 @@ class Link {
     return bandwidth;
   }
 
-  std::list<Chunk*> active_chunks;
+  Latency get_latency() {
+    return latency;
+  }
+
+  std::vector<Chunk*> active_chunks;
 
  private:
   Bandwidth bandwidth;

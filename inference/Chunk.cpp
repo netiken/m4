@@ -2,21 +2,25 @@
 #include <iostream>
 #include <cassert>
 
-Chunk::Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg) noexcept
-    : chunk_size(chunk_size), remaining_size(chunk_size), route(std::move(route)),
+Chunk::Chunk(int id, ChunkSize chunk_size, const Route& route, Callback callback, CallbackArg callback_arg) noexcept
+    : id(id), chunk_size(chunk_size), remaining_size(chunk_size), route(route),
       callback(callback), callback_arg(callback_arg), transmission_start_time(0), rate(0), completion_event_id_(0), topology(nullptr) {
         
         assert(chunk_size > 0);
         assert(!this->route.empty());
-        assert(callback != nullptr);
+        //assert(callback != nullptr);
 
       }
 
-std::shared_ptr<Device> Chunk::current_device() const noexcept {
+int Chunk::get_id() {
+    return this->id;
+}
+
+std::shared_ptr<Node> Chunk::current_device() const noexcept {
     return route.front();
 }
 
-std::shared_ptr<Device> Chunk::next_device() const noexcept {
+std::shared_ptr<Node> Chunk::next_device() const noexcept {
     auto it = route.begin();
     std::advance(it, 1); // Move iterator to the second element
     return *it;
@@ -61,7 +65,7 @@ void Chunk::set_rate(double rate) noexcept {
 void Chunk::invoke_callback() noexcept {
     // std::cerr << "Debug: Invoking callback for chunk ID: " << completion_event_id_ << std::endl;
     
-    (*callback)(callback_arg);
+    //(*callback)(callback_arg);
 
     // std::cerr << "Debug: Callback invoked for chunk ID: " << completion_event_id_ << std::endl;
 }
@@ -94,6 +98,6 @@ void Chunk::set_topology(Topology* topology) noexcept {
     this->topology = topology;
 }
 
-std::shared_ptr<Device> Chunk::get_dest_device() const noexcept {
+std::shared_ptr<Node> Chunk::get_dest_device() const noexcept {
     return route.back();
 }

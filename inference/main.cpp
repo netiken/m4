@@ -26,11 +26,11 @@ void record_fct(int* index) {
 void schedule_next_arrival(int index) {
     int* index_ptr = (int *)malloc(sizeof(int));
     *index_ptr = index;
-    event_queue->schedule_event(fat.at(index), (void (*)(void*)) &add_flow, index_ptr);
+    event_queue->schedule_arrival(fat.at(index), (void (*)(void*)) &add_flow, index_ptr);
 }
 
 void add_flow(int* index_ptr) {
-    std::cout << "flow arrival " << *index_ptr << " " << fsize.at(*index_ptr) << "\n";
+    std::cout << "flow arrival " << *index_ptr << " " << fsize.at(*index_ptr) << " " << fat.at(*index_ptr) << "\n";
     Route route = routing.at(*index_ptr);
     int64_t flow_size = fsize.at(*index_ptr);
     auto chunk = std::make_unique<Chunk>(flow_size, route, (void (*)(void*)) &record_fct, index_ptr);
@@ -90,7 +90,8 @@ int main(int argc, char *argv[]) {
     }
     int* index_ptr = (int *)malloc(sizeof(int));
     *index_ptr = 0;
-    event_queue->schedule_event(fat.at(0), (void (*)(void*)) &add_flow, index_ptr);
+    //event_queue->schedule_event(fat.at(0), (void (*)(void*)) &add_flow, index_ptr);
+    event_queue->schedule_arrival(fat.at(0), (void (*)(void*)) &add_flow, index_ptr);
 
     while (!event_queue->finished()) {
         //event_queue->log_events();
