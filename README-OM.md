@@ -72,7 +72,7 @@ Ensure you have the following installed:
 ```bash
 cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data_large --mixes spec/7.mix.json ns3
-cargo run --release -- --root=./data_large --mixes spec/8.mix_large.json ns3
+cargo run --release -- --root=./data_large --mixes spec/8.mix.json ns3
 cargo run --release -- --root=./data_large --mixes spec/9.mix.json ns3
 ```
 ## **Repository Structure**
