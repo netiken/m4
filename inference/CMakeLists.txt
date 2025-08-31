@@ -20,7 +20,7 @@ else()
 endif()
 
 # Adjust the Python version in the path if necessary
-set(CMAKE_PREFIX_PATH "${CONDA_PREFIX}/lib/python3.12/site-packages/torch/share/cmake/Torch")
+set(CMAKE_PREFIX_PATH "${CONDA_PREFIX}/lib/python3.10/site-packages/torch/share/cmake/Torch")
 
 # Find the Torch package
 find_package(Torch REQUIRED)

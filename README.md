@@ -60,8 +60,9 @@ Ensure you have the following installed:
 
 4. Set up ns-3 for data generation:
    ```bash
-   cd High-Precision-Congestion-Control/ns-3.39
+   cd High-Precision-Congestion-Control/UNISON-for-ns-3
    ./configure
+   ./ns3 run 'scratch/third mix/config_test.txt'
    ```
 
 ---
@@ -89,6 +90,9 @@ jupyter notebook plot_eval.ipynb
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
+
+cargo run --release -- --root=./eval_debug --mixes spec/0.mix.json --nr-flows 2000 ns3
+cargo run --release -- --root=./eval_debug --mixes spec/0.mix.json --nr-flows 2000 mlsys
 ```
 Then, visualize the results using:
 ```bash
