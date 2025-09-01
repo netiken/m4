@@ -61,7 +61,7 @@ Ensure you have the following installed:
 4. Set up ns-3 for data generation:
    ```bash
    cd High-Precision-Congestion-Control/UNISON-for-ns-3
-   ./configure
+   ./configure.sh
    ./ns3 run 'scratch/third mix/config_test.txt'
    ```
 

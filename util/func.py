@@ -23,3 +23,10 @@ def create_logger(log_name):
         level=logging.INFO,
         handlers=[logging.FileHandler(log_name, mode="a"), logging.StreamHandler()],
     )
+
+def map_percentiles(arr,arr_std):
+    assert len(arr) == len(arr_std)
+    sorted_arr_std = np.sort(arr_std)
+    ranks = rankdata(arr, method='ordinal')-1  # Get the ranks of the elements
+    res = sorted_arr_std[ranks]
+    return res
