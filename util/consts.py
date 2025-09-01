@@ -13,6 +13,8 @@ BYTE_TO_BIT = 8
 
 DELAY_PROPAGATION_BASE = {"link": 1000, "path": 1000}  # 1us
 
+SIZE_BUCKET_LIST_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, $\infty$)"]
+
 EPS = 1e-12
 
 balance_len_bins = [
