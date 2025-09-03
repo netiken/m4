@@ -14,6 +14,12 @@ Complete guide showing what files your collaborator needs to provide for `run_m4
 
 **That's it!** Only these 4 files are read by `run_m4_post.py`.
 
+## Demo Data
+
+You can find example data files at: [https://github.com/netiken/parsimon-eval/tree/m4/expts/fig_8/eval_train/0/ns3](https://github.com/netiken/parsimon-eval/tree/m4/expts/fig_8/eval_train/0/ns3)
+
+This shows exactly what the input files should look like with real data.
+
 ## Required Files with Details
 
 ### 1. **flows.txt**
