@@ -1,0 +1,44 @@
+# YAML config for testbed dataset training
+# Custom configuration for single testbed scenario
+
+# Dataset parameters
+dataset:
+  n_flows_list: [2100000]  # Total flows in your testbed data
+  n_hosts_list: [32]       # Adjust based on your network topology
+  shard: 0
+  shard_list: [0, 1, 1]    # [start, end, num] - single shard (0)
+  lr: 10                   # Link rate in Gbps
+  train_frac: 0.9          # 90% for training, 10% for validation
+  topo_type: "_topology_flows"  # Matches your FCT file naming
+  enable_segmentation: True
+  sampling_method: "balanced"  # balanced, uniform, weighted
+  enable_topo: True
+  flow_size_threshold: 100000000  # Large threshold to include all flows
+  enable_flowsim_gt: False
+  enable_remainsize: False  # Disable remaining size data (no trace)
+  enable_queuelen: False    # Disable queue length data (no trace)
+
+# Model parameters
+model:
+  model_name: "lstm"
+  input_size: 2
+  n_layer: 2               # LSTM layers
+  gcn_n_layer: 3           # GCN layers
+  loss_fn_type: "l1"       # L1 loss
+  hidden_size: 200         # LSTM hidden size
+  gcn_hidden_size: 300     # GCN hidden size
+  dropout: 0.2
+  enable_positional_encoding: False
+  enable_gnn: True         # Enable Graph Neural Network
+  enable_lstm: True        # Enable LSTM
+  enable_link_state: True  # Enable link state features
+
+# Training parameters
+training:
+  gpu: [0]                 # Use GPU 0 (adjust as needed)
+  n_epochs: 15             # Number of training epochs
+  batch_size: 4            # Batch size (adjust based on memory)
+  learning_rate: 0.0001    # Learning rate
+  num_workers: 4           # Data loading workers
+  enable_val: True         # Enable validation
+  enable_dist: False       # Disable distributed training
