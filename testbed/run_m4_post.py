@@ -40,10 +40,11 @@ def gen_busy_periods(flows, flow_size_threshold, remainsize_list):
     large_flow_to_info = {}
     flow_to_size = {}
 
+    print(f"Processing {len(events)} events...")
     for event_idx, (time, event, flow_id, links, size) in enumerate(events):
         cur_time = time
-        # if flow_id % 1000 == 0:
-        #     print(f"Processing flow {flow_id}")
+        if event_idx % 100000 == 0:
+            print(f"  Event {event_idx}/{len(events)} ({100*event_idx/len(events):.1f}%)")
         if event == "start":
             flow_to_size[flow_id] = size
             if size > flow_size_threshold:
@@ -338,7 +339,7 @@ if __name__ == "__main__":
     # flowId, sip, dip, sport, dport, size (B), start_time, fcts (ns), standalone_fct (ns)
     cmd = (
         "cat %s" % (file)
-        + " | awk '{if ($5==0 && $7+$8<"
+        + " | awk '{if ($7+$8<"
         + "%d" % time_limit
         + ") {slow=$8/$9;print slow<1?$9:$8, $9, $6, $7, $2, $3, $1}}' | sort -n -k 4,4 -k 7,7"
     )
@@ -431,12 +432,14 @@ if __name__ == "__main__":
         
         # Generate busy periods (works with or without trace files)
         for flow_size_threshold in flow_size_threshold_list:
+            print(f"Generating busy periods for {len(flows)} flows with threshold {flow_size_threshold}...")
             (
                 busy_periods,
                 busy_periods_time,
                 busy_periods_remainsize,
                 remainsizes_num,
             ) = gen_busy_periods(flows, flow_size_threshold, remainsize_list)
+            print(f"Generated {len(busy_periods)} busy periods")
             busy_periods = np.array(busy_periods, dtype=object)
             np.save(
                 "%s/period_%s%s_t%d.npy"
