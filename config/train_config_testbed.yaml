@@ -3,10 +3,10 @@
 
 # Dataset parameters
 dataset:
-  n_flows_list: [2100000]  # Total flows in your testbed data
+  n_flows_list: [500]  # Total flows in your testbed data
   n_hosts_list: [32]       # Adjust based on your network topology
   shard: 0
-  shard_list: [0, 1, 1]    # [start, end, num] - single shard (0)
+  shard_list: [0, 6, 6]    # [start, end, num] - single shard (0)
   lr: 10                   # Link rate in Gbps
   train_frac: 0.9          # 90% for training, 10% for validation
   topo_type: "_topology_flows"  # Matches your FCT file naming

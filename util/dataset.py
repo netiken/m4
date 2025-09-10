@@ -178,10 +178,10 @@ class DataModulePerFlow(LightningDataModule):
                             if (
                                 len(fid) == len(set(fid))
                                 and np.all(fid[:-1] <= fid[1:])
-                                and len(fid) % n_flows == 0
-                                and os.path.exists(
-                                    f"{dir_input}/{spec}/flowsim_fct.npy"
-                                )
+                                # and len(fid) % n_flows == 0
+                                # and os.path.exists(
+                                #     f"{dir_input}/{spec}/flowsim_fct.npy"
+                                # )
                             ):
                                 busy_periods = np.load(
                                     f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
@@ -204,7 +204,8 @@ class DataModulePerFlow(LightningDataModule):
                                 len_per_period = [
                                     (
                                         len_per_period[i]
-                                        if len_per_period_active[i] < 150
+                                        # if len_per_period_active[i] < 150
+                                        if len_per_period_active[i] < 1500
                                         else 0
                                     )
                                     for i in range(len(len_per_period))
@@ -282,7 +283,7 @@ class DataModulePerFlow(LightningDataModule):
 
                 weights = weights / np.sum(weights)
                 sample_indices = np.random.choice(
-                    len(weights), min(n_samples, len(weights)), replace=False, p=weights
+                    len(weights), min(max(n_samples,4000), len(weights)), replace=False, p=weights
                 )
 
                 data_list = [data_list[i] for i in sample_indices]
