@@ -124,7 +124,7 @@ def plot_cdf(
     # plt.tight_layout(pad=0.5, w_pad=0.04, h_pad=0.01)
     plt.yticks(fontsize=_fontsize)
     plt.xticks(fontsize=_fontsize)
-    plt.grid(True)
+    # plt.grid(True)
 
     if rotate_xaxis:
         plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
@@ -202,7 +202,7 @@ def plot_bars(
     plt.xticks(x + (width * (len(data) - 1)) / 2, x_labels, fontsize=fontsize)
     plt.yticks(fontsize=fontsize)
     plt.legend(prop={"size": legend_font}, frameon=False, loc=loc, ncol=legend_cols)
-    plt.grid(True)
+    # plt.grid(True)
 
     if ylim:
         plt.ylim(top=ylim)
@@ -322,7 +322,7 @@ def plot_lines(
 
     plt.yticks(fontsize=_fontsize)
     plt.xticks(fontsize=_fontsize)
-    plt.grid(True)
+    # plt.grid(True)
 
     if rotate_xaxis:
         plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
@@ -433,7 +433,7 @@ def plot_scatter(
 
     plt.yticks(fontsize=_fontsize)
     plt.xticks(fontsize=_fontsize)
-    plt.grid(True)
+    # plt.grid(True)
 
     if rotate_xaxis:
         plt.setp(ax.get_xticklabels(), rotation=30, horizontalalignment="right")
@@ -555,6 +555,7 @@ def plot_box_by_config(
     rotate_xaxis=False,
     file_name=None,
     remove_outliers=True,
+    colors = [color_list[1], color_list[3], color_list[2]],
     fig_idx=0,
 ):
     """
@@ -575,7 +576,6 @@ def plot_box_by_config(
     - save_path: Path to save the plot. If None, the plot is not saved.
     - fig_idx: Figure index for the plot.
     """
-    colors = [color_list[1], color_list[2]]
     unique_configs = np.unique(config_list[:, config_index])
 
     # Prepare data for boxplots
@@ -593,7 +593,7 @@ def plot_box_by_config(
     ax.spines["top"].set_visible(False)
 
     x_positions = np.arange(len(unique_configs))
-    box_width = 0.8 / n_methods  # Adjust width based on number of methods
+    box_width = 0.6 / n_methods  # Adjust width based on number of methods
     handles = []
 
     for j in range(n_methods):
@@ -695,7 +695,7 @@ def plot_box(
         ax.legend(handles, legend_list, loc=loc, prop=legend_properties, frameon=False)
 
     plt.tight_layout()
-    plt.grid(True)
+    # plt.grid(True)
     if title:
         ax.set_title(title, fontsize=fontsize - 5)
 
