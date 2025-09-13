@@ -283,7 +283,7 @@ class DataModulePerFlow(LightningDataModule):
 
                 weights = weights / np.sum(weights)
                 sample_indices = np.random.choice(
-                    len(weights), min(max(n_samples,4000), len(weights)), replace=False, p=weights
+                    len(weights), min(max(n_samples,300), len(weights)), replace=False, p=weights
                 )
 
                 data_list = [data_list[i] for i in sample_indices]
@@ -668,9 +668,9 @@ class TopoFctSldnSegment(Dataset):
         )
         link_info = [[link_dict[link] for link in link_info[i]] for i in fid]
 
+        n_links_passed = np.array([len(path) for path in link_info])
         fcts_flowsim_path = f"{dir_input_tmp}/flowsim_fct.npy"
         if os.path.exists(fcts_flowsim_path):
-            n_links_passed = np.array([len(path) for path in link_info])
             base_delay = get_base_delay_path(
                 sizes=sizes,
                 n_links_passed=n_links_passed,
@@ -759,10 +759,16 @@ class TopoFctSldnSegment(Dataset):
 
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
+        output_data[output_data>50]=1
 
-        sizes = np.log2(sizes / 1000.0 + 1)
+        # sizes = np.log2(sizes / 1000.0 + 1)
+        sizes = sizes
 
-        param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
+        param_path = f"{dir_input_tmp}/param{topo_type}.npy"
+        if os.path.exists(param_path):
+            param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
+        else:
+            param_data = np.zeros(13)
         param_data_repeat = np.repeat(param_data[:, np.newaxis], n_flows, axis=1).T
         if not self.enable_flowsim_gt:
             input_data = np.column_stack(
