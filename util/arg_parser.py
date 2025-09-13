@@ -33,6 +33,7 @@ def create_config():
     parser.add_argument("--mode", type=str, default="train")
     parser.add_argument("--test_on_train", action="store_true")
     parser.add_argument("--test_on_empirical", action="store_true")
+    parser.add_argument("--test_on_manual", action="store_true")
     parser.add_argument(
         "--version_id",
         type=int,

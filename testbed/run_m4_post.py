@@ -237,7 +237,7 @@ if __name__ == "__main__":
         "-p",
         dest="prefix",
         action="store",
-        default="topo4-4_traffic",
+        default="topology_flows",
         help="Specify the prefix of the fcts file. Usually like fct_<topology>_<trace>",
     )
     parser.add_argument("-s", dest="step", action="store", default="5")
@@ -267,7 +267,7 @@ if __name__ == "__main__":
         "--output_dir",
         dest="output_dir",
         action="store",
-        default="data/input",
+        default="../testbed/eval_train/5/ns3",
         help="the name of the flow file",
     )
     parser.add_argument(
