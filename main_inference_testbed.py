@@ -80,7 +80,7 @@ class Inference:
             self.z_t_link[:, 2] = 1.0
         else:
             self.z_t_link = None
-        self.save_models("./testbed/models")
+        self.save_models("./testbed/models_new")
 
     def save_models(self, directory="./inference/models_topo"):
         if not os.path.exists(directory):
@@ -603,7 +603,8 @@ def main():
         ("eval_train", ["100_2","100_4","100_8","100_12","100_16"], 4000),
     ]
     model_list = [
-        ("m4_cut_1500", 15, 6),
+        # ("m4_cut_1500", 15, 6),
+        ("m4_cut_1500", 23, 6),
         # ("m4_cut_1500", 16, 6),
         # ("m4_cut_1500", 17, 6),
         # ("m4_cut_1500", 18, 6),
@@ -612,14 +613,20 @@ def main():
         # ("m4_cut_1500", 21, 6),
         # ("m4_cut_1500", 22, 6),
         # ("m4_cut_1500", 23, 6),
+        # ("m4_cut_1500", 24, 6),
+        # ("m4_cut_1500", 25, 6),
+        # ("m4_cut_1500", 26, 6),
         # ("m4", 7, 6),
         # ("m4", 8, 6),
         # ("m4", 9, 6),
         # ("m4", 10, 6),
+        # ("m4", 11, 6),
         # ("m4_cut", 9, 6),
         # ("m4_cut", 10, 6),
         # ("m4_cut", 11, 6),
         # ("m4_cut", 12, 6),
+        # ("m4_cut", 13, 6),
+        # ("m4_cut", 14, 6),
         # ("m4_noqueue", 10, 4000),
         # ("m4_nosize", 10, 4000),
         # ("m4_noseq", 10, 4000),
