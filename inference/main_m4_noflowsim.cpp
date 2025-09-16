@@ -32,10 +32,10 @@ static constexpr uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable 
 // Callback when a request arrives at the server. Immediately send a response.
 // Tunables for extra timing (ns)
 // Disable explicit propagation in main; rely on Topology link latency instead
-static constexpr uint64_t SERVER_OVERHEAD_NS = 24267; // 400 us between recv and send
+static constexpr uint64_t SERVER_OVERHEAD_NS = 24267; // flowsim control-path server delay
 static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
 static constexpr uint64_t STARTUP_DELAY_NS = 60346 - SEND_SPACING_NS;       // Extra delay between first and second initial sends
-static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // Delay between resp_recv_ud and handshake_send
+static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // flowsim control-path client delay
 
 // RNG exactly as in libhrd/hrd.h
 static inline uint32_t hrd_fastrand(uint64_t* seed) {
@@ -130,6 +130,9 @@ static std::vector<std::string> herd_flow_records;
 // Shared pointers to use inside callbacks
 static std::shared_ptr<EventQueue> g_event_queue;
 static std::shared_ptr<Topology> g_topology;
+// ML+HERD dynamic arrival control
+static int g_ops_limit = 0;
+static int g_next_to_schedule = 0;
 
 // Emit flowsim-style staged records based on ML-predicted FCT
 static void generate_herd_messages_m4(int flow_id, uint64_t flow_start_ns, uint64_t ml_fct_ns, uint64_t large_size_bytes) {
@@ -252,11 +255,8 @@ static void client_recv_ud(void* arg) {
     g_flow_records.push_back(rec);
     // Send handshake
     ctx->is_handshake = true; ctx->req_bytes = HANDSHAKE_BYTES; ctx->start_time = g_event_queue->get_current_time() + HANDSHAKE_DELAY_NS;
-    g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << ctx->start_time << " id=" << ctx->op_index
-                                  << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                                  << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
-    auto hs_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->req_bytes, ctx->route_fwd, (void (*)(void*)) &on_request_arrival, ctx);
-    g_topology->send(std::move(hs_chunk));
+    // Schedule the actual handshake send at start_time to avoid negative FCT
+    g_event_queue->schedule_completion(ctx->start_time, (void (*)(void*)) &client_send_handshake, ctx);
 }
 
 static void client_recv_rdma_finalize(void* arg) {
@@ -291,8 +291,12 @@ static void client_start_batch(void* arg) {
 static void add_flow_for_client(void* client_id_ptr) {
     int client_id = *(int*)client_id_ptr; free(client_id_ptr);
     int op_index = (int)g_next_op_index; g_next_op_index++;
-    int wn = 0; int is_update = 0; int key_i = 0;
-    uint128 key128 = CityHash128((char*)&key_i, 4);
+    // HERD-style randomized worker and key selection
+    int wn = (int)(hrd_fastrand(&g_clients[client_id].seed) % (uint32_t)NUM_WORKERS);
+    int is_update = 0;
+    int key_i = (int)(hrd_fastrand(&g_clients[client_id].seed) % (uint32_t)HERD_NUM_KEYS);
+    uint32_t key_idx = g_clients[client_id].key_perm ? (uint32_t)g_clients[client_id].key_perm[key_i] : (uint32_t)key_i;
+    uint128 key128 = CityHash128((char*)&key_idx, 4);
     uint8_t vlen = herd_val_len_from_key_parts(key128.first, key128.second);
     auto* ctx = new FlowCtx();
     ctx->op_index = op_index; ctx->client_id = client_id; ctx->worker_id = wn;
@@ -422,7 +426,7 @@ void setup_m4(torch::Device device) {
     // Load models
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "/home/zabreyko/m4/inference/model";
+        const std::string model_dir = "models_old";
         try {
             lstmcell_time = torch::jit::load(model_dir + "/lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "/lstmcell_rate.pt", device);
@@ -469,7 +473,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
 
     // Clone tensors to ensure ownership
     size_tensor = torch::from_blob(fsize.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
-    size_tensor = torch::log2(size_tensor / 1000.0f + 1.0f);
+    size_tensor = torch::log2(size_tensor /1000.0f + 1.0f);
 
     fat_tensor = torch::from_blob(fat.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
     i_fct_tensor = torch::from_blob(fct_i.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
@@ -697,7 +701,11 @@ void step_m4() {
         n_flows_active--;
         n_flows_completed++;
         flow_counts[get_tor(completed_flow_id)] -= 1;
-        if (!tor_queue[get_tor(completed_flow_id)].empty()) {
+        // Refill window by scheduling the next flow's arrival at current time
+        if (g_next_to_schedule < g_ops_limit) {
+            fat_tensor.index_put_({g_next_to_schedule}, time_clock);
+            g_next_to_schedule++;
+        } else if (!tor_queue[get_tor(completed_flow_id)].empty()) {
             std::cout << "tor push " << completed_flow_id << " " << get_tor(completed_flow_id) << " " << tor_queue[get_tor(completed_flow_id)].front() << "\n";
             flow_queue.push(tor_queue[get_tor(completed_flow_id)].front());
             tor_queue[get_tor(completed_flow_id)].pop();
@@ -805,57 +813,55 @@ void step_m4() {
 }
 
 
-// HERD-like simulation main function (copied from flowsim)
-int herd_main() {
-    // Minimal HERD driver: use flowsim-style app logic with inference's EventQueue/Topology
-    g_event_queue = std::make_shared<EventQueue>();
-    Topology::set_event_queue(g_event_queue);
-    // Build trivial 2-node topology directly
-    g_topology = std::make_shared<Topology>(2, 2);
-    g_topology->connect(0, 1, bw_GBps_to_Bpns(10), 100, true);
-
-    // Build trivial routes 0 -> 1 -> 0
-    Route c2s; c2s.push_back(g_topology->get_device(0)); c2s.push_back(g_topology->get_device(1));
-    Route s2c; s2c.push_back(g_topology->get_device(1)); s2c.push_back(g_topology->get_device(0));
-
-    NUM_CLIENTS = 1; g_clients.assign(NUM_CLIENTS, ClientState());
-    g_routes_c2s = {c2s}; g_routes_s2c = {s2c};
-    g_client_logs.resize(NUM_CLIENTS); g_client_logs[0].open("client_0.log");
-    g_server_log.open("server.log");
-
-    g_total_sent_per_client.assign(NUM_CLIENTS, 0);
-    g_client_limit.assign(NUM_CLIENTS, 650);
-    g_inflight_per_client.assign(NUM_CLIENTS, 0);
-
-    // Schedule initial window
-    EventTime t0 = g_event_queue->get_current_time() + 1;
-    for (int cid = 0; cid < NUM_CLIENTS; cid++) {
-        int* arg = (int*)malloc(sizeof(int)); *arg = cid;
-        g_event_queue->schedule_completion(t0, (void (*)(void*)) &client_start_batch, arg);
-    }
-    while (!g_event_queue->finished()) g_event_queue->proceed();
-
-    // Write flows.txt compatible with flowsim
-    std::ofstream ofs("flows.txt");
-    for (const auto& r : g_flow_records) {
-        ofs << r.op_index << " " << r.client_id << " " << r.worker_id << " " << r.slot << " "
-            << r.req_bytes << " " << r.resp_bytes << " " << r.start_ns << " " << r.end_ns << " "
-            << r.fct_ns << " " << r.stage << "\n";
-    }
-    if (g_client_logs[0].is_open()) g_client_logs[0].close();
-    if (g_server_log.is_open()) g_server_log.close();
-    std::cout << "HERD-sim completed ops: " << g_flow_records.size() << ", wrote flows.txt\n";
-    return 0;
-}
-
 int main(int argc, char *argv[]) {
-    bool herd_mode = false;
-    
-    // If not enough args for ML inference mode, switch to HERD mode
-    if (argc < 6) herd_mode = true;
-    
-    if (herd_mode) {
-        return herd_main();
+    // Mirror flowsim: run HERD-like mode when not enough args; else run ML+HERD
+    if (argc < 6) {
+        g_event_queue = std::make_shared<EventQueue>();
+        Topology::set_event_queue(g_event_queue);
+
+        // Single client (0) <-> server (1) link
+        g_topology = std::make_shared<Topology>(2, 2);
+        // Match flowsim: bandwidth ~ 10 GB/s / 8 = 1.25 B/ns, latency 3500 ns
+        g_topology->connect(0, 1, 10.0 / 8.0, 3500.0f, true);
+
+        // Build routes 0 -> 1 -> 0
+        Route c2s; c2s.push_back(g_topology->get_device(0)); c2s.push_back(g_topology->get_device(1));
+        Route s2c; s2c.push_back(g_topology->get_device(1)); s2c.push_back(g_topology->get_device(0));
+
+        NUM_CLIENTS = 1;
+        g_clients.assign(NUM_CLIENTS, ClientState());
+        for (int i = 0; i < NUM_CLIENTS; i++) {
+            g_clients[i].id = i;
+            g_clients[i].key_perm = herd_get_random_permutation(HERD_NUM_KEYS, i, &g_clients[i].seed);
+        }
+        g_routes_c2s = {c2s};
+        g_routes_s2c = {s2c};
+        g_client_logs.resize(NUM_CLIENTS); g_client_logs[0].open("client_0.log");
+        g_server_log.open("server.log");
+
+        g_total_sent_per_client.assign(NUM_CLIENTS, 0);
+        g_client_limit.assign(NUM_CLIENTS, 650);
+        g_inflight_per_client.assign(NUM_CLIENTS, 0);
+
+        // Schedule initial window
+        EventTime t0 = g_event_queue->get_current_time() + 1;
+        for (int cid = 0; cid < NUM_CLIENTS; cid++) {
+            int* arg = (int*)malloc(sizeof(int)); *arg = cid;
+            g_event_queue->schedule_completion(t0, (void (*)(void*)) &client_start_batch, arg);
+        }
+        while (!g_event_queue->finished()) g_event_queue->proceed();
+
+        // Write flows.txt compatible with flowsim
+        std::ofstream ofs("flows.txt");
+        for (const auto& r : g_flow_records) {
+            ofs << r.op_index << " " << r.client_id << " " << r.worker_id << " " << r.slot << " "
+                << r.req_bytes << " " << r.resp_bytes << " " << r.start_ns << " " << r.end_ns << " "
+                << r.fct_ns << " " << r.stage << "\n";
+        }
+        if (g_client_logs[0].is_open()) g_client_logs[0].close();
+        if (g_server_log.is_open()) g_server_log.close();
+        std::cout << "HERD-sim completed ops: " << g_flow_records.size() << ", wrote flows.txt\n";
+        return 0;
     }
     
     // =============== Original ML inference path ===============
@@ -911,56 +917,98 @@ int main(int argc, char *argv[]) {
     std::filesystem::path routing_fs = std::filesystem::current_path() / routing_path;
     std::ifstream infile_routing(routing_fs);
     int num_hops;
+    // Also capture raw device IDs per flow to synthesize link mapping if needed
+    std::vector<std::vector<int>> route_device_ids;
     while (infile_routing >> num_hops) {
         int host_id;
         auto route = Route();
+        std::vector<int> flow_devs;
         infile_routing >> host_id;
         host_ids.push_back(host_id);
         route.push_back(topology->get_device(host_id));
+        flow_devs.push_back(host_id);
         for (int i = 1; i < num_hops; i++) {
             infile_routing >> host_id;
             route.push_back(topology->get_device(host_id));
+            flow_devs.push_back(host_id);
         }
         routing.push_back(route);
+        route_device_ids.push_back(std::move(flow_devs));
     }
 
-    for (int i = 0; i < fat.size(); i++) {
-        double prop_delay = latency * (routing.at(i).size() - 1);
-        double trans_delay = (((fsize.at(i) + std::ceil(fsize.at(i) / MTU) * BYTES_PER_HEADER)) / bandwidth);
-        double first_packet = (std::min(MTU, (double) fsize.at(i)) + BYTES_PER_HEADER) / bandwidth * (routing.at(i).size() - 2);
-        fct_i.push_back(trans_delay + prop_delay + first_packet);
+    // Ideal FCT: fixed 3000ns base + transmission delay only (no propagation/first-packet adders)
+    const double FIXED_IDEAL_NS = 3000.0;
+    for (int i = 0; i < (int)fat.size(); i++) {
+        double trans_delay = (((fsize.at(i) + std::ceil((double)fsize.at(i) / MTU) * BYTES_PER_HEADER)) / bandwidth);
+        fct_i.push_back(FIXED_IDEAL_NS + trans_delay);
     }
 
+    // Load params; if missing, use zeros for parity with flowsim
+    try {
     npy::npy_data d_param = npy::read_npy<double>(param_path);
     params = d_param.data;
+    } catch (...) {
+        params.assign(13, 0.0);
+    }
 
     std::filesystem::path cwd = std::filesystem::current_path() / flow_link_path;
     std::ifstream infile(cwd);
-    int num_links;
     int32_t offset = 0;
     int32_t flow_id = 0;
+    if (infile.good()) {
+        int num_links;
     while (infile >> num_links) {
-        std::vector<int> hops;
         flowid_to_linkid_offsets.push_back(offset);
         for (int i = 0; i < num_links; i++) {
             int32_t link;
             infile >> link;
             flowid_to_linkid_flat.push_back(link);
             offset++;
-
             edges_flow_ids.push_back(flow_id);
             edges_link_ids.push_back(link);
         }
         flow_id++;
     }
     flowid_to_linkid_offsets.push_back(offset);
+    } else {
+        // Fallback: synthesize link mapping from route_device_ids
+        // Assign a unique incremental link id to each directed hop (u->v)
+        std::unordered_map<long long, int32_t> link_id_map; // key = ((long long)u<<32)|v
+        auto key_of = [](int u, int v) -> long long { return ( (long long)u << 32 ) | (unsigned int)v; };
+        for (size_t f = 0; f < route_device_ids.size(); ++f) {
+            const auto &devs = route_device_ids[f];
+            flowid_to_linkid_offsets.push_back(offset);
+            for (size_t i = 0; i + 1 < devs.size(); ++i) {
+                int u = devs[i], v = devs[i+1];
+                long long key = key_of(u, v);
+                auto it = link_id_map.find(key);
+                int32_t lid;
+                if (it == link_id_map.end()) {
+                    lid = (int32_t)link_id_map.size();
+                    link_id_map.emplace(key, lid);
+                } else {
+                    lid = it->second;
+                }
+                flowid_to_linkid_flat.push_back(lid);
+                offset++;
+                edges_flow_ids.push_back((int32_t)f);
+                edges_link_ids.push_back(lid);
+            }
+        }
+        flowid_to_linkid_offsets.push_back(offset);
+    }
 
-    uint32_t n_edges = flowid_to_linkid_flat.size();
+    uint32_t n_edges = (uint32_t)flowid_to_linkid_flat.size();
 
     infile.close();
-    infile.open(config_path);
+    // Open config; if not provided or missing, fall back to test_config_testbed.yaml
+    std::ifstream infile_cfg(config_path);
+    if (!infile_cfg.good()) {
+        std::string fallback_cfg = "config/test_config_testbed.yaml";
+        infile_cfg.open(fallback_cfg);
+    }
     std::ostringstream contents;
-    contents << infile.rdbuf();
+    contents << infile_cfg.rdbuf();
     std::string config_contents = contents.str();
     ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
     ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
@@ -988,6 +1036,10 @@ int main(int argc, char *argv[]) {
 
     int flow_index = 0;
     int flows_completed = 0;
+    // Expose for step_m4() to refill dynamically on completion
+    g_ops_limit = OPS_LIMIT;
+    g_next_to_schedule = next_to_schedule;
+
     while (n_flows_arrived < OPS_LIMIT || n_flows_completed < OPS_LIMIT) {
         std::cout << "provoking " << n_flows_arrived << " " << n_flows_completed << "\n";
         update_times_m4();
@@ -995,8 +1047,20 @@ int main(int argc, char *argv[]) {
     }
 
     std::vector<float> fct_vector;
+    fct_vector.reserve(res_fct_tensor.sizes()[0]);
+    double sum_slowdown = 0.0;
+    int count_ops = 0;
     for (int i = 0; i < res_fct_tensor.sizes()[0]; i++) {
-        fct_vector.push_back(res_fct_tensor[i][0].item<float>());
+        float fct = res_fct_tensor[i][0].item<float>();
+        fct_vector.push_back(fct);
+        float ideal = (i < (int)fct_i.size() ? (float)fct_i[i] : 1.0f);
+        if (ideal > 0.0f) { sum_slowdown += (double)fct / (double)ideal; count_ops++; }
+    }
+
+    // Print concise slowdown summary
+    if (count_ops > 0) {
+        double mean_slowdown = sum_slowdown / (double)count_ops;
+        std::cout << "M4 mean slowdown=" << mean_slowdown << " over " << count_ops << " ops\n";
     }
 
     npy::npy_data<float> d;
