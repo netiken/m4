@@ -25,7 +25,7 @@ void EventQueue::proceed() noexcept {
   auto& current_event_list = event_queue.front();
 
   // Check the validity and update current time
-  assert(current_event_list.get_event_time() > current_time);
+  assert(current_event_list.get_event_time() >= current_time);
   current_time = current_event_list.get_event_time();
 
   // Invoke events
