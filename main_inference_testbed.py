@@ -80,7 +80,7 @@ class Inference:
             self.z_t_link[:, 2] = 1.0
         else:
             self.z_t_link = None
-        # self.save_models("./models")
+        self.save_models("./testbed/models")
 
     def save_models(self, directory="./inference/models_topo"):
         if not os.path.exists(directory):
@@ -121,20 +121,14 @@ class Inference:
                 enable_dist=training_config["enable_dist"],
                 input_size=model_config["input_size"],
                 output_size=1,
-                enable_bidirectional=model_config.get("enable_bidirectional", False),
                 enable_positional_encoding=model_config.get(
                     "enable_positional_encoding", False
                 ),
                 enable_gnn=model_config.get("enable_gnn", False),
                 enable_lstm=model_config.get("enable_lstm", False),
-                current_period_len_idx=dataset_config.get(
-                    "current_period_len_idx", None
-                ),
-                enable_lstm_in_gnn=model_config.get("enable_lstm_in_gnn", False),
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
-                enable_path=dataset_config.get("enable_path", False),
                 enable_topo=dataset_config.get("enable_topo", False),
             )
         else:
@@ -334,15 +328,9 @@ def interactive_inference(
 
     i_fct_tensor = torch.tensor(i_fct, dtype=torch.float32, device=device)
     fat_tensor = torch.tensor(fat, dtype=torch.float32, device=device)
-    # size_tensor = torch.tensor(
-    #     np.log2(size / 1000.0 + 1), dtype=torch.float32, device=device
-    # )
     size_tensor = torch.tensor(
         np.log2(size + 1), dtype=torch.float32, device=device
     )
-    # size_tensor = torch.tensor(
-    #     size, dtype=torch.float32, device=device
-    # )
     sldn_flowsim_tensor = torch.tensor(sldn_flowsim, dtype=torch.float32, device=device)
     param_data_tensor = torch.tensor(param_data, dtype=torch.float32, device=device)
 
@@ -409,15 +397,6 @@ def interactive_inference(
             predictions = inference.infer(input_tensor)
             sldn_est = predictions[:, 0]
             
-            # Debug: Check prediction values
-            if n_flows_completed < 5:  # Reduce debug output
-                raw_pred = sldn_est[0].item() if len(sldn_est) > 0 else float('nan')
-                input_mean = input_tensor.mean().item()
-                actual_sldn = (fct[flowid_active_list[0].item()] / i_fct_tensor[flowid_active_list[0]].item()) if len(flowid_active_list) > 0 else float('nan')
-                print(f"Flow {n_flows_completed}: pred={raw_pred:.4f}, actual={actual_sldn:.4f}, "
-                      f"error={(abs(raw_pred-actual_sldn)/actual_sldn*100):.1f}%, "
-                      f"input_mean={input_mean:.4f}")
-            
             sldn_est[sldn_est < 1.0] = 1.0
             fct_stamp_est = (
                 fat_tensor[flowid_active_list]
@@ -428,6 +407,15 @@ def interactive_inference(
             completed_flow_id = flowid_active_list[min_idx].item()
             sldn_min = sldn_est[min_idx].item()
 
+            # Debug: Check prediction values
+            if n_flows_completed < 5:  # Reduce debug output
+                raw_pred = sldn_est[0].item() if len(sldn_est) > 0 else float('nan')
+                input_mean = input_tensor.mean().item()
+                actual_sldn = (fct[flowid_active_list[0].item()] / i_fct_tensor[flowid_active_list[0]].item()) if len(flowid_active_list) > 0 else float('nan')
+                print(f"Flow {n_flows_completed}: pred={raw_pred:.4f}, actual={actual_sldn:.4f}, "
+                      f"error={(abs(raw_pred-actual_sldn)/actual_sldn*100):.1f}%, "
+                      f"input_mean={input_mean:.4f}")
+                
         if flow_arrival_time < flow_completion_time:
             # New flow arrives
             flowid_active_mask[flow_id_in_prop] = True
@@ -612,14 +600,26 @@ def main():
 
     max_inflight_flows = 0
     dataset_list = [
-        ("eval_train", ["100_2","100_4","100_8","100_12","100_16"], 3000),
+        ("eval_train", ["100_2","100_4","100_8","100_12","100_16"], 4000),
     ]
     model_list = [
-        # ("m4_2000_size", 9, 6),
-        ("m4_2000_size_log", 9, 6),
-        ("m4_2000_size_log", 10, 6),
-        ("m4_2000_size_log", 11, 6),
-        ("m4_2000_size_log", 12, 6),
+        ("m4_cut_1500", 15, 6),
+        # ("m4_cut_1500", 16, 6),
+        # ("m4_cut_1500", 17, 6),
+        # ("m4_cut_1500", 18, 6),
+        # ("m4_cut_1500", 19, 6),
+        # ("m4_cut_1500", 20, 6),
+        # ("m4_cut_1500", 21, 6),
+        # ("m4_cut_1500", 22, 6),
+        # ("m4_cut_1500", 23, 6),
+        # ("m4", 7, 6),
+        # ("m4", 8, 6),
+        # ("m4", 9, 6),
+        # ("m4", 10, 6),
+        # ("m4_cut", 9, 6),
+        # ("m4_cut", 10, 6),
+        # ("m4_cut", 11, 6),
+        # ("m4_cut", 12, 6),
         # ("m4_noqueue", 10, 4000),
         # ("m4_nosize", 10, 4000),
         # ("m4_noseq", 10, 4000),
