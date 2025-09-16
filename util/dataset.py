@@ -170,6 +170,8 @@ class DataModulePerFlow(LightningDataModule):
             #         for n_hosts in n_hosts_list:
             for spec in os.listdir(dir_input):
                 n_hosts = 12
+                if float(spec.split("_")[0])>1000:
+                    continue
                 spec+=f"/ns3"
                 if enable_topo:
                     topo_type_cur = topo_type
@@ -208,7 +210,7 @@ class DataModulePerFlow(LightningDataModule):
                             (
                                 len_per_period[i]
                                 # if len_per_period_active[i] < 150
-                                if len_per_period_active[i] < 2000
+                                if len_per_period_active[i] < 1500
                                 else 0
                             )
                             for i in range(len(len_per_period))
@@ -286,7 +288,7 @@ class DataModulePerFlow(LightningDataModule):
 
                 weights = weights / np.sum(weights)
                 sample_indices = np.random.choice(
-                    len(weights), min(max(n_samples,800), len(weights)), replace=True, p=weights
+                    len(weights), min(max(n_samples,600), len(weights)), replace=False, p=weights
                 )
 
                 data_list = [data_list[i] for i in sample_indices]
@@ -764,10 +766,7 @@ class TopoFctSldnSegment(Dataset):
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
 
-        # sizes = np.log2(sizes / 1000.0 + 1)
         sizes = np.log2(sizes + 1)
-        # sizes = sizes
-
         param_path = f"{dir_input_tmp}/param{topo_type}.npy"
         if os.path.exists(param_path):
             param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
