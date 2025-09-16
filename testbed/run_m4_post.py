@@ -406,13 +406,18 @@ if __name__ == "__main__":
             fids = res_np[:, 6].astype("int64")
             assert np.all(fids[:-1] <= fids[1:])
             
-            n_flows_skip=1000
-            index_selected = fids>n_flows_skip
-            fcts = fcts[index_selected]
-            i_fcts = i_fcts[index_selected]
-            fsize = fsize[index_selected]
-            fids = fids[index_selected]
-            fats = fats[index_selected]
+            slowdown=fcts/i_fcts
+            n_flows_skip=500
+            while n_flows_skip<2000:
+                if slowdown[n_flows_skip]<2:
+                    break
+                n_flows_skip+=1
+            print(f"n_flows_skip: {n_flows_skip}")
+            fcts = fcts[n_flows_skip:]
+            i_fcts = i_fcts[n_flows_skip:]
+            fsize = fsize[n_flows_skip:]
+            fids = fids[n_flows_skip:]
+            fats = fats[n_flows_skip:]
             fats = fats - fats[0]
             fids = fids - fids[0]
 
