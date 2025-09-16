@@ -107,7 +107,18 @@ target_include_directories(flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
 target_link_libraries(flowsim ryml)
 
 target_include_directories(no_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
+target_include_directories(no_flowsim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rdma_bench)
 target_link_libraries(no_flowsim ryml)
+
+# Link CityHash C object to satisfy CityHash128 used via mica.h
+add_library(cityhash_c OBJECT rdma_bench/mica/city.c)
+target_link_libraries(no_flowsim cityhash_c)
+
+# Ensure C symbols are visible when linking with C++
+set_target_properties(no_flowsim PROPERTIES LINKER_LANGUAGE CXX)
+
+# Match flowsim: compile city.c as C++ so symbols match C++ caller
+set_source_files_properties(rdma_bench/mica/city.c PROPERTIES LANGUAGE CXX)
 
 target_include_directories(pure_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
 
@@ -139,4 +150,11 @@ set_target_properties(no_flowsim PROPERTIES
     BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib"
     INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
 )
+
+# Prepend the system libstdc++ path to RPATH so runtime prefers GLIBCXX from the system
+# This mirrors the manual LD_LIBRARY_PATH workaround (using /usr/lib/x86_64-linux-gnu first)
+set(SYSTEM_CXXLIB_PATH "/usr/lib/x86_64-linux-gnu")
+set_property(TARGET no_flowsim APPEND PROPERTY BUILD_RPATH "${SYSTEM_CXXLIB_PATH}")
+set_property(TARGET no_flowsim APPEND PROPERTY INSTALL_RPATH "${SYSTEM_CXXLIB_PATH}")
+target_link_options(no_flowsim PRIVATE -Wl,-rpath,${SYSTEM_CXXLIB_PATH})
 

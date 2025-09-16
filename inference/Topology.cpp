@@ -66,6 +66,22 @@ void Topology::send(std::unique_ptr<Chunk> chunk) noexcept {
     // }
 
     add_chunk_to_links(chunk_ptr);
+
+    // Initialize per-chunk path latency once, based on its route (mirrors flowsim)
+    Latency total_latency = 0.0f;
+    const auto& route = chunk_ptr->get_route();
+    auto it = route.begin();
+    while (it != route.end()) {
+        auto src_device = (*it)->get_id();
+        ++it;
+        if (it == route.end()) break;
+        auto dest_device = (*it)->get_id();
+        auto link_it = link_map.find(std::make_pair(src_device, dest_device));
+        if (link_it != link_map.end()) {
+            total_latency += link_it->second->get_latency();
+        }
+    }
+    chunk_ptr->set_initial_path_latency(total_latency);
     update_link_states();
     reschedule_active_chunks();
 }
@@ -165,7 +181,8 @@ double Topology::calculate_bottleneck_rate(const std::pair<DeviceId, DeviceId>& 
 }
 
 void Topology::reschedule_active_chunks() {
-    //const auto current_time = event_queue->get_current_time();
+    // Use EventQueue time if available (HERD-mode), else internal time (M4 path)
+    const auto now_time = (event_queue != nullptr ? event_queue->get_current_time() : current_time);
     //std::cerr << "Debug: Rescheduling num active chunks: " << active_chunks.size() << std::endl;
     uint64_t min = -1;
     double completion_time;
@@ -178,19 +195,22 @@ void Topology::reschedule_active_chunks() {
             double remaining_size = chunk->get_remaining_size();
             double new_rate = chunk->get_rate();
             double new_completion_time = std::max(1.0, (remaining_size / new_rate));
+            // Add only the remaining path latency (do not re-add full latency every reschedule)
+            Latency remaining_latency = chunk->get_remaining_path_latency();
+            new_completion_time += remaining_latency;
             completion_time_map[chunk->get_id()] = new_completion_time;
             //double new_completion_time = remaining_size / new_rate;
-            chunk->set_transmission_start_time(current_time);  // Update transmission start time
+            chunk->set_transmission_start_time(now_time);  // Update transmission start time
             chunk->set_remaining_size(remaining_size);  // Update remaining size
 
             auto* chunk_ptr = static_cast<void*>(chunk);  // Ensure proper chunk pointer
             // std::cerr << "Debug: Scheduling chunk ID " << chunk->get_completion_event_id() << ", Chunk rate: " << new_rate << ", Remaining size: " << remaining_size << ", Current time: " << current_time << ", New completion time: " << new_completion_time << std::endl;
-            if (min == -1 || min > current_time + new_completion_time) {
+            if (min == -1 || min > now_time + new_completion_time) {
                 next_chunks.clear();
-                min = current_time + new_completion_time;
+                min = now_time + new_completion_time;
                 next_chunks.push_back(chunk);
                 rate = rate;
-            } else if (min == current_time + new_completion_time) {
+            } else if (min == now_time + new_completion_time) {
                 next_chunks.push_back(chunk);
             }
         //}
@@ -198,10 +218,14 @@ void Topology::reschedule_active_chunks() {
     //std::cout << "min " << min << "\n";
     for (Chunk* chunk : next_chunks) {
         auto* chunk_ptr = static_cast<void*>(chunk);
-        //std::cout << "completion time " << min << " " << chunk->get_size() << " " << rate << "\n";
+        // Maintain legacy fields for M4 path
         next_completion_time = min;
         next_completion_id = chunk->get_id();
-        //event_queue->schedule_completion(min, chunk_completion_callback, chunk_ptr);
+        // Schedule event for HERD-mode using completion channel
+        if (event_queue != nullptr) {
+            event_queue->schedule_completion(min, chunk_completion_callback, chunk_ptr);
+            // no per-chunk event id tracking in this EventQueue implementation
+        }
         break;
         //chunk->set_completion_event_id(new_event_id);
     }
@@ -261,7 +285,29 @@ void Topology::remove_chunk_from_links(Chunk* chunk) {
     }
 }
 
-//void Topology::chunk_completion_callback(void* arg) noexcept {
+void Topology::chunk_completion_callback(void* arg) noexcept {
+    Chunk* chunk = static_cast<Chunk*>(arg);
+    Topology* topology = chunk->get_topology();
+
+    // Cancel all events
+    topology->cancel_all_events();
+
+    // Perform necessary updates and remove chunk from active chunks
+    topology->remove_chunk_from_links(chunk);
+    // Replace list.remove() with vector.erase() using std::find
+    auto chunk_it = std::find(topology->active_chunks.begin(), topology->active_chunks.end(), chunk);
+    if (chunk_it != topology->active_chunks.end()) {
+        topology->active_chunks.erase(chunk_it);
+    }
+
+    // Update link states and reschedule active chunks
+    topology->update_link_states();
+    topology->reschedule_active_chunks();
+
+    // Invoke the chunk's callback
+    chunk->invoke_callback();
+}
+
 void Topology::chunk_completion(int chunk_id) {
     Chunk *chunk;
     for (Chunk *cand_chunk : active_chunks) {
@@ -306,29 +352,14 @@ double Topology::chunk_time(int id) {
 }
 
 void Topology::cancel_all_events() noexcept {
-    //const auto current_time = event_queue->get_current_time();
-    //event_queue->cancel_completion();
-
+    // Use EventQueue time if available
+    const auto now_time = (event_queue != nullptr ? event_queue->get_current_time() : current_time);
     for (Chunk *chunk: active_chunks) {
-        double elapsed_time = current_time - chunk->get_transmission_start_time();
+        double elapsed_time = now_time - chunk->get_transmission_start_time();
+        if (elapsed_time < 0) elapsed_time = 0;
+        // Consume path latency first, then transmission
+        chunk->consume_path_latency(static_cast<Latency>(elapsed_time));
         double transmitted_size = elapsed_time * chunk->get_rate();
         chunk->update_remaining_size(transmitted_size);
     }
-
-    /*
-    const auto current_time = event_queue->get_current_time();
-    // std::cerr << "Debug: Cancelling num of events: " << active_chunks.size() << std::endl;
-    for (Chunk* chunk : active_chunks) {
-        //if (chunk->get_completion_event_id() != 0) {
-            double elapsed_time = current_time - chunk->get_transmission_start_time();
-            double transmitted_size = elapsed_time * chunk->get_rate();
-            //if (chunk->get_remaining_size() - transmitted_size > 100) {
-                //std::cout << "deleting some stuff\n";
-                chunk->update_remaining_size(transmitted_size);
-                event_queue->cancel_event(chunk->get_completion_event_id());
-                chunk->set_completion_event_id(0);
-            //}
-        //}
-    }
-    */
 }

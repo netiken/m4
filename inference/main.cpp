@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include "rdma_bench/mica/mica.h" // Brings in city.h and MICA_MAX_VALUE
 
 std::shared_ptr<EventQueue> event_queue;
 std::shared_ptr<Topology> topology;

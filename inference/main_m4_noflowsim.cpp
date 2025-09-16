@@ -11,6 +11,8 @@
 #include "TopologyBuilder.h"
 #include "Type.h"
 
+// CityHash + MICA (as in flowsim HERD path)
+#include "rdma_bench/mica/mica.h"
 #include <iomanip>
 
 
@@ -502,7 +504,281 @@ void step_m4() {
 }
 
 
+// ======================== HERD-like simulation bits (mirrors flowsim) ========================
+static std::shared_ptr<EventQueue> herd_event_queue;
+static std::shared_ptr<Topology> herd_topology;
+
+static constexpr int HERD_NUM_KEYS = (8 * 1024 * 1024);
+static constexpr int NUM_WORKERS = 12;
+static int HERD_NUM_CLIENTS = 1;
+static constexpr int WINDOW_SIZE = 16;
+
+static constexpr uint64_t RESP_UD_BYTES = 41;
+static constexpr uint64_t HANDSHAKE_BYTES = 10;
+static constexpr uint64_t RESP_RDMA_BYTES = 1024008;
+
+static constexpr uint64_t SERVER_OVERHEAD_NS = 24267;
+static constexpr uint64_t SEND_SPACING_NS = 2500;
+static constexpr uint64_t STARTUP_DELAY_NS = 0;
+static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;
+
+static inline uint32_t hrd_fastrand(uint64_t* seed) {
+    *seed = *seed * 1103515245 + 12345;
+    return (uint32_t)(*seed >> 32);
+}
+
+static inline uint8_t herd_val_len_from_key_parts(uint64_t part0, uint64_t part1) {
+    const uint8_t min_len = 8;
+    const uint8_t max_len = MICA_MAX_VALUE;
+    const uint32_t range = (uint32_t)(max_len - min_len + 1);
+    uint64_t mix = part0 ^ (part1 >> 32) ^ (part1 & 0xffffffffULL);
+    return (uint8_t)(min_len + (mix % range));
+}
+
+static int* herd_get_random_permutation(int n, int clt_gid, uint64_t* seed) {
+    assert(n > 0);
+    for (int i = 0; i < clt_gid * HERD_NUM_KEYS; i++) {
+        hrd_fastrand(seed);
+    }
+    int* log = (int*)malloc(n * sizeof(int));
+    assert(log != nullptr);
+    for (int i = 0; i < n; i++) log[i] = i;
+    for (int i = n - 1; i >= 1; i--) {
+        int j = (int)(hrd_fastrand(seed) % (uint32_t)(i + 1));
+        int temp = log[i];
+        log[i] = log[j];
+        log[j] = temp;
+    }
+    return log;
+}
+
+struct HerdClientState {
+    int id;
+    uint64_t seed;
+    int* key_perm;
+    int ws[NUM_WORKERS];
+    HerdClientState() : id(0), seed(0xdeadbeef), key_perm(nullptr) { for (int i = 0; i < NUM_WORKERS; i++) ws[i] = 0; }
+};
+
+struct HerdFlowCtx {
+    int op_index;
+    int client_id;
+    int worker_id;
+    int slot;
+    bool is_update;
+    uint8_t vlen;
+    uint64_t req_bytes;
+    uint64_t resp_bytes;
+    bool is_handshake;
+    EventTime start_time;
+    EventTime server_send_time;
+    EventTime handshake_send_time;
+    Route route_fwd;
+    Route route_rev;
+};
+
+struct HerdFlowRecord { int op_index; int client_id; int worker_id; int slot; uint64_t req_bytes; uint64_t resp_bytes; EventTime start_ns; EventTime end_ns; uint64_t fct_ns; std::string stage; };
+
+static std::vector<HerdClientState> herd_clients;
+static std::vector<Route> herd_routes_c2s;
+static std::vector<Route> herd_routes_s2c;
+static std::vector<HerdFlowRecord> herd_flow_records;
+static std::vector<std::ofstream> herd_client_logs; // client_*.log
+static std::ofstream herd_server_log; // server.log
+static std::vector<uint64_t> herd_total_sent_per_client;
+static std::vector<uint64_t> herd_client_limit;
+static std::vector<uint32_t> herd_inflight_per_client;
+static uint64_t herd_next_op_index = 0;
+
+static void herd_on_request_arrival(void* arg);
+static void herd_worker_recv(void* arg);
+static void herd_worker_send(void* arg);
+static void herd_on_response_arrival(void* arg);
+static void herd_client_recv_ud(void* arg);
+static void herd_client_send_handshake(void* arg);
+static void herd_client_recv_rdma_finalize(void* arg);
+static void herd_client_start_batch(void* arg);
+static void herd_add_flow_for_client(void* arg);
+
+static void herd_on_request_arrival(void* arg) {
+    auto* ctx = static_cast<HerdFlowCtx*>(arg);
+    if (ctx->is_handshake) ctx->resp_bytes = RESP_RDMA_BYTES; else ctx->resp_bytes = RESP_UD_BYTES;
+    {
+        HerdFlowRecord rec{ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot, ctx->req_bytes, 0, ctx->start_time, herd_event_queue->get_current_time(), (uint64_t)(herd_event_queue->get_current_time() - ctx->start_time), ctx->is_handshake ? "c2s_handshake" : "c2s_get"};
+        herd_flow_records.push_back(rec);
+    }
+    herd_event_queue->schedule_completion(herd_event_queue->get_current_time(), (void (*)(void*)) &herd_worker_recv, ctx);
+}
+
+static void herd_worker_recv(void* arg) {
+    auto* ctx = static_cast<HerdFlowCtx*>(arg);
+    EventTime when;
+    if (!ctx->is_handshake) {
+        herd_server_log << "event=reqq_recv ts_ns=" << herd_event_queue->get_current_time() << " id=" << ctx->op_index << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
+        when = herd_event_queue->get_current_time() + SERVER_OVERHEAD_NS;
+    } else {
+        herd_server_log << "event=hand_recv ts_ns=" << herd_event_queue->get_current_time() << " id=" << ctx->op_index << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
+        when = herd_event_queue->get_current_time();
+    }
+    herd_event_queue->schedule_completion(when, (void (*)(void*)) &herd_worker_send, ctx);
+}
+
+static void herd_worker_send(void* arg) {
+    auto* ctx = static_cast<HerdFlowCtx*>(arg);
+    if (ctx->is_handshake) {
+        herd_server_log << "event=hand_conf ts_ns=" << herd_event_queue->get_current_time() << " id=" << ctx->op_index << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
+    } else {
+        herd_server_log << "event=resp_send ts_ns=" << herd_event_queue->get_current_time() << " id=" << ctx->op_index << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
+    }
+    ctx->server_send_time = herd_event_queue->get_current_time();
+    auto resp_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->resp_bytes, ctx->route_rev, (void (*)(void*)) &herd_on_response_arrival, ctx);
+    herd_topology->send(std::move(resp_chunk));
+}
+
+static void herd_on_response_arrival(void* arg) {
+    auto* ctx = static_cast<HerdFlowCtx*>(arg);
+    EventTime when = herd_event_queue->get_current_time();
+    if (ctx->is_handshake) herd_event_queue->schedule_completion(when, (void (*)(void*)) &herd_client_recv_rdma_finalize, ctx);
+    else herd_event_queue->schedule_completion(when, (void (*)(void*)) &herd_client_recv_ud, ctx);
+}
+
+static void herd_client_recv_ud(void* arg) {
+    auto* ctx = static_cast<HerdFlowCtx*>(arg);
+    herd_client_logs[ctx->client_id] << "event=resp_recv_ud ts_ns=" << herd_event_queue->get_current_time() << " id=" << ctx->op_index << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
+    {
+        HerdFlowRecord rec{ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot, 0, ctx->resp_bytes, ctx->server_send_time, herd_event_queue->get_current_time(), (uint64_t)(herd_event_queue->get_current_time() - ctx->server_send_time), "s2c_ud"};
+        herd_flow_records.push_back(rec);
+    }
+    ctx->is_handshake = true;
+    ctx->req_bytes = HANDSHAKE_BYTES;
+    EventTime when = herd_event_queue->get_current_time() + HANDSHAKE_DELAY_NS;
+    herd_event_queue->schedule_completion(when, (void (*)(void*)) &herd_client_send_handshake, ctx);
+}
+
+static void herd_client_send_handshake(void* arg) {
+    auto* ctx = static_cast<HerdFlowCtx*>(arg);
+    ctx->start_time = herd_event_queue->get_current_time();
+    ctx->handshake_send_time = ctx->start_time;
+    herd_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << ctx->start_time << " id=" << ctx->op_index << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
+    auto hs_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->req_bytes, ctx->route_fwd, (void (*)(void*)) &herd_on_request_arrival, ctx);
+    herd_topology->send(std::move(hs_chunk));
+}
+
+static void herd_client_recv_rdma_finalize(void* arg) {
+    auto* ctx = static_cast<HerdFlowCtx*>(arg);
+    uint64_t now_ns = (uint64_t)herd_event_queue->get_current_time();
+    uint64_t dur_ns = (ctx->handshake_send_time <= now_ns) ? (now_ns - (uint64_t)ctx->handshake_send_time) : 0;
+    herd_client_logs[ctx->client_id] << "event=resp_rdma_read ts_ns=" << now_ns << " id=" << ctx->op_index << " start_ns=" << ctx->handshake_send_time << " dur_ns=" << dur_ns << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
+    {
+        HerdFlowRecord rec{ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot, 0, ctx->resp_bytes, ctx->server_send_time, herd_event_queue->get_current_time(), (uint64_t)(herd_event_queue->get_current_time() - ctx->server_send_time), "s2c_rdma"};
+        herd_flow_records.push_back(rec);
+    }
+    int client_id = ctx->client_id;
+    if (herd_inflight_per_client[client_id] > 0) herd_inflight_per_client[client_id]--;
+    delete ctx;
+    if (herd_total_sent_per_client[client_id] < herd_client_limit[client_id]) {
+        int* cid = (int*)malloc(sizeof(int)); *cid = client_id;
+        herd_event_queue->schedule_completion(herd_event_queue->get_current_time(), (void (*)(void*)) &herd_add_flow_for_client, cid);
+    }
+}
+
+static void herd_add_flow_for_client(void* client_id_ptr) {
+    int client_id = *(int*)client_id_ptr; free(client_id_ptr);
+    int op_index = (int)herd_next_op_index; herd_next_op_index++;
+    int wn = (int)(hrd_fastrand(&herd_clients[client_id].seed) % (uint32_t)NUM_WORKERS);
+    int is_update = 0;
+    int key_i = (int)(hrd_fastrand(&herd_clients[client_id].seed) % (uint32_t)HERD_NUM_KEYS);
+    uint128 key128 = CityHash128((char*)&herd_clients[client_id].key_perm[key_i], 4);
+    uint64_t part0 = key128.first; uint64_t part1 = key128.second;
+    uint8_t vlen = herd_val_len_from_key_parts(part0, part1);
+    uint64_t req_bytes = is_update ? (uint64_t)(16 + 1 + 1 + vlen) : (uint64_t)(16 + 1);
+    auto* ctx = new HerdFlowCtx();
+    ctx->op_index = op_index; ctx->client_id = client_id; ctx->worker_id = wn;
+    ctx->slot = herd_clients[ctx->client_id].ws[wn]; ctx->is_update = (is_update != 0);
+    ctx->vlen = vlen; ctx->req_bytes = req_bytes; ctx->is_handshake = false;
+    ctx->route_fwd = herd_routes_c2s[ctx->client_id]; ctx->route_rev = herd_routes_s2c[ctx->client_id];
+    ctx->start_time = herd_event_queue->get_current_time();
+    herd_clients[ctx->client_id].ws[wn] = (herd_clients[ctx->client_id].ws[wn] + 1) % WINDOW_SIZE;
+    herd_client_logs[ctx->client_id] << "event=req_send ts_ns=" << herd_event_queue->get_current_time() << " id=" << ctx->op_index << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
+    auto req_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->req_bytes, ctx->route_fwd, (void (*)(void*)) &herd_on_request_arrival, ctx);
+    herd_topology->send(std::move(req_chunk));
+    herd_total_sent_per_client[client_id]++;
+    herd_inflight_per_client[client_id]++;
+}
+
+static void herd_client_start_batch(void* arg) {
+    int client_id = arg ? *(int*)arg : 0; if (arg) free(arg);
+    EventTime base = herd_event_queue->get_current_time();
+    uint32_t to_send = WINDOW_SIZE;
+    for (uint32_t i = 0; i < to_send && herd_total_sent_per_client[client_id] < herd_client_limit[client_id]; i++) {
+        int* cid = (int*)malloc(sizeof(int)); *cid = client_id;
+        EventTime extra = (i > 0 ? STARTUP_DELAY_NS : 0);
+        EventTime send_time = base + extra + (EventTime)(i * SEND_SPACING_NS);
+        herd_event_queue->schedule_completion(send_time, (void (*)(void*)) &herd_add_flow_for_client, cid);
+    }
+}
+
+static int herd_main() {
+    herd_event_queue = std::make_shared<EventQueue>();
+    Topology::set_event_queue(herd_event_queue);
+    bool multi_client_topo = false;
+    double bw_bpns = 10.0/8;
+    if (!multi_client_topo) {
+        herd_topology = std::make_shared<Topology>(2, 2);
+        herd_topology->connect(0, 1, bw_bpns, 3500, true);
+        HERD_NUM_CLIENTS = 1;
+        herd_clients.assign(HERD_NUM_CLIENTS, HerdClientState());
+        herd_client_logs.resize(HERD_NUM_CLIENTS);
+        for (int i = 0; i < HERD_NUM_CLIENTS; i++) { herd_clients[i].id = i; herd_clients[i].key_perm = herd_get_random_permutation(HERD_NUM_KEYS, i, &herd_clients[i].seed); }
+        herd_routes_c2s.resize(HERD_NUM_CLIENTS); herd_routes_s2c.resize(HERD_NUM_CLIENTS);
+        Route c2s; c2s.push_back(herd_topology->get_device(0)); c2s.push_back(herd_topology->get_device(1));
+        Route s2c; s2c.push_back(herd_topology->get_device(1)); s2c.push_back(herd_topology->get_device(0));
+        herd_routes_c2s[0] = c2s; herd_routes_s2c[0] = s2c; herd_client_logs[0].open("client_0.log");
+    } else {
+        herd_topology = std::make_shared<Topology>(8, 4);
+        herd_topology->connect(0, 1, bw_bpns, 800.0, true);
+        herd_topology->connect(1, 2, bw_bpns, 800.0, true);
+        herd_topology->connect(3, 7, bw_bpns, 800.0, true);
+        herd_topology->connect(4, 5, bw_bpns, 800.0, true);
+        herd_topology->connect(5, 2, bw_bpns, 800.0, true);
+        herd_topology->connect(6, 5, bw_bpns, 800.0, true);
+        herd_topology->connect(7, 2, bw_bpns, 800.0, true);
+        HERD_NUM_CLIENTS = 3;
+        herd_clients.assign(HERD_NUM_CLIENTS, HerdClientState());
+        herd_client_logs.resize(HERD_NUM_CLIENTS);
+        for (int i = 0; i < HERD_NUM_CLIENTS; i++) { herd_clients[i].id = i; herd_clients[i].key_perm = herd_get_random_permutation(HERD_NUM_KEYS, i, &herd_clients[i].seed); }
+        herd_routes_c2s.resize(HERD_NUM_CLIENTS); herd_routes_s2c.resize(HERD_NUM_CLIENTS);
+        auto build_route = [&](std::vector<int> path){ Route r; for(int id: path) r.push_back(herd_topology->get_device(id)); return r; };
+        herd_routes_c2s[0] = build_route({3,7,2,1,0}); herd_routes_s2c[0] = build_route({0,1,2,7,3});
+        herd_routes_c2s[1] = build_route({4,5,2,1,0}); herd_routes_s2c[1] = build_route({0,1,2,5,4});
+        herd_routes_c2s[2] = build_route({6,5,2,1,0}); herd_routes_s2c[2] = build_route({0,1,2,5,6});
+        herd_client_logs[0].open("client_0.log"); herd_client_logs[1].open("client_1.log"); herd_client_logs[2].open("client_2.log");
+    }
+
+    herd_server_log.open("server.log");
+    const int default_ops = 650;
+    std::vector<int64_t> herd_fat; herd_fat.clear(); herd_fat.reserve(default_ops);
+    herd_total_sent_per_client.assign(HERD_NUM_CLIENTS, 0);
+    herd_client_limit.assign(HERD_NUM_CLIENTS, default_ops / HERD_NUM_CLIENTS);
+    herd_inflight_per_client.assign(HERD_NUM_CLIENTS, 0);
+    EventTime start_time = herd_event_queue->get_current_time() + 1;
+    for (int cid = 0; cid < HERD_NUM_CLIENTS; cid++) { int* arg_c = (int*)malloc(sizeof(int)); *arg_c = cid; herd_event_queue->schedule_completion(start_time, (void (*)(void*)) &herd_client_start_batch, arg_c); }
+    while (!herd_event_queue->finished()) { herd_event_queue->proceed(); }
+    for (int i = 0; i < (int)herd_clients.size(); i++) { if (herd_clients[i].key_perm != nullptr) { free(herd_clients[i].key_perm); herd_clients[i].key_perm = nullptr; } }
+    for (auto& cl : herd_client_logs) if (cl.is_open()) cl.close(); if (herd_server_log.is_open()) herd_server_log.close();
+    std::ofstream ofs("flows.txt");
+    for (const auto& r : herd_flow_records) {
+        ofs << r.op_index << " " << r.client_id << " " << r.worker_id << " " << r.slot << " " << r.req_bytes << " " << r.resp_bytes << " " << r.start_ns << " " << r.end_ns << " " << r.fct_ns << " " << r.stage << "\n";
+    }
+    std::cout << "HERD-sim completed ops: " << herd_flow_records.size() << ", wrote flows.txt\n";
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
+    // Mirror flowsim: default to HERD-mode when insufficient args
+    if (argc < 6) {
+        return herd_main();
+    }
     const std::string scenario_path = argv[1];
     const std::string fat_path = scenario_path + "/fat.npy";
     const std::string fsize_path = scenario_path + "/fsize.npy";

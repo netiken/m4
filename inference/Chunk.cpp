@@ -4,7 +4,7 @@
 
 Chunk::Chunk(int id, ChunkSize chunk_size, const Route& route, Callback callback, CallbackArg callback_arg) noexcept
     : id(id), chunk_size(chunk_size), remaining_size(chunk_size), route(route),
-      callback(callback), callback_arg(callback_arg), transmission_start_time(0), rate(0), completion_event_id_(0), topology(nullptr) {
+      callback(callback), callback_arg(callback_arg), transmission_start_time(0), rate(0), completion_event_id_(0), topology(nullptr), remaining_path_latency(0.0) {
         
         assert(chunk_size > 0);
         assert(!this->route.empty());
@@ -63,11 +63,9 @@ void Chunk::set_rate(double rate) noexcept {
 }
 
 void Chunk::invoke_callback() noexcept {
-    // std::cerr << "Debug: Invoking callback for chunk ID: " << completion_event_id_ << std::endl;
-    
-    //(*callback)(callback_arg);
-
-    // std::cerr << "Debug: Callback invoked for chunk ID: " << completion_event_id_ << std::endl;
+    if (callback != nullptr) {
+        (*callback)(callback_arg);
+    }
 }
 
 void Chunk::set_transmission_start_time(EventTime start_time) noexcept {
@@ -100,4 +98,20 @@ void Chunk::set_topology(Topology* topology) noexcept {
 
 std::shared_ptr<Node> Chunk::get_dest_device() const noexcept {
     return route.back();
+}
+
+void Chunk::set_initial_path_latency(Latency total_latency) noexcept {
+    remaining_path_latency = total_latency;
+}
+
+Latency Chunk::get_remaining_path_latency() const noexcept {
+    return remaining_path_latency;
+}
+
+void Chunk::consume_path_latency(Latency elapsed_ns) noexcept {
+    if (elapsed_ns >= remaining_path_latency) {
+        remaining_path_latency = 0.0f;
+    } else {
+        remaining_path_latency -= elapsed_ns;
+    }
 }

@@ -12,7 +12,7 @@
 //#include "yaml-cpp/node/parse.h"
 #include <ryml_std.hpp>
 #include <ryml.hpp>
-
+#include "rdma_bench/mica/mica.h" // Brings in city.h and MICA_MAX_VALUE
 
 // flowsim parameters
 std::shared_ptr<EventQueue> event_queue;
