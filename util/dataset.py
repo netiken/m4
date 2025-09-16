@@ -165,86 +165,89 @@ class DataModulePerFlow(LightningDataModule):
                 len_per_period_all = []
                 len_per_period_active_all = []
                 len_per_period_stats_all = []
-            for shard in shard_list:
-                for n_flows in n_flows_list:
-                    for n_hosts in n_hosts_list:
-                        if enable_topo:
-                            topo_type_cur = topo_type
-                            spec = f"{shard}/ns3"
-                            file_suffix = ""
-                            fid = np.load(
-                                f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+            # for shard in shard_list:
+            #     for n_flows in n_flows_list:
+            #         for n_hosts in n_hosts_list:
+            for spec in os.listdir(dir_input):
+                n_hosts = 12
+                spec+=f"/ns3"
+                if enable_topo:
+                    topo_type_cur = topo_type
+                    # spec = f"{shard}/ns3"
+                    file_suffix = ""
+                    fid = np.load(
+                        f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+                    )
+                    if (
+                        len(fid) == len(set(fid))
+                        and np.all(fid[:-1] <= fid[1:])
+                        # and len(fid) % n_flows == 0
+                        # and os.path.exists(
+                        #     f"{dir_input}/{spec}/flowsim_fct.npy"
+                        # )
+                    ):
+                        busy_periods = np.load(
+                            f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
+                            allow_pickle=True,
+                        )
+
+                        len_per_period_stats = [
+                            len(period) for period in busy_periods
+                        ]
+
+                        remainsize_path = f"{dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy"
+
+                        if os.path.exists(remainsize_path):
+                            len_per_period_active = np.load(remainsize_path)
+                        else:
+                            len_per_period_active = len_per_period_stats
+
+                        len_per_period = len_per_period_stats
+
+                        len_per_period = [
+                            (
+                                len_per_period[i]
+                                # if len_per_period_active[i] < 150
+                                if len_per_period_active[i] < 2000
+                                else 0
                             )
-                            if (
-                                len(fid) == len(set(fid))
-                                and np.all(fid[:-1] <= fid[1:])
-                                # and len(fid) % n_flows == 0
-                                # and os.path.exists(
-                                #     f"{dir_input}/{spec}/flowsim_fct.npy"
-                                # )
-                            ):
-                                busy_periods = np.load(
-                                    f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
-                                    allow_pickle=True,
+                            for i in range(len(len_per_period))
+                        ]
+
+                        if np.sum(len_per_period) > 0:
+                            data_list_per_period = [
+                                (
+                                    spec,
+                                    (0, n_hosts - 1),
+                                    topo_type_cur + file_suffix,
+                                    int(segment_id),
+                                    len_per_period_stats[segment_id],
                                 )
+                                for segment_id in range(len(busy_periods))
+                            ]
+                            sample_indices = np.arange(len(len_per_period))
 
-                                len_per_period_stats = [
-                                    len(period) for period in busy_periods
+                            len_per_period_all.extend(
+                                [len_per_period[i] for i in sample_indices]
+                            )
+                            len_per_period_stats_all.extend(
+                                [
+                                    len_per_period_stats[i]
+                                    for i in sample_indices
                                 ]
-
-                                remainsize_path = f"{dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy"
-
-                                if os.path.exists(remainsize_path):
-                                    len_per_period_active = np.load(remainsize_path)
-                                else:
-                                    len_per_period_active = len_per_period_stats
-
-                                len_per_period = len_per_period_stats
-
-                                len_per_period = [
-                                    (
-                                        len_per_period[i]
-                                        # if len_per_period_active[i] < 150
-                                        if len_per_period_active[i] < 1500
-                                        else 0
-                                    )
-                                    for i in range(len(len_per_period))
+                            )
+                            len_per_period_active_all.extend(
+                                [
+                                    len_per_period_active[i]
+                                    for i in sample_indices
                                 ]
-
-                                if np.sum(len_per_period) > 0:
-                                    data_list_per_period = [
-                                        (
-                                            spec,
-                                            (0, n_hosts - 1),
-                                            topo_type_cur + file_suffix,
-                                            int(segment_id),
-                                            len_per_period_stats[segment_id],
-                                        )
-                                        for segment_id in range(len(busy_periods))
-                                    ]
-                                    sample_indices = np.arange(len(len_per_period))
-
-                                    len_per_period_all.extend(
-                                        [len_per_period[i] for i in sample_indices]
-                                    )
-                                    len_per_period_stats_all.extend(
-                                        [
-                                            len_per_period_stats[i]
-                                            for i in sample_indices
-                                        ]
-                                    )
-                                    len_per_period_active_all.extend(
-                                        [
-                                            len_per_period_active[i]
-                                            for i in sample_indices
-                                        ]
-                                    )
-                                    data_list.extend(
-                                        [
-                                            data_list_per_period[i]
-                                            for i in sample_indices
-                                        ]
-                                    )
+                            )
+                            data_list.extend(
+                                [
+                                    data_list_per_period[i]
+                                    for i in sample_indices
+                                ]
+                            )
 
             if enable_segmentation:
                 len_per_period_all = np.array(len_per_period_all)
@@ -283,7 +286,7 @@ class DataModulePerFlow(LightningDataModule):
 
                 weights = weights / np.sum(weights)
                 sample_indices = np.random.choice(
-                    len(weights), min(max(n_samples,300), len(weights)), replace=False, p=weights
+                    len(weights), min(max(n_samples,800), len(weights)), replace=True, p=weights
                 )
 
                 data_list = [data_list[i] for i in sample_indices]
@@ -690,6 +693,7 @@ class TopoFctSldnSegment(Dataset):
                 fcts = np.load(f)[fid]
             with open(f"{dir_input_tmp}/fct_i{topo_type}.npy", "rb") as f:
                 i_fcts = np.load(f)[fid]
+        assert len(fcts) == len(fid)==len(fats)==len(i_fcts)==len(sizes)
 
         fats = fats - fats[0]
         fcts_stamp = fats + fcts
@@ -759,10 +763,10 @@ class TopoFctSldnSegment(Dataset):
 
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
-        output_data[output_data>50]=1
 
         # sizes = np.log2(sizes / 1000.0 + 1)
-        sizes = sizes
+        sizes = np.log2(sizes + 1)
+        # sizes = sizes
 
         param_path = f"{dir_input_tmp}/param{topo_type}.npy"
         if os.path.exists(param_path):
