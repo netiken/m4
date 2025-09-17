@@ -46,6 +46,8 @@ SET(NOFLOWSIM_SOURCES
     Event.cpp
     EventQueue.h 
     EventQueue.cpp 
+    EventList.h
+    EventList.cpp
     Link.h 
     Link.cpp 
     TopologyBuilder.h 

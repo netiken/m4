@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include "Type.h"
 #include "EventList.h"
-#include "Event.h"
 
 /**
  * EventQueue manages scheduled EventLists.
@@ -39,9 +38,6 @@ class EventQueue {
    */
   void proceed() noexcept;
 
-  void schedule_arrival(EventTime arrival_time, Callback callback, CallbackArg callback_arg) noexcept;
-  void schedule_completion(EventTime completion_time, Callback callback, CallbackArg callback_arg) noexcept;
-
   /**
    * Schedule an event with a given event time.
    *
@@ -50,21 +46,17 @@ class EventQueue {
    * @param callback_arg argument of the callback function
    * @return EventId ID of the scheduled event
    */
-  /*
   EventId schedule_event(
       EventTime event_time,
       Callback callback,
       CallbackArg callback_arg) noexcept;
-  */
 
   /**
    * Cancel a scheduled event.
    *
    * @param event_id ID of the event to cancel
    */
-  //void cancel_event(EventId event_id) noexcept;
-
-  void cancel_completion();
+  void cancel_event(EventId event_id) noexcept;
 
   void log_events();
 
@@ -75,9 +67,11 @@ class EventQueue {
   /// next event ID to be assigned
   EventId next_event_id;
 
-  // Storage for next events
-  Event* next_arrival;
-  Event* next_completion;
+  /// list of EventLists
+  std::list<EventList> event_queue;
+
+  /// map of event IDs to their corresponding event list iterator
+  std::unordered_map<EventId, std::list<EventList>::iterator> event_map;
 };
 
 #endif // _EVENTQUEUE_

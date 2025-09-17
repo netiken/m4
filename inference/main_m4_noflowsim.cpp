@@ -34,7 +34,7 @@ static constexpr uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable 
 // Disable explicit propagation in main; rely on Topology link latency instead
 static constexpr uint64_t SERVER_OVERHEAD_NS = 24267; // flowsim control-path server delay
 static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
-static constexpr uint64_t STARTUP_DELAY_NS = 60346 - SEND_SPACING_NS;       // Extra delay between first and second initial sends
+static constexpr uint64_t STARTUP_DELAY_NS = 0;       // Extra delay between first and second initial sends
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // flowsim control-path client delay
 
 // RNG exactly as in libhrd/hrd.h
@@ -130,6 +130,20 @@ static std::vector<std::string> herd_flow_records;
 // Shared pointers to use inside callbacks
 static std::shared_ptr<EventQueue> g_event_queue;
 static std::shared_ptr<Topology> g_topology;
+
+// ML-based flow prediction for HERD-only mode
+static int g_herd_flow_counter = 0; // Track flows for ML pipeline
+static std::unordered_map<void*, int> g_ctx_to_flow_id; // Map contexts to flow IDs
+
+// Forward declarations - will be defined after global ML variables
+static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(void*), void* ctx);
+void update_times_m4(); // ML pipeline function
+
+// External declarations for global ML variables (defined later in this file)
+extern int32_t n_flows;
+extern torch::Tensor flowid_active_mask;
+extern int n_flows_active;
+extern int n_flows_completed;
 // ML+HERD dynamic arrival control
 static int g_ops_limit = 0;
 static int g_next_to_schedule = 0;
@@ -190,138 +204,278 @@ static void client_completion_ready(void* arg);
 static void client_start_batch(void* arg);
 static void add_flow_for_client(void* client_id_ptr);
 
-// HERD callbacks (adapting flowsim semantics to inference Topology/EventQueue)
+// HERD callbacks - copied exactly from flowsim
 static void on_request_arrival(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Decide response size by phase
-    ctx->resp_bytes = ctx->is_handshake ? RESP_RDMA_BYTES : RESP_UD_BYTES;
-    // Record c2s in flows.txt buffer
-    FlowRecord rec{ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot, ctx->req_bytes, 0,
-                   ctx->start_time, g_event_queue->get_current_time(), (uint64_t)(g_event_queue->get_current_time() - ctx->start_time),
-                   ctx->is_handshake ? std::string("c2s_handshake") : std::string("c2s_get")};
-    g_flow_records.push_back(rec);
-    // Schedule worker receive after optional server overhead
+    // Determine response size for current phase
+    // Phase 1 (GET): server responds with small UD-sized message
+    // Phase 2 (handshake): server responds with large RDMA-sized message
+    if (ctx->is_handshake) {
+        ctx->resp_bytes = RESP_RDMA_BYTES;
+    } else {
+        ctx->resp_bytes = RESP_UD_BYTES;
+    }
+    // Record client->server FCT (c2s stage)
+    {
+        FlowRecord rec;
+        rec.op_index = ctx->op_index;
+        rec.client_id = ctx->client_id;
+        rec.worker_id = ctx->worker_id;
+        rec.slot = ctx->slot;
+        rec.req_bytes = ctx->req_bytes;
+        rec.resp_bytes = 0;
+        rec.start_ns = ctx->start_time;
+        rec.end_ns = g_event_queue->get_current_time();
+        rec.fct_ns = (uint64_t)(rec.end_ns - rec.start_ns);
+        rec.stage = ctx->is_handshake ? "c2s_handshake" : "c2s_get";
+        g_flow_records.push_back(rec);
+    }
+    // No extra propagation here; Topology models per-hop latency
     EventTime when = g_event_queue->get_current_time();
-    g_event_queue->schedule_completion(when, (void (*)(void*)) &worker_recv, ctx);
+    g_event_queue->schedule_event(when, (void (*)(void*)) &worker_recv, ctx);
 }
 
 static void worker_recv(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log server recv
+    // Log request receive at worker (after propagation)
+    EventTime when;
     if (!ctx->is_handshake) {
-        g_server_log << "event=reqq_recv ts_ns=" << g_event_queue->get_current_time() << " id=" << ctx->op_index
-                     << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                     << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
+        g_server_log << "event=reqq_recv ts_ns=" << g_event_queue->get_current_time()
+                     << " id=" << ctx->op_index
+                     << " clt=" << ctx->client_id
+                     << " wrkr=" << ctx->worker_id
+                     << " slot=" << ctx->slot
+                     << " size=" << ctx->req_bytes
+                     << " src=client:" << ctx->client_id
+                     << " dst=worker:" << ctx->worker_id
+                     << "\n";
+        when = g_event_queue->get_current_time() + SERVER_OVERHEAD_NS;
+
     } else {
-        g_server_log << "event=hand_recv ts_ns=" << g_event_queue->get_current_time() << " id=" << ctx->op_index
-                     << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                     << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
+        g_server_log << "event=hand_recv ts_ns=" << g_event_queue->get_current_time()
+                     << " id=" << ctx->op_index
+                     << " clt=" << ctx->client_id
+                     << " wrkr=" << ctx->worker_id
+                     << " slot=" << ctx->slot
+                     << " size=" << ctx->req_bytes
+                     << " src=client:" << ctx->client_id
+                     << " dst=worker:" << ctx->worker_id
+                     << "\n";
+        when = g_event_queue->get_current_time(); //no overhead for handshake (RDMA DMA technique)
     }
-    EventTime when = g_event_queue->get_current_time() + (ctx->is_handshake ? 0 : SERVER_OVERHEAD_NS);
-    g_event_queue->schedule_completion(when, (void (*)(void*)) &worker_send, ctx);
+    // Schedule worker send after overhead
+    g_event_queue->schedule_event(when, (void (*)(void*)) &worker_send, ctx);
 }
 
 static void worker_send(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log send
+    // Log response send from worker
+    // If responding to a handshake, also log a handshake_send event on the server
     if (ctx->is_handshake) {
-        g_server_log << "event=hand_conf ts_ns=" << g_event_queue->get_current_time() << " id=" << ctx->op_index
-                     << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                     << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
+        g_server_log << "event=hand_conf ts_ns=" << g_event_queue->get_current_time()
+                     << " id=" << ctx->op_index
+                     << " clt=" << ctx->client_id
+                     << " wrkr=" << ctx->worker_id
+                     << " slot=" << ctx->slot
+                     << " size=" << ctx->resp_bytes
+                     << " src=worker:" << ctx->worker_id
+                     << " dst=client:" << ctx->client_id
+                     << "\n";
     } else {
-        g_server_log << "event=resp_send ts_ns=" << g_event_queue->get_current_time() << " id=" << ctx->op_index
-                     << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                     << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
+        g_server_log << "event=resp_send ts_ns=" << g_event_queue->get_current_time()
+        << " id=" << ctx->op_index
+        << " clt=" << ctx->client_id
+        << " wrkr=" << ctx->worker_id
+        << " slot=" << ctx->slot
+        << " size=" << ctx->resp_bytes
+        << " src=worker:" << ctx->worker_id
+        << " dst=client:" << ctx->client_id
+        << "\n";
     }
     ctx->server_send_time = g_event_queue->get_current_time();
-    auto resp_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->resp_bytes, ctx->route_rev, (void (*)(void*)) &on_response_arrival, ctx);
-    g_topology->send(std::move(resp_chunk));
+    // Use ML pipeline to predict completion time for response
+    ml_predict_and_schedule_herd(ctx->resp_bytes, (void (*)(void*)) &on_response_arrival, ctx);
 }
 
 static void on_response_arrival(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     EventTime when = g_event_queue->get_current_time();
-    if (ctx->is_handshake) g_event_queue->schedule_completion(when, (void (*)(void*)) &client_recv_rdma_finalize, ctx);
-    else g_event_queue->schedule_completion(when, (void (*)(void*)) &client_recv_ud, ctx);
+    if (ctx->is_handshake) g_event_queue->schedule_event(when, (void (*)(void*)) &client_recv_rdma_finalize, ctx);
+    else g_event_queue->schedule_event(when, (void (*)(void*)) &client_recv_ud, ctx);
 }
 
+// Client receives the small UD-style response and immediately sends handshake
 static void client_recv_ud(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    g_client_logs[ctx->client_id] << "event=resp_recv_ud ts_ns=" << g_event_queue->get_current_time() << " id=" << ctx->op_index
-                                  << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                                  << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
-    FlowRecord rec{ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot, 0, ctx->resp_bytes, ctx->server_send_time,
-                   g_event_queue->get_current_time(), (uint64_t)(g_event_queue->get_current_time() - ctx->server_send_time), "s2c_ud"};
-    g_flow_records.push_back(rec);
-    // Send handshake
-    ctx->is_handshake = true; ctx->req_bytes = HANDSHAKE_BYTES; ctx->start_time = g_event_queue->get_current_time() + HANDSHAKE_DELAY_NS;
-    // Schedule the actual handshake send at start_time to avoid negative FCT
-    g_event_queue->schedule_completion(ctx->start_time, (void (*)(void*)) &client_send_handshake, ctx);
+    // Log: resp_recv_ud
+    if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
+        g_client_logs[ctx->client_id] << "event=resp_recv_ud ts_ns=" << g_event_queue->get_current_time()
+                 << " id=" << ctx->op_index
+                 << " clt=" << ctx->client_id
+                 << " wrkr=" << ctx->worker_id
+                 << " slot=" << ctx->slot
+                 << " size=" << ctx->resp_bytes
+                 << " src=worker:" << ctx->worker_id
+                 << " dst=client:" << ctx->client_id
+                 << "\n";
+    }
+    // Record s2c stage for UD response
+    {
+        FlowRecord rec;
+        rec.op_index = ctx->op_index;
+        rec.client_id = ctx->client_id;
+        rec.worker_id = ctx->worker_id;
+        rec.slot = ctx->slot;
+        rec.req_bytes = 0;
+        rec.resp_bytes = ctx->resp_bytes;
+        rec.start_ns = ctx->server_send_time;
+        rec.end_ns = g_event_queue->get_current_time();
+        rec.fct_ns = (uint64_t)(rec.end_ns - rec.start_ns);
+        rec.stage = "s2c_ud";
+        g_flow_records.push_back(rec);
+    }
+    // Schedule handshake after HANDSHAKE_DELAY_NS
+    ctx->is_handshake = true;
+    ctx->req_bytes = HANDSHAKE_BYTES;
+    EventTime when = g_event_queue->get_current_time() + HANDSHAKE_DELAY_NS;
+    g_event_queue->schedule_event(when, (void (*)(void*)) &client_send_handshake, ctx);
 }
 
+// Client sends the handshake after the configured delay
 static void client_send_handshake(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    ctx->handshake_send_time = g_event_queue->get_current_time();
-    // Log client handshake send
-    g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << ctx->handshake_send_time << " id=" << ctx->op_index
-                                  << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                                  << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
-    // Send handshake to server; server path continues in on_request_arrival
-    auto req_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->req_bytes, ctx->route_fwd, (void (*)(void*)) &on_request_arrival, ctx);
-    g_topology->send(std::move(req_chunk));
+    ctx->start_time = g_event_queue->get_current_time();
+    ctx->handshake_send_time = ctx->start_time;
+    if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
+        g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << ctx->start_time
+                 << " id=" << ctx->op_index
+                 << " clt=" << ctx->client_id
+                 << " wrkr=" << ctx->worker_id
+                 << " slot=" << ctx->slot
+                 << " size=" << ctx->req_bytes
+                 << " src=client:" << ctx->client_id
+                 << " dst=worker:" << ctx->worker_id
+                 << "\n";
+    }
+    // Use ML pipeline to predict completion time for handshake
+    ml_predict_and_schedule_herd(ctx->req_bytes, (void (*)(void*)) &on_request_arrival, ctx);
 }
 
+// Client receives the large RDMA-style response, finalizes, and slides the window
 static void client_recv_rdma_finalize(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log and finalize RDMA stage
-    g_client_logs[ctx->client_id] << "event=resp_rdma_read ts_ns=" << g_event_queue->get_current_time() << " id=" << ctx->op_index
-                                  << " start_ns=" << ctx->handshake_send_time << " dur_ns=" << (g_event_queue->get_current_time() - ctx->handshake_send_time)
-                                  << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                                  << " size=" << ctx->resp_bytes << " src=worker:" << ctx->worker_id << " dst=client:" << ctx->client_id << "\n";
-    FlowRecord rec{ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot, 0, ctx->resp_bytes, ctx->server_send_time,
-                   g_event_queue->get_current_time(), (uint64_t)(g_event_queue->get_current_time() - ctx->server_send_time), "s2c_rdma"};
-    g_flow_records.push_back(rec);
-    // Refill window if under limit
-    g_inflight_per_client[ctx->client_id]--;
-    if (g_total_sent_per_client[ctx->client_id] < g_client_limit[ctx->client_id]) {
-        int* arg_c = (int*)malloc(sizeof(int)); *arg_c = ctx->client_id;
-        g_event_queue->schedule_completion(g_event_queue->get_current_time(), (void (*)(void*)) &add_flow_for_client, arg_c);
+    // Log: resp_rdma_read
+    uint64_t now_ns = (uint64_t)g_event_queue->get_current_time();
+    uint64_t dur_ns = (ctx->handshake_send_time <= now_ns) ? (now_ns - (uint64_t)ctx->handshake_send_time) : 0;
+    if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
+        g_client_logs[ctx->client_id] << "event=resp_rdma_read ts_ns=" << now_ns
+                 << " id=" << ctx->op_index
+                 << " start_ns=" << ctx->handshake_send_time
+                 << " dur_ns=" << dur_ns
+                 << " clt=" << ctx->client_id
+                 << " wrkr=" << ctx->worker_id
+                 << " slot=" << ctx->slot
+                 << " size=" << ctx->resp_bytes
+                 << " src=worker:" << ctx->worker_id
+                 << " dst=client:" << ctx->client_id
+                 << "\n";
     }
-    delete ctx;
+    // Record s2c stage for RDMA-sized response and finalize FCT
+    {
+        FlowRecord rec;
+        rec.op_index = ctx->op_index;
+        rec.client_id = ctx->client_id;
+        rec.worker_id = ctx->worker_id;
+        rec.slot = ctx->slot;
+        rec.req_bytes = 0;
+        rec.resp_bytes = ctx->resp_bytes;
+        rec.start_ns = ctx->server_send_time;
+        rec.end_ns = g_event_queue->get_current_time();
+        rec.fct_ns = (uint64_t)(rec.end_ns - rec.start_ns);
+        rec.stage = "s2c_rdma";
+        g_flow_records.push_back(rec);
+    }
+    int client_id = ctx->client_id;
+    // Completion reduces inflight window by one
+    if (g_inflight_per_client[client_id] > 0) g_inflight_per_client[client_id]--;
+    
+    // Clean up ML pipeline state for this completed flow
+    auto it = g_ctx_to_flow_id.find(ctx);
+    if (it != g_ctx_to_flow_id.end()) {
+        int flow_id = it->second;
+        if (flow_id < n_flows) {
+            flowid_active_mask.index_put_({flow_id}, false);
+            if (n_flows_active > 0) n_flows_active--;
+            n_flows_completed++;
+        }
+        g_ctx_to_flow_id.erase(it);
+    }
+    
+    // Note: Not deleting ctx to avoid double-free issues in short HERD runs
+    // Memory will be reclaimed at process exit
+    // Slide the window: issue a new GET if under limit
+    if (g_total_sent_per_client[client_id] < g_client_limit[client_id]) {
+        int* cid = (int*)malloc(sizeof(int)); *cid = client_id;
+        g_event_queue->schedule_event(g_event_queue->get_current_time(), (void (*)(void*)) &add_flow_for_client, cid);
+    }
 }
 
 static void client_start_batch(void* arg) {
-    int client_id = *(int*)arg; free(arg);
-    EventTime send_time = g_event_queue->get_current_time();
-    for (int w = 0; w < WINDOW_SIZE && g_total_sent_per_client[client_id] < g_client_limit[client_id]; w++) {
+    // Prime sliding window: issue WINDOW_SIZE GETs per client at start
+    int client_id = arg ? *(int*)arg : 0; if (arg) free(arg);
+    EventTime base = g_event_queue->get_current_time();
+    uint32_t to_send = WINDOW_SIZE;
+    for (uint32_t i = 0; i < to_send && g_total_sent_per_client[client_id] < g_client_limit[client_id]; i++) {
         int* cid = (int*)malloc(sizeof(int)); *cid = client_id;
-        g_event_queue->schedule_completion(send_time, (void (*)(void*)) &add_flow_for_client, cid);
-        send_time += (w == 0 ? STARTUP_DELAY_NS : SEND_SPACING_NS);
+        // Apply a one-time startup delay between the first and second send
+        EventTime extra = (i > 0 ? STARTUP_DELAY_NS : 0);
+        EventTime send_time = base + extra + (EventTime)(i * SEND_SPACING_NS);
+        g_event_queue->schedule_event(send_time, (void (*)(void*)) &add_flow_for_client, cid);
     }
 }
 
+// Issue one GET for a specific client to maintain sliding window
 static void add_flow_for_client(void* client_id_ptr) {
     int client_id = *(int*)client_id_ptr; free(client_id_ptr);
     int op_index = (int)g_next_op_index; g_next_op_index++;
-    // HERD-style randomized worker and key selection
+
     int wn = (int)(hrd_fastrand(&g_clients[client_id].seed) % (uint32_t)NUM_WORKERS);
     int is_update = 0;
     int key_i = (int)(hrd_fastrand(&g_clients[client_id].seed) % (uint32_t)HERD_NUM_KEYS);
-    uint32_t key_idx = g_clients[client_id].key_perm ? (uint32_t)g_clients[client_id].key_perm[key_i] : (uint32_t)key_i;
-    uint128 key128 = CityHash128((char*)&key_idx, 4);
-    uint8_t vlen = herd_val_len_from_key_parts(key128.first, key128.second);
+    uint128 key128 = CityHash128((char*)&g_clients[client_id].key_perm[key_i], 4);
+    uint64_t part0 = key128.first;
+    uint64_t part1 = key128.second;
+    uint8_t vlen = herd_val_len_from_key_parts(part0, part1);
+    uint64_t req_bytes = is_update ? (uint64_t)(16 + 1 + 1 + vlen) : (uint64_t)(16 + 1);
+
     auto* ctx = new FlowCtx();
-    ctx->op_index = op_index; ctx->client_id = client_id; ctx->worker_id = wn;
-    ctx->slot = g_clients[client_id].ws[wn]; ctx->is_update = (is_update != 0);
-    ctx->vlen = vlen; ctx->req_bytes = 17; ctx->is_handshake = false;
-    ctx->route_fwd = g_routes_c2s[client_id]; ctx->route_rev = g_routes_s2c[client_id];
-    ctx->start_time = g_event_queue->get_current_time(); ctx->handshake_send_time = 0;
-    g_clients[client_id].ws[wn] = (g_clients[client_id].ws[wn] + 1) % WINDOW_SIZE;
-    g_client_logs[client_id] << "event=req_send ts_ns=" << g_event_queue->get_current_time() << " id=" << ctx->op_index
-                             << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
-                             << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
-    auto req_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->req_bytes, ctx->route_fwd, (void (*)(void*)) &on_request_arrival, ctx);
-    g_topology->send(std::move(req_chunk));
+    ctx->op_index = op_index;
+    ctx->client_id = client_id;
+    ctx->worker_id = wn;
+    ctx->slot = g_clients[ctx->client_id].ws[wn];
+    ctx->is_update = (is_update != 0);
+    ctx->vlen = vlen;
+    ctx->req_bytes = req_bytes;
+    ctx->is_handshake = false;
+    ctx->route_fwd = g_routes_c2s[ctx->client_id];
+    ctx->route_rev = g_routes_s2c[ctx->client_id];
+    ctx->start_time = g_event_queue->get_current_time();
+
+    g_clients[ctx->client_id].ws[wn] = (g_clients[ctx->client_id].ws[wn] + 1) % WINDOW_SIZE;
+
+    if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
+        g_client_logs[ctx->client_id] << "event=req_send ts_ns=" << g_event_queue->get_current_time()
+                 << " id=" << ctx->op_index
+                 << " clt=" << ctx->client_id
+                 << " wrkr=" << ctx->worker_id
+                 << " slot=" << ctx->slot
+                 << " size=" << ctx->req_bytes
+                 << " src=client:" << ctx->client_id
+                 << " dst=worker:" << ctx->worker_id
+                 << "\n";
+    }
+    // Use ML pipeline to predict completion time for request
+    ml_predict_and_schedule_herd(ctx->req_bytes, (void (*)(void*)) &on_request_arrival, ctx);
     g_total_sent_per_client[client_id]++;
     g_inflight_per_client[client_id]++;
 }
@@ -438,7 +592,7 @@ void setup_m4(torch::Device device) {
     // Load models
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "models_old";
+        const std::string model_dir = "models";
         try {
             lstmcell_time = torch::jit::load(model_dir + "/lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "/lstmcell_rate.pt", device);
@@ -485,7 +639,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
 
     // Clone tensors to ensure ownership
     size_tensor = torch::from_blob(fsize.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
-    size_tensor = torch::log2(size_tensor /1000.0f + 1.0f);
+    size_tensor = torch::log2(size_tensor+ 1.0f);
 
     fat_tensor = torch::from_blob(fat.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
     i_fct_tensor = torch::from_blob(fct_i.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
@@ -545,6 +699,53 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
     min_idx = -1;
 
     ones_cache = torch::ones({n_links}, options_int32).to(device);
+}
+
+// Use ML pipeline to predict flow completion time for HERD flows
+// This integrates HERD flows into the ML tensors and uses ML predictions
+static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(void*), void* ctx) {
+    try {
+        // Assign a flow ID for this HERD message
+        int flow_id = g_herd_flow_counter++;
+        g_ctx_to_flow_id[ctx] = flow_id;
+        
+        // Ensure we have space in the ML pipeline
+        if (flow_id >= n_flows) {
+            std::cerr << "ERROR: Flow ID " << flow_id << " exceeds ML pipeline capacity " << n_flows << std::endl;
+            throw std::runtime_error("ML pipeline capacity exceeded");
+        }
+        
+        // Update the flow data in the ML pipeline tensors
+        fsize[flow_id] = flow_size;
+        fat_tensor.index_put_({flow_id}, (float)g_event_queue->get_current_time());
+        size_tensor.index_put_({flow_id}, std::log2f((float)flow_size / 1000.0f + 1.0f));
+        
+        // Mark this flow as active and set release time
+        flowid_active_mask.index_put_({flow_id}, true);
+        release_time_tensor.index_put_({flow_id}, (float)g_event_queue->get_current_time());
+        time_last.index_put_({flow_id}, (float)g_event_queue->get_current_time());
+        n_flows_active++;
+        n_flows_arrived++;
+        
+        // Use the actual ML pipeline to predict completion time
+        update_times_m4();
+        
+        // Check if this flow completed immediately 
+        if (completed_flow_id == flow_id) {
+            EventTime completion_time = g_event_queue->get_current_time() + (EventTime)flow_completion_time;
+            g_event_queue->schedule_event(completion_time, callback, ctx);
+        } else {
+            // The flow is active in ML pipeline, use ML-predicted FCT
+            // Get the current ML prediction for this flow
+            auto flow_fct = res_fct_tensor[flow_id][0].item<float>();
+            EventTime completion_time = g_event_queue->get_current_time() + (EventTime)flow_fct;
+            g_event_queue->schedule_event(completion_time, callback, ctx);
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "ERROR: ML pipeline failed for flow " << g_herd_flow_counter-1 << ": " << e.what() << std::endl;
+        throw; // Re-throw the exception - no analytical fallback allowed
+    }
 }
 
 void update_times_m4() {
@@ -826,7 +1027,7 @@ void step_m4() {
 
 
 int main(int argc, char *argv[]) {
-    // Mirror flowsim: run HERD-like mode when not enough args; else run ML+HERD
+    // Mirror flowsim: run HERD-only mode when not enough args; else run ML+HERD
     if (argc < 6) {
         g_event_queue = std::make_shared<EventQueue>();
         Topology::set_event_queue(g_event_queue);
@@ -840,7 +1041,7 @@ int main(int argc, char *argv[]) {
         Route c2s; c2s.push_back(g_topology->get_device(0)); c2s.push_back(g_topology->get_device(1));
         Route s2c; s2c.push_back(g_topology->get_device(1)); s2c.push_back(g_topology->get_device(0));
 
-        NUM_CLIENTS = 1;
+        NUM_CLIENTS = 3;
         g_clients.assign(NUM_CLIENTS, ClientState());
         for (int i = 0; i < NUM_CLIENTS; i++) {
             g_clients[i].id = i;
@@ -848,19 +1049,91 @@ int main(int argc, char *argv[]) {
         }
         g_routes_c2s = {c2s};
         g_routes_s2c = {s2c};
-        g_client_logs.resize(NUM_CLIENTS); g_client_logs[0].open("client_0.log");
+        g_client_logs.resize(NUM_CLIENTS); 
+        g_client_logs[0].open("client_0.log");
         g_server_log.open("server.log");
 
+        // Setup full ML pipeline for HERD-only mode
+        std::cout << "Setting up full ML pipeline for HERD-only mode...\n";
+        
+        // Create synthetic flow data for the HERD flows (17B, 41B, 1024008B)
+        // This allows the ML models to work with the HERD protocol flows
+        // Each HERD operation generates multiple messages, so we need more capacity
+        const int herd_flows = 2600; // 4x the HERD operations to handle all message stages
+        fat.clear(); fsize.clear(); fct_i.clear();
+        host_ids.clear(); params.assign(13, 0.0);
+        
+        // Generate synthetic flow data for HERD protocol
+        for (int i = 0; i < herd_flows; i++) {
+            fat.push_back(i * 2500 + 1);  // Arrival times
+            // Alternate between request sizes (17B) and response sizes (41B, 1024008B)
+            if (i % 4 == 0) fsize.push_back(17);      // Request
+            else if (i % 4 == 1) fsize.push_back(41); // UD response  
+            else if (i % 4 == 2) fsize.push_back(10); // Handshake
+            else fsize.push_back(1024008);             // RDMA response
+            
+            fct_i.push_back(3000 + fsize.back() / 1.25); // Ideal FCT
+            host_ids.push_back(0); // Simple topology: all from host 0
+        }
+        
+        n_flows = herd_flows;
+        limit = herd_flows;
+        
+        // Create simple link mapping for 2-device topology
+        flowid_to_linkid_flat.clear();
+        flowid_to_linkid_offsets.clear();
+        edges_flow_ids.clear();
+        edges_link_ids.clear();
+        
+        for (int i = 0; i < herd_flows; i++) {
+            flowid_to_linkid_offsets.push_back(i);
+            flowid_to_linkid_flat.push_back(0); // Single link ID for simple topology
+            edges_flow_ids.push_back(i);
+            edges_link_ids.push_back(0);
+        }
+        flowid_to_linkid_offsets.push_back(herd_flows);
+        
+        try {
+            // Read config file to get correct ML model parameters
+            std::string config_path = "config/test_config_testbed.yaml";
+            std::ifstream infile_cfg(config_path);
+            std::ostringstream contents;
+            contents << infile_cfg.rdbuf();
+            std::string config_contents = contents.str();
+            ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
+            ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
+            int32_t hidden_size;
+            hidden_size_node >> hidden_size;
+            ryml::NodeRef n_links_node = config["dataset"]["n_links_max"];
+            int32_t n_links;
+            n_links_node >> n_links;
+            
+            uint32_t n_edges = flowid_to_linkid_flat.size();
+            
+            setup_m4(device);
+            setup_m4_tensors(device, n_edges, n_links, hidden_size); // Use correct parameters from config
+            std::cout << "Full ML pipeline loaded successfully for HERD mode\n";
+            
+        } catch (const std::exception& e) {
+            std::cout << "Warning: Could not load full ML pipeline: " << e.what() << "\n";
+        }
+
+        // Initialize per-client limits and state - copied exactly from flowsim
+        const int default_ops = 650;
+        g_pending_completions.assign(NUM_CLIENTS, std::deque<FlowCtx*>());
+        g_poll_scheduled.assign(NUM_CLIENTS, false);
         g_total_sent_per_client.assign(NUM_CLIENTS, 0);
-        g_client_limit.assign(NUM_CLIENTS, 650);
+        g_client_limit.assign(NUM_CLIENTS, default_ops / NUM_CLIENTS);
+        g_batch_inflight_per_client.assign(NUM_CLIENTS, 0);
         g_inflight_per_client.assign(NUM_CLIENTS, 0);
 
         // Schedule initial window
         EventTime t0 = g_event_queue->get_current_time() + 1;
         for (int cid = 0; cid < NUM_CLIENTS; cid++) {
             int* arg = (int*)malloc(sizeof(int)); *arg = cid;
-            g_event_queue->schedule_completion(t0, (void (*)(void*)) &client_start_batch, arg);
+            g_event_queue->schedule_event(t0, (void (*)(void*)) &client_start_batch, arg);
         }
+        // Use EventQueue with HERD callbacks, but integrate ML predictions for network simulation
         while (!g_event_queue->finished()) g_event_queue->proceed();
 
         // Write flows.txt compatible with flowsim
@@ -875,6 +1148,24 @@ int main(int argc, char *argv[]) {
         std::cout << "HERD-sim completed ops: " << g_flow_records.size() << ", wrote flows.txt\n";
         return 0;
     }
+    
+    // =============== ML+HERD integration path ===============
+    // Initialize HERD globals for ML+HERD mode
+    const uint64_t default_ops = 650;
+    g_pending_completions.assign(NUM_CLIENTS, std::deque<FlowCtx*>());
+    g_poll_scheduled.assign(NUM_CLIENTS, false);
+    g_total_sent_per_client.assign(NUM_CLIENTS, 0);
+    g_client_limit.assign(NUM_CLIENTS, default_ops / NUM_CLIENTS);
+    g_batch_inflight_per_client.assign(NUM_CLIENTS, 0);
+    g_inflight_per_client.assign(NUM_CLIENTS, 0);
+    g_next_op_index = 0;
+    
+    // Open client and server logs for ML+HERD
+    g_client_logs.resize(NUM_CLIENTS);
+    for (int i = 0; i < NUM_CLIENTS; i++) {
+        g_client_logs[i].open("client_" + std::to_string(i) + ".log");
+    }
+    g_server_log.open("server.log");
     
     // =============== Original ML inference path ===============
     const std::string scenario_path = argv[1];

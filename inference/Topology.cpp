@@ -223,7 +223,7 @@ void Topology::reschedule_active_chunks() {
         next_completion_id = chunk->get_id();
         // Schedule event for HERD-mode using completion channel
         if (event_queue != nullptr) {
-            event_queue->schedule_completion(min, chunk_completion_callback, chunk_ptr);
+            event_queue->schedule_event(min, chunk_completion_callback, chunk_ptr);
             // no per-chunk event id tracking in this EventQueue implementation
         }
         break;

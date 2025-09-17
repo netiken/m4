@@ -34,7 +34,8 @@ void EventList::invoke_event() noexcept {
   if (empty()) {
     return;
   }
-  auto const& event = events.front();
+  // Copy the event before popping to avoid use-after-free if callback frees the list
+  EventEntry event = events.front();
   events.pop_front();
   event.callback(event.callback_arg);
 }
