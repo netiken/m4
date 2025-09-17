@@ -22,12 +22,12 @@
 static constexpr int HERD_NUM_KEYS = (8 * 1024 * 1024);
 static constexpr int NUM_WORKERS = 12;
 static int NUM_CLIENTS = 1; // configurable per-topology mode
-static constexpr int WINDOW_SIZE = 16; // per-worker ring slots per client
+static int WINDOW_SIZE = 16; // per-worker ring slots per client
 
 // New protocol constants for staged exchange
 static constexpr uint64_t RESP_UD_BYTES = 41;       // Server's first small response
 static constexpr uint64_t HANDSHAKE_BYTES = 10;     // Client's handshake payload size
-static constexpr uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable response
+static uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable response
 
 // Callback when a request arrives at the server. Immediately send a response.
 // Tunables for extra timing (ns)
@@ -871,6 +871,14 @@ static void add_flow_for_client(void* client_id_ptr) {
 }
 
 int main(int argc, char *argv[]) {
+    if (argc >= 2) {
+        int ws = std::atoi(argv[1]);
+        if (ws > 0) WINDOW_SIZE = ws;
+    }
+    if (argc >= 3) {
+        uint64_t rdma = std::strtoull(argv[2], nullptr, 10);
+        if (rdma > 0) RESP_RDMA_BYTES = rdma;
+    }
     // Mirror flowsim: run HERD-only mode when not enough args; else run ML+HERD
     if (argc < 6) {
         g_event_queue = std::make_shared<EventQueue>();
