@@ -259,6 +259,18 @@ static void client_recv_ud(void* arg) {
     g_event_queue->schedule_completion(ctx->start_time, (void (*)(void*)) &client_send_handshake, ctx);
 }
 
+static void client_send_handshake(void* arg) {
+    auto* ctx = static_cast<FlowCtx*>(arg);
+    ctx->handshake_send_time = g_event_queue->get_current_time();
+    // Log client handshake send
+    g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << ctx->handshake_send_time << " id=" << ctx->op_index
+                                  << " clt=" << ctx->client_id << " wrkr=" << ctx->worker_id << " slot=" << ctx->slot
+                                  << " size=" << ctx->req_bytes << " src=client:" << ctx->client_id << " dst=worker:" << ctx->worker_id << "\n";
+    // Send handshake to server; server path continues in on_request_arrival
+    auto req_chunk = std::make_unique<Chunk>(ctx->op_index, ctx->req_bytes, ctx->route_fwd, (void (*)(void*)) &on_request_arrival, ctx);
+    g_topology->send(std::move(req_chunk));
+}
+
 static void client_recv_rdma_finalize(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     // Log and finalize RDMA stage
