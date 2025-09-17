@@ -133,7 +133,7 @@ static constexpr uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable 
 // Disable explicit propagation in main; rely on Topology link latency instead
 static constexpr uint64_t SERVER_OVERHEAD_NS = 24267; // 400 us between recv and send
 static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
-static constexpr uint64_t STARTUP_DELAY_NS = 60346 - SEND_SPACING_NS;       // Extra delay between first and second initial sends
+static constexpr uint64_t STARTUP_DELAY_NS = 0;       // Extra delay between first and second initial sends
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // Delay between resp_recv_ud and handshake_send
 
 
