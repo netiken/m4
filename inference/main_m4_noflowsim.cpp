@@ -120,7 +120,6 @@ static std::vector<std::deque<FlowCtx*>> g_pending_completions; // per-client CQ
 static std::vector<bool> g_poll_scheduled; // per-client poll scheduled flag
 static std::vector<uint64_t> g_total_sent_per_client; // per-client total sends
 static std::vector<uint64_t> g_client_limit; // per-client send limit
-static std::vector<uint32_t> g_batch_inflight_per_client; // per-client window in flight (legacy; unused)
 static std::vector<uint32_t> g_inflight_per_client; // per-client active flows (sliding window)
 static uint64_t g_next_op_index = 0; // global unique op index
 static std::vector<std::ofstream> g_client_logs; // one per client
@@ -766,24 +765,19 @@ void update_times_m4() {
         for (int i = 0; i < num_tors; i++) {
             queue_size += tor_queue[i].size();
         }
-        std::cout << "waiting in queue " << queue_size << " " << flow_queue.size() << "\n";
         if (!flow_queue.empty()) {
-            std::cout << "flow queue " << flow_queue.front() << "\n";
             flow_id_in_prop = flow_queue.front();
             flow_arrival_time = fat_tensor[flow_id_in_prop].item<float>() < time_clock ? time_clock : fat_tensor[flow_id_in_prop].item<float>();
             queued = true;
         }
         else {
-            std::cout << "checking flow\n";
             while (current_flow < n_flows) {
                 int tor = get_tor(current_flow);
                 if (flow_counts[tor] < flow_limit) {
-                    std::cout << "taking flow " << current_flow << "\n";
                     flow_id_in_prop = current_flow;
                     flow_arrival_time = fat_tensor[current_flow].item<float>();
                     break;
                 } else {
-                    std::cout << "pushing flow " << current_flow << " " << " " << host_ids.at(current_flow) << " " << get_tor(current_flow) << " " << tor_queue[get_tor(current_flow)].size() << "\n";
                     tor_queue[get_tor(current_flow)].push(current_flow);
                     current_flow++;
                 }
@@ -799,7 +793,6 @@ void update_times_m4() {
         auto h_vec_active = h_vec.index_select(0, flowid_active_indices);
         auto nlinks_cur = flowid_to_nlinks_tensor.index_select(0, flowid_active_indices).unsqueeze(1); // [n_active,1]
         auto params_data_cur = params_tensor.repeat({n_flows_active, 1});
-        std::cout << nlinks_cur.size(0) << " " << params_data_cur.size(0) << " " << h_vec_active.size(0) << "\n";
         auto input_tensor = torch::cat({nlinks_cur, params_data_cur, h_vec_active}, 1);
 
         // Perform inference
@@ -825,7 +818,6 @@ void step_m4() {
     if (flow_arrival_time < flow_completion_time) {
         // New flow arrives before the next completion
 
-        std::cout << flow_id_in_prop << " arrived\n";
 
         if (queued) {
             flow_queue.pop();
@@ -919,11 +911,9 @@ void step_m4() {
             fat_tensor.index_put_({g_next_to_schedule}, time_clock);
             g_next_to_schedule++;
         } else if (!tor_queue[get_tor(completed_flow_id)].empty()) {
-            std::cout << "tor push " << completed_flow_id << " " << get_tor(completed_flow_id) << " " << tor_queue[get_tor(completed_flow_id)].front() << "\n";
             flow_queue.push(tor_queue[get_tor(completed_flow_id)].front());
             tor_queue[get_tor(completed_flow_id)].pop();
         }
-        std::cout << "m4: flow completed " << completed_flow_id <<  " " << get_tor(completed_flow_id) << "\n";
 
         // Get graph ID of the completed flow
         graph_id_cur = flow_to_graph_id[completed_flow_id].item<int64_t>();
@@ -956,8 +946,6 @@ void step_m4() {
     // Update h_vec for active flows
     auto flowid_active_mask_cur = torch::logical_and(flowid_active_mask, flow_to_graph_id == graph_id_cur);
     auto flowid_active_list_cur = torch::nonzero(flowid_active_mask_cur).flatten();
-    std::cout << "actual var: " << n_flows_active << ", n_active_flows: "<<flowid_active_list_cur.numel()<< ", graph_id_cur: " << graph_id_cur<< ", fat: " << flow_arrival_time/1000.0 << ", fct: " << flow_completion_time/1000.0 << std::endl;
-    std::cout <<"m4: " << flow_to_graph_id[0].item<int32_t>() << "\n";
     if (flowid_active_list_cur.numel() > 0 && flow_arrival_time < flow_completion_time) {
         
         // Calculate time deltas for active flows
@@ -1041,7 +1029,7 @@ int main(int argc, char *argv[]) {
         Route c2s; c2s.push_back(g_topology->get_device(0)); c2s.push_back(g_topology->get_device(1));
         Route s2c; s2c.push_back(g_topology->get_device(1)); s2c.push_back(g_topology->get_device(0));
 
-        NUM_CLIENTS = 3;
+        NUM_CLIENTS = 1;
         g_clients.assign(NUM_CLIENTS, ClientState());
         for (int i = 0; i < NUM_CLIENTS; i++) {
             g_clients[i].id = i;
@@ -1124,7 +1112,6 @@ int main(int argc, char *argv[]) {
         g_poll_scheduled.assign(NUM_CLIENTS, false);
         g_total_sent_per_client.assign(NUM_CLIENTS, 0);
         g_client_limit.assign(NUM_CLIENTS, default_ops / NUM_CLIENTS);
-        g_batch_inflight_per_client.assign(NUM_CLIENTS, 0);
         g_inflight_per_client.assign(NUM_CLIENTS, 0);
 
         // Schedule initial window
@@ -1156,7 +1143,6 @@ int main(int argc, char *argv[]) {
     g_poll_scheduled.assign(NUM_CLIENTS, false);
     g_total_sent_per_client.assign(NUM_CLIENTS, 0);
     g_client_limit.assign(NUM_CLIENTS, default_ops / NUM_CLIENTS);
-    g_batch_inflight_per_client.assign(NUM_CLIENTS, 0);
     g_inflight_per_client.assign(NUM_CLIENTS, 0);
     g_next_op_index = 0;
     

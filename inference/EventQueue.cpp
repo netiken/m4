@@ -13,7 +13,6 @@ EventTime EventQueue::get_current_time() const noexcept {
 
 bool EventQueue::finished() const noexcept {
   // Check whether event queue is empty
-  // std::cerr << "Checking if event queue is empty" << std::endl;
   return event_queue.empty();
 }
 
@@ -39,12 +38,7 @@ void EventQueue::proceed() noexcept {
 }
 
 void EventQueue::log_events() {
-    std::cout << "Event lists: " << event_queue.size();
-    int eventCount = 0;
-    for (auto it = event_queue.begin(); it != event_queue.end(); it++) {
-        eventCount += it->num_events();
-    }
-    std::cout << " " << eventCount << "\n";
+    // Debug function - currently unused in production
 }
 
 EventId EventQueue::schedule_event(
@@ -52,7 +46,6 @@ EventId EventQueue::schedule_event(
     const Callback callback,
     const CallbackArg callback_arg) noexcept {
   // Time should be at least larger than current time
-  // std::cerr << "Scheduling event time: " << event_time << ", Current time: " << current_time << std::endl;
   assert(event_time >= current_time);
 
   // Find the entry to insert the event
@@ -85,12 +78,10 @@ EventId EventQueue::schedule_event(
 
   // Store event in map for cancellation
   event_map[event_id] = event_list_it;
-  // std::cerr << "Event scheduled at time " << event_time << " with ID " << event_id << std::endl;
   return event_id;
 }
 
 void EventQueue::cancel_event(EventId event_id) noexcept {
-  // std::cerr << "Cancelling event with ID " << event_id << std::endl;
   auto it = event_map.find(event_id);
   if (it != event_map.end()) {
     auto& event_list_it = it->second;

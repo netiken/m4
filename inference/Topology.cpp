@@ -60,10 +60,6 @@ void Topology::send(std::unique_ptr<Chunk> chunk) noexcept {
     Chunk* chunk_ptr = active_chunks_ptrs.back().get();
     active_chunks.push_back(chunk_ptr);
 
-    // std::cerr << "Total active chunks: " << active_chunks.size() << std::endl;
-    // for (Chunk* ch : active_chunks) {
-    //     std::cerr << "Debug: Chunk ID: " << ch->get_completion_event_id() << ", Remaining size: " << ch->get_remaining_size() << ", Size: " << ch->get_size() << " from device " << ch->current_device()->get_id() << " to device " << ch->get_dest_device()->get_id() << std::endl;
-    // }
 
     add_chunk_to_links(chunk_ptr);
 
@@ -103,10 +99,6 @@ void Topology::connect(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency
         link_map[std::make_pair(dest, src)] = reverse_link;
     }
 
-    // std::cerr << "Debug: Connecting src: " << src << " dest: " << dest << " with bandwidth: " << bandwidth << std::endl;
-    // if (bidirectional) {
-    //     std::cerr << "Debug: Connecting dest: " << dest << " src: " << src << " with bandwidth: " << bandwidth << std::endl;
-    // }
 }
 
 //void Topology::instantiate_devices() noexcept {
@@ -147,20 +139,9 @@ void Topology::update_link_states() {
                 }
             }
         } else {
-            // std::cerr << "Debug: No active chunks on bottleneck link (" << bottleneck_link.first << " -> " << bottleneck_link.second << ")" << std::endl;
             break;
         }
     }
-    /*
-    std::cout << "New link state\n";
-    for (auto const& chunk : active_chunks) {
-        std::cout << "Route ";
-        for (auto const& step : chunk->get_route()) {
-            std::cout << step->get_id() << " ";
-        }
-        std::cout << "\n\tRate: " << chunk->get_rate() << "\n";
-    }
-    */
 }
 
 double Topology::calculate_bottleneck_rate(const std::pair<DeviceId, DeviceId>& link, const std::unordered_set<Chunk*>& fixed_chunks) {
@@ -176,17 +157,14 @@ double Topology::calculate_bottleneck_rate(const std::pair<DeviceId, DeviceId>& 
     }
 
     double fair_rate = active_chunks > 0 ? remaining_bandwidth / active_chunks : std::numeric_limits<double>::max();
-    // std::cerr << "Debug: Link (" << link.first << " -> " << link.second << "), Fair rate: " << fair_rate << ", Remaining bandwidth: " << remaining_bandwidth << ", Active chunks: " << active_chunks << std::endl;
     return fair_rate;
 }
 
 void Topology::reschedule_active_chunks() {
     // Use EventQueue time if available (HERD-mode), else internal time (M4 path)
     const auto now_time = (event_queue != nullptr ? event_queue->get_current_time() : current_time);
-    //std::cerr << "Debug: Rescheduling num active chunks: " << active_chunks.size() << std::endl;
     uint64_t min = -1;
     double completion_time;
-    //std::cerr << "Debug: Rescheduling num active chunks: " << active_chunks.size() << std::endl;
     //Chunk* next_chunk = nullptr;
     std::vector<Chunk*> next_chunks;
     double rate;
@@ -204,7 +182,6 @@ void Topology::reschedule_active_chunks() {
             chunk->set_remaining_size(remaining_size);  // Update remaining size
 
             auto* chunk_ptr = static_cast<void*>(chunk);  // Ensure proper chunk pointer
-            // std::cerr << "Debug: Scheduling chunk ID " << chunk->get_completion_event_id() << ", Chunk rate: " << new_rate << ", Remaining size: " << remaining_size << ", Current time: " << current_time << ", New completion time: " << new_completion_time << std::endl;
             if (min == -1 || min > now_time + new_completion_time) {
                 next_chunks.clear();
                 min = now_time + new_completion_time;
@@ -215,7 +192,6 @@ void Topology::reschedule_active_chunks() {
             }
         //}
     }
-    //std::cout << "min " << min << "\n";
     for (Chunk* chunk : next_chunks) {
         auto* chunk_ptr = static_cast<void*>(chunk);
         // Maintain legacy fields for M4 path
@@ -281,7 +257,6 @@ void Topology::remove_chunk_from_links(Chunk* chunk) {
         if (active_chunks.empty()) {
             active_links.erase(std::make_pair(src_device, dest_device));
         }
-        // std::cerr << "Debug: Removed chunk from link (" << src_device << " -> " << dest_device << "). It now has " << active_chunks.size() << " active chunks." << std::endl;
     }
 }
 
@@ -330,7 +305,6 @@ void Topology::chunk_completion(int chunk_id) {
         topology->active_chunks.erase(chunk_it);
     }
 
-    // std::cerr << "Debug: Chunk completion callback completed for chunk ID: " << chunk->get_completion_event_id() << std::endl;
 
     // Update link states and reschedule active chunks
     topology->update_link_states();
