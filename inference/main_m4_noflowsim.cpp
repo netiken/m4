@@ -32,7 +32,7 @@ static constexpr uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable 
 // Callback when a request arrives at the server. Immediately send a response.
 // Tunables for extra timing (ns)
 // Disable explicit propagation in main; rely on Topology link latency instead
-static constexpr uint64_t SERVER_OVERHEAD_NS = 24267; // flowsim control-path server delay
+static constexpr uint64_t SERVER_OVERHEAD_NS = 10000; // flowsim control-path server delay
 static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
 static constexpr uint64_t STARTUP_DELAY_NS = 0;       // Extra delay between first and second initial sends
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // flowsim control-path client delay
@@ -877,7 +877,7 @@ int main(int argc, char *argv[]) {
         Topology::set_event_queue(g_event_queue);
 
         // Topology switch: single client/server or multi-client tree (matching flowsim)
-        bool multi_client_topo = false; // Start with single-client for testing
+        bool multi_client_topo = true; // Start with single-client for testing
         double bw_bpns = 10.0;
         
         if (!multi_client_topo) {
