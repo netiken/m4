@@ -1,0 +1,864 @@
+event=req_send ts_ns=1 id=1 clt=1 wrkr=0 slot=0 size=17 src=client:1 dst=worker:0
+event=req_send ts_ns=2501 id=4 clt=1 wrkr=1 slot=0 size=17 src=client:1 dst=worker:1
+event=req_send ts_ns=5001 id=7 clt=1 wrkr=4 slot=0 size=17 src=client:1 dst=worker:4
+event=req_send ts_ns=7501 id=10 clt=1 wrkr=2 slot=0 size=17 src=client:1 dst=worker:2
+event=req_send ts_ns=10001 id=13 clt=1 wrkr=1 slot=1 size=17 src=client:1 dst=worker:1
+event=req_send ts_ns=12501 id=16 clt=1 wrkr=6 slot=0 size=17 src=client:1 dst=worker:6
+event=req_send ts_ns=15001 id=19 clt=1 wrkr=6 slot=1 size=17 src=client:1 dst=worker:6
+event=req_send ts_ns=17501 id=22 clt=1 wrkr=8 slot=0 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=24158 id=1 clt=1 wrkr=0 slot=0 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=32805 id=1 clt=1 wrkr=0 slot=0 size=10 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=52725 id=4 clt=1 wrkr=1 slot=0 size=41 src=worker:1 dst=client:1
+event=resp_recv_ud ts_ns=53694 id=7 clt=1 wrkr=4 slot=0 size=41 src=worker:4 dst=client:1
+event=resp_recv_ud ts_ns=54605 id=10 clt=1 wrkr=2 slot=0 size=41 src=worker:2 dst=client:1
+event=resp_recv_ud ts_ns=56572 id=13 clt=1 wrkr=1 slot=1 size=41 src=worker:1 dst=client:1
+event=resp_recv_ud ts_ns=59215 id=16 clt=1 wrkr=6 slot=0 size=41 src=worker:6 dst=client:1
+event=resp_recv_ud ts_ns=61226 id=19 clt=1 wrkr=6 slot=1 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=61372 id=4 clt=1 wrkr=1 slot=0 size=10 src=client:1 dst=worker:1
+event=hand_send ts_ns=62341 id=7 clt=1 wrkr=4 slot=0 size=10 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=63139 id=22 clt=1 wrkr=8 slot=0 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=63252 id=10 clt=1 wrkr=2 slot=0 size=10 src=client:1 dst=worker:2
+event=hand_send ts_ns=65219 id=13 clt=1 wrkr=1 slot=1 size=10 src=client:1 dst=worker:1
+event=hand_send ts_ns=67862 id=16 clt=1 wrkr=6 slot=0 size=10 src=client:1 dst=worker:6
+event=hand_send ts_ns=69873 id=19 clt=1 wrkr=6 slot=1 size=10 src=client:1 dst=worker:6
+event=hand_send ts_ns=71786 id=22 clt=1 wrkr=8 slot=0 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=1013187 id=1 start_ns=32805 dur_ns=980382 clt=1 wrkr=0 slot=0 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=1013187 id=24 clt=1 wrkr=7 slot=0 size=17 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=1057133 id=24 clt=1 wrkr=7 slot=0 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=1065780 id=24 clt=1 wrkr=7 slot=0 size=10 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=1089984 id=4 start_ns=61372 dur_ns=1028612 clt=1 wrkr=1 slot=0 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=1089984 id=27 clt=1 wrkr=9 slot=0 size=17 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=1134023 id=7 start_ns=62341 dur_ns=1071682 clt=1 wrkr=4 slot=0 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=1134023 id=30 clt=1 wrkr=11 slot=0 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=1158871 id=27 clt=1 wrkr=9 slot=0 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=1167518 id=27 clt=1 wrkr=9 slot=0 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=1175624 id=10 start_ns=63252 dur_ns=1112372 clt=1 wrkr=2 slot=0 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=1175624 id=32 clt=1 wrkr=3 slot=0 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=1202301 id=30 clt=1 wrkr=11 slot=0 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=1210948 id=30 clt=1 wrkr=11 slot=0 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=1235087 id=13 start_ns=65219 dur_ns=1169868 clt=1 wrkr=1 slot=1 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=1235087 id=34 clt=1 wrkr=8 slot=1 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=1244427 id=32 clt=1 wrkr=3 slot=0 size=41 src=worker:3 dst=client:1
+event=resp_rdma_read ts_ns=1251684 id=16 start_ns=67862 dur_ns=1183822 clt=1 wrkr=6 slot=0 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=1251684 id=35 clt=1 wrkr=4 slot=1 size=17 src=client:1 dst=worker:4
+event=hand_send ts_ns=1253074 id=32 clt=1 wrkr=3 slot=0 size=10 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=1304107 id=34 clt=1 wrkr=8 slot=1 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=1312754 id=34 clt=1 wrkr=8 slot=1 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=1314659 id=19 start_ns=69873 dur_ns=1244786 clt=1 wrkr=6 slot=1 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=1314659 id=37 clt=1 wrkr=8 slot=2 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=1321503 id=35 clt=1 wrkr=4 slot=1 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=1330150 id=35 clt=1 wrkr=4 slot=1 size=10 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=1384136 id=37 clt=1 wrkr=8 slot=2 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=1392783 id=37 clt=1 wrkr=8 slot=2 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=1406124 id=22 start_ns=71786 dur_ns=1334338 clt=1 wrkr=8 slot=0 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=1406124 id=39 clt=1 wrkr=10 slot=0 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=1471411 id=39 clt=1 wrkr=10 slot=0 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=1480058 id=39 clt=1 wrkr=10 slot=0 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=2419288 id=24 start_ns=1065780 dur_ns=1353508 clt=1 wrkr=7 slot=0 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=2419288 id=48 clt=1 wrkr=9 slot=1 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=2457516 id=48 clt=1 wrkr=9 slot=1 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=2466163 id=48 clt=1 wrkr=9 slot=1 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=2626551 id=27 start_ns=1167518 dur_ns=1459033 clt=1 wrkr=9 slot=0 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=2626551 id=52 clt=1 wrkr=11 slot=1 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=2683267 id=52 clt=1 wrkr=11 slot=1 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=2691914 id=52 clt=1 wrkr=11 slot=1 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=2761581 id=30 start_ns=1210948 dur_ns=1550633 clt=1 wrkr=11 slot=0 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=2761581 id=58 clt=1 wrkr=1 slot=2 size=17 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=2792947 id=32 start_ns=1253074 dur_ns=1539873 clt=1 wrkr=3 slot=0 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=2792947 id=60 clt=1 wrkr=10 slot=1 size=17 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=2822191 id=39 start_ns=1480058 dur_ns=1342133 clt=1 wrkr=10 slot=0 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=2822191 id=61 clt=1 wrkr=1 slot=3 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=2823066 id=58 clt=1 wrkr=1 slot=2 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=2831713 id=58 clt=1 wrkr=1 slot=2 size=10 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=2855365 id=60 clt=1 wrkr=10 slot=1 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=2864012 id=60 clt=1 wrkr=10 slot=1 size=10 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=2886801 id=61 clt=1 wrkr=1 slot=3 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=2895448 id=61 clt=1 wrkr=1 slot=3 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=2930565 id=34 start_ns=1312754 dur_ns=1617811 clt=1 wrkr=8 slot=1 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=2930565 id=67 clt=1 wrkr=8 slot=3 size=17 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=2939978 id=35 start_ns=1330150 dur_ns=1609828 clt=1 wrkr=4 slot=1 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=2939978 id=68 clt=1 wrkr=9 slot=2 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=2999571 id=67 clt=1 wrkr=8 slot=3 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=3008218 id=67 clt=1 wrkr=8 slot=3 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=3008878 id=68 clt=1 wrkr=9 slot=2 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=3017525 id=68 clt=1 wrkr=9 slot=2 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=3021199 id=37 start_ns=1392783 dur_ns=1628416 clt=1 wrkr=8 slot=2 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=3021199 id=70 clt=1 wrkr=5 slot=0 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=3092415 id=70 clt=1 wrkr=5 slot=0 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=3101062 id=70 clt=1 wrkr=5 slot=0 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=3514531 id=48 start_ns=2466163 dur_ns=1048368 clt=1 wrkr=9 slot=1 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=3514531 id=73 clt=1 wrkr=7 slot=1 size=17 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=3558169 id=73 clt=1 wrkr=7 slot=1 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=3566816 id=73 clt=1 wrkr=7 slot=1 size=10 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=3685457 id=52 start_ns=2691914 dur_ns=993543 clt=1 wrkr=11 slot=1 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=3685457 id=76 clt=1 wrkr=6 slot=2 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=3743776 id=76 clt=1 wrkr=6 slot=2 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=3752423 id=76 clt=1 wrkr=6 slot=2 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=3753576 id=58 start_ns=2831713 dur_ns=921863 clt=1 wrkr=1 slot=2 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=3753576 id=77 clt=1 wrkr=9 slot=3 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=3812389 id=77 clt=1 wrkr=9 slot=3 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=3821036 id=77 clt=1 wrkr=9 slot=3 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=4172882 id=60 start_ns=2864012 dur_ns=1308870 clt=1 wrkr=10 slot=1 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=4172882 id=84 clt=1 wrkr=0 slot=1 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=4213266 id=84 clt=1 wrkr=0 slot=1 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=4221913 id=84 clt=1 wrkr=0 slot=1 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=4273304 id=67 start_ns=3008218 dur_ns=1265086 clt=1 wrkr=8 slot=3 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=4273304 id=86 clt=1 wrkr=0 slot=2 size=17 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=4301013 id=61 start_ns=2895448 dur_ns=1405565 clt=1 wrkr=1 slot=3 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=4301013 id=88 clt=1 wrkr=1 slot=4 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=4330375 id=86 clt=1 wrkr=0 slot=2 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=4339022 id=86 clt=1 wrkr=0 slot=2 size=10 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=4364428 id=88 clt=1 wrkr=1 slot=4 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=4373075 id=88 clt=1 wrkr=1 slot=4 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=4543912 id=73 start_ns=3566816 dur_ns=977096 clt=1 wrkr=7 slot=1 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=4543912 id=91 clt=1 wrkr=10 slot=2 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=4610290 id=91 clt=1 wrkr=10 slot=2 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=4618937 id=91 clt=1 wrkr=10 slot=2 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=4634056 id=76 start_ns=3752423 dur_ns=881633 clt=1 wrkr=6 slot=2 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=4634056 id=96 clt=1 wrkr=1 slot=5 size=17 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=4686758 id=68 start_ns=3017525 dur_ns=1669233 clt=1 wrkr=9 slot=2 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=4686758 id=97 clt=1 wrkr=8 slot=4 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=4699948 id=96 clt=1 wrkr=1 slot=5 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=4708595 id=96 clt=1 wrkr=1 slot=5 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=4744709 id=77 start_ns=3821036 dur_ns=923673 clt=1 wrkr=9 slot=3 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=4744709 id=98 clt=1 wrkr=3 slot=1 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=4754407 id=97 clt=1 wrkr=8 slot=4 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=4763054 id=97 clt=1 wrkr=8 slot=4 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=4814267 id=98 clt=1 wrkr=3 slot=1 size=41 src=worker:3 dst=client:1
+event=resp_rdma_read ts_ns=4816619 id=70 start_ns=3101062 dur_ns=1715557 clt=1 wrkr=5 slot=0 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=4816619 id=100 clt=1 wrkr=0 slot=3 size=17 src=client:1 dst=worker:0
+event=hand_send ts_ns=4822914 id=98 clt=1 wrkr=3 slot=1 size=10 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=4874958 id=100 clt=1 wrkr=0 slot=3 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=4883605 id=100 clt=1 wrkr=0 slot=3 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=5204590 id=84 start_ns=4221913 dur_ns=982677 clt=1 wrkr=0 slot=1 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=5204590 id=109 clt=1 wrkr=2 slot=1 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=5269366 id=109 clt=1 wrkr=2 slot=1 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=5278013 id=109 clt=1 wrkr=2 slot=1 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=5465819 id=88 start_ns=4373075 dur_ns=1092744 clt=1 wrkr=1 slot=4 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=5465819 id=112 clt=1 wrkr=9 slot=4 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=5528762 id=112 clt=1 wrkr=9 slot=4 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=5537409 id=112 clt=1 wrkr=9 slot=4 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=5549872 id=86 start_ns=4339022 dur_ns=1210850 clt=1 wrkr=0 slot=2 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=5549872 id=113 clt=1 wrkr=7 slot=2 size=17 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=5606452 id=113 clt=1 wrkr=7 slot=2 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=5615099 id=113 clt=1 wrkr=7 slot=2 size=10 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=5693526 id=91 start_ns=4618937 dur_ns=1074589 clt=1 wrkr=10 slot=2 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=5693526 id=115 clt=1 wrkr=6 slot=3 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=5754145 id=115 clt=1 wrkr=6 slot=3 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=5762792 id=115 clt=1 wrkr=6 slot=3 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=6162456 id=96 start_ns=4708595 dur_ns=1453861 clt=1 wrkr=1 slot=5 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=6162456 id=122 clt=1 wrkr=11 slot=2 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=6217715 id=122 clt=1 wrkr=11 slot=2 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=6226362 id=122 clt=1 wrkr=11 slot=2 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=6241036 id=109 start_ns=5278013 dur_ns=963023 clt=1 wrkr=2 slot=1 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=6241036 id=124 clt=1 wrkr=11 slot=3 size=17 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=6250424 id=97 start_ns=4763054 dur_ns=1487370 clt=1 wrkr=8 slot=4 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=6250424 id=126 clt=1 wrkr=0 slot=4 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=6295635 id=124 clt=1 wrkr=11 slot=3 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=6304282 id=124 clt=1 wrkr=11 slot=3 size=10 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=6312140 id=126 clt=1 wrkr=0 slot=4 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=6320787 id=126 clt=1 wrkr=0 slot=4 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=6452414 id=98 start_ns=4822914 dur_ns=1629500 clt=1 wrkr=3 slot=1 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=6452414 id=131 clt=1 wrkr=1 slot=6 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=6519810 id=131 clt=1 wrkr=1 slot=6 size=41 src=worker:1 dst=client:1
+event=resp_rdma_read ts_ns=6525261 id=113 start_ns=5615099 dur_ns=910162 clt=1 wrkr=7 slot=2 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=6525261 id=134 clt=1 wrkr=3 slot=2 size=17 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=6527878 id=112 start_ns=5537409 dur_ns=990469 clt=1 wrkr=9 slot=4 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=6527878 id=135 clt=1 wrkr=0 slot=5 size=17 src=client:1 dst=worker:0
+event=hand_send ts_ns=6528457 id=131 clt=1 wrkr=1 slot=6 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=6532503 id=100 start_ns=4883605 dur_ns=1648898 clt=1 wrkr=0 slot=3 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=6532503 id=136 clt=1 wrkr=11 slot=4 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=6595321 id=134 clt=1 wrkr=3 slot=2 size=41 src=worker:3 dst=client:1
+event=resp_recv_ud ts_ns=6597524 id=135 clt=1 wrkr=0 slot=5 size=41 src=worker:0 dst=client:1
+event=resp_rdma_read ts_ns=6599579 id=115 start_ns=5762792 dur_ns=836787 clt=1 wrkr=6 slot=3 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=6599579 id=138 clt=1 wrkr=2 slot=2 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=6602468 id=136 clt=1 wrkr=11 slot=4 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=6603968 id=134 clt=1 wrkr=3 slot=2 size=10 src=client:1 dst=worker:3
+event=hand_send ts_ns=6606171 id=135 clt=1 wrkr=0 slot=5 size=10 src=client:1 dst=worker:0
+event=hand_send ts_ns=6611115 id=136 clt=1 wrkr=11 slot=4 size=10 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=6671332 id=138 clt=1 wrkr=2 slot=2 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=6679979 id=138 clt=1 wrkr=2 slot=2 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=7375635 id=122 start_ns=6226362 dur_ns=1149273 clt=1 wrkr=11 slot=2 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=7375635 id=146 clt=1 wrkr=11 slot=5 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=7411963 id=146 clt=1 wrkr=11 slot=5 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=7420610 id=146 clt=1 wrkr=11 slot=5 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=7463069 id=124 start_ns=6304282 dur_ns=1158787 clt=1 wrkr=11 slot=3 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=7463069 id=148 clt=1 wrkr=2 slot=3 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=7511474 id=148 clt=1 wrkr=2 slot=3 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=7520121 id=148 clt=1 wrkr=2 slot=3 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=7521707 id=126 start_ns=6320787 dur_ns=1200920 clt=1 wrkr=0 slot=4 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=7521707 id=149 clt=1 wrkr=2 slot=4 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=7580118 id=149 clt=1 wrkr=2 slot=4 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=7588765 id=149 clt=1 wrkr=2 slot=4 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=7667070 id=134 start_ns=6603968 dur_ns=1063102 clt=1 wrkr=3 slot=2 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=7667070 id=152 clt=1 wrkr=9 slot=5 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=7728117 id=152 clt=1 wrkr=9 slot=5 size=41 src=worker:9 dst=client:1
+event=resp_rdma_read ts_ns=7730022 id=138 start_ns=6679979 dur_ns=1050043 clt=1 wrkr=2 slot=2 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=7730022 id=153 clt=1 wrkr=4 slot=2 size=17 src=client:1 dst=worker:4
+event=hand_send ts_ns=7736764 id=152 clt=1 wrkr=9 slot=5 size=10 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=7780803 id=153 clt=1 wrkr=4 slot=2 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=7789450 id=153 clt=1 wrkr=4 slot=2 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=8208453 id=131 start_ns=6528457 dur_ns=1679996 clt=1 wrkr=1 slot=6 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=8208453 id=163 clt=1 wrkr=11 slot=6 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=8273215 id=163 clt=1 wrkr=11 slot=6 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=8281862 id=163 clt=1 wrkr=11 slot=6 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=8316501 id=135 start_ns=6606171 dur_ns=1710330 clt=1 wrkr=0 slot=5 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=8316501 id=167 clt=1 wrkr=8 slot=5 size=17 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=8340876 id=146 start_ns=7420610 dur_ns=920266 clt=1 wrkr=11 slot=5 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=8340876 id=169 clt=1 wrkr=6 slot=4 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=8385771 id=167 clt=1 wrkr=8 slot=5 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=8394418 id=167 clt=1 wrkr=8 slot=5 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=8408854 id=169 clt=1 wrkr=6 slot=4 size=41 src=worker:6 dst=client:1
+event=resp_rdma_read ts_ns=8415368 id=148 start_ns=7520121 dur_ns=895247 clt=1 wrkr=2 slot=3 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=8415368 id=170 clt=1 wrkr=9 slot=6 size=17 src=client:1 dst=worker:9
+event=hand_send ts_ns=8417501 id=169 clt=1 wrkr=6 slot=4 size=10 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=8485078 id=170 clt=1 wrkr=9 slot=6 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=8493725 id=170 clt=1 wrkr=9 slot=6 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=8496305 id=136 start_ns=6611115 dur_ns=1885190 clt=1 wrkr=11 slot=4 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=8496305 id=172 clt=1 wrkr=3 slot=3 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=8565711 id=172 clt=1 wrkr=3 slot=3 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=8574358 id=172 clt=1 wrkr=3 slot=3 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=8609773 id=149 start_ns=7588765 dur_ns=1021008 clt=1 wrkr=2 slot=4 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=8609773 id=174 clt=1 wrkr=5 slot=1 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=8669905 id=174 clt=1 wrkr=5 slot=1 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=8678552 id=174 clt=1 wrkr=5 slot=1 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=8882541 id=152 start_ns=7736764 dur_ns=1145777 clt=1 wrkr=9 slot=5 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=8882541 id=176 clt=1 wrkr=4 slot=3 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=8924056 id=176 clt=1 wrkr=4 slot=3 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=8932703 id=176 clt=1 wrkr=4 slot=3 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=8938954 id=153 start_ns=7789450 dur_ns=1149504 clt=1 wrkr=4 slot=2 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=8938954 id=178 clt=1 wrkr=6 slot=5 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=9003743 id=178 clt=1 wrkr=6 slot=5 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=9012390 id=178 clt=1 wrkr=6 slot=5 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=9543427 id=169 start_ns=8417501 dur_ns=1125926 clt=1 wrkr=6 slot=4 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=9543427 id=187 clt=1 wrkr=9 slot=7 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=9591021 id=187 clt=1 wrkr=9 slot=7 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=9599668 id=187 clt=1 wrkr=9 slot=7 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=9614026 id=174 start_ns=8678552 dur_ns=935474 clt=1 wrkr=5 slot=1 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=9614026 id=188 clt=1 wrkr=8 slot=6 size=17 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=9620513 id=163 start_ns=8281862 dur_ns=1338651 clt=1 wrkr=11 slot=6 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=9620513 id=189 clt=1 wrkr=10 slot=3 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=9666215 id=188 clt=1 wrkr=8 slot=6 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=9674862 id=188 clt=1 wrkr=8 slot=6 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=9682768 id=189 clt=1 wrkr=10 slot=3 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=9691415 id=189 clt=1 wrkr=10 slot=3 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=9907000 id=172 start_ns=8574358 dur_ns=1332642 clt=1 wrkr=3 slot=3 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=9907000 id=195 clt=1 wrkr=3 slot=4 size=17 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=9961121 id=170 start_ns=8493725 dur_ns=1467396 clt=1 wrkr=9 slot=6 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=9961121 id=196 clt=1 wrkr=4 slot=4 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=9965815 id=195 clt=1 wrkr=3 slot=4 size=41 src=worker:3 dst=client:1
+event=resp_rdma_read ts_ns=9965925 id=167 start_ns=8394418 dur_ns=1571507 clt=1 wrkr=8 slot=5 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=9965925 id=197 clt=1 wrkr=4 slot=5 size=17 src=client:1 dst=worker:4
+event=hand_send ts_ns=9974462 id=195 clt=1 wrkr=3 slot=4 size=10 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=10020663 id=196 clt=1 wrkr=4 slot=4 size=41 src=worker:4 dst=client:1
+event=resp_recv_ud ts_ns=10027615 id=197 clt=1 wrkr=4 slot=5 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=10029310 id=196 clt=1 wrkr=4 slot=4 size=10 src=client:1 dst=worker:4
+event=hand_send ts_ns=10036262 id=197 clt=1 wrkr=4 slot=5 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=10048094 id=176 start_ns=8932703 dur_ns=1115391 clt=1 wrkr=4 slot=3 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=10048094 id=200 clt=1 wrkr=6 slot=6 size=17 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=10095457 id=178 start_ns=9012390 dur_ns=1083067 clt=1 wrkr=6 slot=5 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=10095457 id=205 clt=1 wrkr=11 slot=7 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=10112684 id=200 clt=1 wrkr=6 slot=6 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=10121331 id=200 clt=1 wrkr=6 slot=6 size=10 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=10161976 id=205 clt=1 wrkr=11 slot=7 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=10170623 id=205 clt=1 wrkr=11 slot=7 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=10561354 id=189 start_ns=9691415 dur_ns=869939 clt=1 wrkr=10 slot=3 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=10561354 id=211 clt=1 wrkr=10 slot=4 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=10602003 id=211 clt=1 wrkr=10 slot=4 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=10610650 id=211 clt=1 wrkr=10 slot=4 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=10710302 id=188 start_ns=9674862 dur_ns=1035440 clt=1 wrkr=8 slot=6 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=10710302 id=212 clt=1 wrkr=2 slot=5 size=17 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=10713332 id=187 start_ns=9599668 dur_ns=1113664 clt=1 wrkr=9 slot=7 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=10713332 id=213 clt=1 wrkr=9 slot=0 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=10752221 id=212 clt=1 wrkr=2 slot=5 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=10760868 id=212 clt=1 wrkr=2 slot=5 size=10 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=10770259 id=213 clt=1 wrkr=9 slot=0 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=10778906 id=213 clt=1 wrkr=9 slot=0 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=11178822 id=195 start_ns=9974462 dur_ns=1204360 clt=1 wrkr=3 slot=4 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=11178822 id=219 clt=1 wrkr=0 slot=6 size=17 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=11202881 id=196 start_ns=10029310 dur_ns=1173571 clt=1 wrkr=4 slot=4 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=11202881 id=221 clt=1 wrkr=5 slot=2 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=11219979 id=219 clt=1 wrkr=0 slot=6 size=41 src=worker:0 dst=client:1
+event=resp_rdma_read ts_ns=11226939 id=197 start_ns=10036262 dur_ns=1190677 clt=1 wrkr=4 slot=5 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=11226939 id=222 clt=1 wrkr=11 slot=0 size=17 src=client:1 dst=worker:11
+event=hand_send ts_ns=11228626 id=219 clt=1 wrkr=0 slot=6 size=10 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=11262675 id=221 clt=1 wrkr=5 slot=2 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=11271322 id=221 clt=1 wrkr=5 slot=2 size=10 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=11287680 id=222 clt=1 wrkr=11 slot=0 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=11296327 id=222 clt=1 wrkr=11 slot=0 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=11361902 id=200 start_ns=10121331 dur_ns=1240571 clt=1 wrkr=6 slot=6 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=11361902 id=226 clt=1 wrkr=6 slot=7 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=11426670 id=226 clt=1 wrkr=6 slot=7 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=11435317 id=226 clt=1 wrkr=6 slot=7 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=11647880 id=211 start_ns=10610650 dur_ns=1037230 clt=1 wrkr=10 slot=4 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=11647880 id=233 clt=1 wrkr=1 slot=7 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=11715093 id=233 clt=1 wrkr=1 slot=7 size=41 src=worker:1 dst=client:1
+event=resp_rdma_read ts_ns=11722458 id=213 start_ns=10778906 dur_ns=943552 clt=1 wrkr=9 slot=0 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=11722458 id=234 clt=1 wrkr=11 slot=1 size=17 src=client:1 dst=worker:11
+event=hand_send ts_ns=11723740 id=233 clt=1 wrkr=1 slot=7 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=11755963 id=205 start_ns=10170623 dur_ns=1585340 clt=1 wrkr=11 slot=7 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=11755963 id=235 clt=1 wrkr=4 slot=6 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=11793214 id=234 clt=1 wrkr=11 slot=1 size=41 src=worker:11 dst=client:1
+event=resp_rdma_read ts_ns=11797088 id=212 start_ns=10760868 dur_ns=1036220 clt=1 wrkr=2 slot=5 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=11797088 id=237 clt=1 wrkr=3 slot=5 size=17 src=client:1 dst=worker:3
+event=hand_send ts_ns=11801861 id=234 clt=1 wrkr=11 slot=1 size=10 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=11826779 id=235 clt=1 wrkr=4 slot=6 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=11835426 id=235 clt=1 wrkr=4 slot=6 size=10 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=11867985 id=237 clt=1 wrkr=3 slot=5 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=11876632 id=237 clt=1 wrkr=3 slot=5 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=12092841 id=222 start_ns=11296327 dur_ns=796514 clt=1 wrkr=11 slot=0 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=12092841 id=242 clt=1 wrkr=9 slot=1 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=12155388 id=242 clt=1 wrkr=9 slot=1 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=12164035 id=242 clt=1 wrkr=9 slot=1 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=12342236 id=219 start_ns=11228626 dur_ns=1113610 clt=1 wrkr=0 slot=6 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=12342236 id=246 clt=1 wrkr=6 slot=0 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=12389864 id=246 clt=1 wrkr=6 slot=0 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=12398511 id=246 clt=1 wrkr=6 slot=0 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=12455404 id=221 start_ns=11271322 dur_ns=1184082 clt=1 wrkr=5 slot=2 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=12455404 id=248 clt=1 wrkr=5 slot=3 size=17 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=12467608 id=226 start_ns=11435317 dur_ns=1032291 clt=1 wrkr=6 slot=7 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=12467608 id=249 clt=1 wrkr=6 slot=1 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=12511203 id=248 clt=1 wrkr=5 slot=3 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=12519850 id=248 clt=1 wrkr=5 slot=3 size=10 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=12529980 id=249 clt=1 wrkr=6 slot=1 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=12538627 id=249 clt=1 wrkr=6 slot=1 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=13185792 id=246 start_ns=12398511 dur_ns=787281 clt=1 wrkr=6 slot=0 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=13185792 id=257 clt=1 wrkr=9 slot=2 size=17 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=13187654 id=237 start_ns=11876632 dur_ns=1311022 clt=1 wrkr=3 slot=5 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=13187654 id=258 clt=1 wrkr=8 slot=7 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=13246864 id=257 clt=1 wrkr=9 slot=2 size=41 src=worker:9 dst=client:1
+event=resp_recv_ud ts_ns=13248186 id=258 clt=1 wrkr=8 slot=7 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=13255511 id=257 clt=1 wrkr=9 slot=2 size=10 src=client:1 dst=worker:9
+event=hand_send ts_ns=13256833 id=258 clt=1 wrkr=8 slot=7 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=13259482 id=242 start_ns=12164035 dur_ns=1095447 clt=1 wrkr=9 slot=1 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=13259482 id=261 clt=1 wrkr=5 slot=4 size=17 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=13296167 id=233 start_ns=11723740 dur_ns=1572427 clt=1 wrkr=1 slot=7 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=13296167 id=264 clt=1 wrkr=4 slot=7 size=17 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=13297506 id=234 start_ns=11801861 dur_ns=1495645 clt=1 wrkr=11 slot=1 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=13297506 id=265 clt=1 wrkr=2 slot=6 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=13319531 id=261 clt=1 wrkr=5 slot=4 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=13328178 id=261 clt=1 wrkr=5 slot=4 size=10 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=13357965 id=264 clt=1 wrkr=4 slot=7 size=41 src=worker:4 dst=client:1
+event=resp_recv_ud ts_ns=13359363 id=265 clt=1 wrkr=2 slot=6 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=13366612 id=264 clt=1 wrkr=4 slot=7 size=10 src=client:1 dst=worker:4
+event=hand_send ts_ns=13368010 id=265 clt=1 wrkr=2 slot=6 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=13386959 id=249 start_ns=12538627 dur_ns=848332 clt=1 wrkr=6 slot=1 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=13386959 id=269 clt=1 wrkr=4 slot=0 size=17 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=13435757 id=235 start_ns=11835426 dur_ns=1600331 clt=1 wrkr=4 slot=6 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=13435757 id=271 clt=1 wrkr=5 slot=5 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=13452190 id=269 clt=1 wrkr=4 slot=0 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=13460837 id=269 clt=1 wrkr=4 slot=0 size=10 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=13504668 id=271 clt=1 wrkr=5 slot=5 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=13513315 id=271 clt=1 wrkr=5 slot=5 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=13604335 id=248 start_ns=12519850 dur_ns=1084485 clt=1 wrkr=5 slot=3 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=13604335 id=273 clt=1 wrkr=9 slot=3 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=13668740 id=273 clt=1 wrkr=9 slot=3 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=13677387 id=273 clt=1 wrkr=9 slot=3 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=14312903 id=257 start_ns=13255511 dur_ns=1057392 clt=1 wrkr=9 slot=2 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=14312903 id=281 clt=1 wrkr=9 slot=4 size=17 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=14348608 id=258 start_ns=13256833 dur_ns=1091775 clt=1 wrkr=8 slot=7 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=14348608 id=283 clt=1 wrkr=7 slot=3 size=17 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=14375067 id=281 clt=1 wrkr=9 slot=4 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=14383714 id=281 clt=1 wrkr=9 slot=4 size=10 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=14410789 id=283 clt=1 wrkr=7 slot=3 size=41 src=worker:7 dst=client:1
+event=resp_rdma_read ts_ns=14415237 id=261 start_ns=13328178 dur_ns=1087059 clt=1 wrkr=5 slot=4 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=14415237 id=284 clt=1 wrkr=3 slot=6 size=17 src=client:1 dst=worker:3
+event=hand_send ts_ns=14419436 id=283 clt=1 wrkr=7 slot=3 size=10 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=14476555 id=284 clt=1 wrkr=3 slot=6 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=14485202 id=284 clt=1 wrkr=3 slot=6 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=14675278 id=264 start_ns=13366612 dur_ns=1308666 clt=1 wrkr=4 slot=7 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=14675278 id=289 clt=1 wrkr=11 slot=2 size=17 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=14703901 id=265 start_ns=13368010 dur_ns=1335891 clt=1 wrkr=2 slot=6 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=14703901 id=291 clt=1 wrkr=10 slot=5 size=17 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=14705473 id=269 start_ns=13460837 dur_ns=1244636 clt=1 wrkr=4 slot=0 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=14705473 id=292 clt=1 wrkr=9 slot=5 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=14737988 id=289 clt=1 wrkr=11 slot=2 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=14746635 id=289 clt=1 wrkr=11 slot=2 size=10 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=14767539 id=291 clt=1 wrkr=10 slot=5 size=41 src=worker:10 dst=client:1
+event=resp_recv_ud ts_ns=14769335 id=292 clt=1 wrkr=9 slot=5 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=14776186 id=291 clt=1 wrkr=10 slot=5 size=10 src=client:1 dst=worker:10
+event=hand_send ts_ns=14777982 id=292 clt=1 wrkr=9 slot=5 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=14886625 id=273 start_ns=13677387 dur_ns=1209238 clt=1 wrkr=9 slot=3 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=14886625 id=296 clt=1 wrkr=10 slot=6 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=14953941 id=296 clt=1 wrkr=10 slot=6 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=14962588 id=296 clt=1 wrkr=10 slot=6 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=14986318 id=271 start_ns=13513315 dur_ns=1473003 clt=1 wrkr=5 slot=5 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=14986318 id=301 clt=1 wrkr=2 slot=7 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=15056023 id=301 clt=1 wrkr=2 slot=7 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=15064670 id=301 clt=1 wrkr=2 slot=7 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=15380986 id=281 start_ns=14383714 dur_ns=997272 clt=1 wrkr=9 slot=4 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=15380986 id=304 clt=1 wrkr=1 slot=0 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=15422711 id=304 clt=1 wrkr=1 slot=0 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=15431358 id=304 clt=1 wrkr=1 slot=0 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=15457394 id=283 start_ns=14419436 dur_ns=1037958 clt=1 wrkr=7 slot=3 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=15457394 id=307 clt=1 wrkr=0 slot=7 size=17 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=15511878 id=284 start_ns=14485202 dur_ns=1026676 clt=1 wrkr=3 slot=6 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=15511878 id=309 clt=1 wrkr=5 slot=6 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=15523839 id=307 clt=1 wrkr=0 slot=7 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=15532486 id=307 clt=1 wrkr=0 slot=7 size=10 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=15572407 id=309 clt=1 wrkr=5 slot=6 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=15581054 id=309 clt=1 wrkr=5 slot=6 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=15957325 id=289 start_ns=14746635 dur_ns=1210690 clt=1 wrkr=11 slot=2 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=15957325 id=313 clt=1 wrkr=11 slot=3 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=16017638 id=313 clt=1 wrkr=11 slot=3 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=16026285 id=313 clt=1 wrkr=11 slot=3 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=16070342 id=292 start_ns=14777982 dur_ns=1292360 clt=1 wrkr=9 slot=5 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=16070342 id=316 clt=1 wrkr=5 slot=7 size=17 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=16078177 id=291 start_ns=14776186 dur_ns=1301991 clt=1 wrkr=10 slot=5 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=16078177 id=317 clt=1 wrkr=7 slot=4 size=17 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=16129986 id=316 clt=1 wrkr=5 slot=7 size=41 src=worker:5 dst=client:1
+event=resp_recv_ud ts_ns=16138075 id=317 clt=1 wrkr=7 slot=4 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=16138633 id=316 clt=1 wrkr=5 slot=7 size=10 src=client:1 dst=worker:5
+event=hand_send ts_ns=16146722 id=317 clt=1 wrkr=7 slot=4 size=10 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=16495185 id=309 start_ns=15581054 dur_ns=914131 clt=1 wrkr=5 slot=6 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=16495185 id=322 clt=1 wrkr=10 slot=7 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=16545404 id=322 clt=1 wrkr=10 slot=7 size=41 src=worker:10 dst=client:1
+event=resp_rdma_read ts_ns=16550903 id=296 start_ns=14962588 dur_ns=1588315 clt=1 wrkr=10 slot=6 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=16550903 id=323 clt=1 wrkr=1 slot=1 size=17 src=client:1 dst=worker:1
+event=hand_send ts_ns=16554051 id=322 clt=1 wrkr=10 slot=7 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=16578570 id=307 start_ns=15532486 dur_ns=1046084 clt=1 wrkr=0 slot=7 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=16578570 id=325 clt=1 wrkr=1 slot=2 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=16611137 id=323 clt=1 wrkr=1 slot=1 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=16619784 id=323 clt=1 wrkr=1 slot=1 size=10 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=16629832 id=325 clt=1 wrkr=1 slot=2 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=16638479 id=325 clt=1 wrkr=1 slot=2 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=16667975 id=304 start_ns=15431358 dur_ns=1236617 clt=1 wrkr=1 slot=0 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=16667975 id=331 clt=1 wrkr=9 slot=6 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=16727530 id=331 clt=1 wrkr=9 slot=6 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=16736177 id=331 clt=1 wrkr=9 slot=6 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=16899777 id=301 start_ns=15064670 dur_ns=1835107 clt=1 wrkr=2 slot=7 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=16899777 id=335 clt=1 wrkr=0 slot=0 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=16950419 id=335 clt=1 wrkr=0 slot=0 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=16959066 id=335 clt=1 wrkr=0 slot=0 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=16978410 id=313 start_ns=16026285 dur_ns=952125 clt=1 wrkr=11 slot=3 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=16978410 id=336 clt=1 wrkr=5 slot=0 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=17034199 id=336 clt=1 wrkr=5 slot=0 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=17042846 id=336 clt=1 wrkr=5 slot=0 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=17125446 id=316 start_ns=16138633 dur_ns=986813 clt=1 wrkr=5 slot=7 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=17125446 id=339 clt=1 wrkr=8 slot=0 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=17187866 id=339 clt=1 wrkr=8 slot=0 size=41 src=worker:8 dst=client:1
+event=resp_rdma_read ts_ns=17195181 id=317 start_ns=16146722 dur_ns=1048459 clt=1 wrkr=7 slot=4 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=17195181 id=343 clt=1 wrkr=8 slot=1 size=17 src=client:1 dst=worker:8
+event=hand_send ts_ns=17196513 id=339 clt=1 wrkr=8 slot=0 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=17257398 id=343 clt=1 wrkr=8 slot=1 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=17266045 id=343 clt=1 wrkr=8 slot=1 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=17635655 id=323 start_ns=16619784 dur_ns=1015871 clt=1 wrkr=1 slot=1 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=17635655 id=346 clt=1 wrkr=9 slot=7 size=17 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=17698319 id=322 start_ns=16554051 dur_ns=1144268 clt=1 wrkr=10 slot=7 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=17698319 id=348 clt=1 wrkr=8 slot=2 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=17699682 id=346 clt=1 wrkr=9 slot=7 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=17708329 id=346 clt=1 wrkr=9 slot=7 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=17711763 id=325 start_ns=16638479 dur_ns=1073284 clt=1 wrkr=1 slot=2 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=17711763 id=349 clt=1 wrkr=1 slot=3 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=17762547 id=348 clt=1 wrkr=8 slot=2 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=17771194 id=348 clt=1 wrkr=8 slot=2 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=17776376 id=349 clt=1 wrkr=1 slot=3 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=17785023 id=349 clt=1 wrkr=1 slot=3 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=17942356 id=331 start_ns=16736177 dur_ns=1206179 clt=1 wrkr=9 slot=6 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=17942356 id=356 clt=1 wrkr=4 slot=1 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=18012826 id=356 clt=1 wrkr=4 slot=1 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=18021473 id=356 clt=1 wrkr=4 slot=1 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=18226109 id=335 start_ns=16959066 dur_ns=1267043 clt=1 wrkr=0 slot=0 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=18226109 id=360 clt=1 wrkr=8 slot=3 size=17 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=18277916 id=336 start_ns=17042846 dur_ns=1235070 clt=1 wrkr=5 slot=0 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=18277916 id=361 clt=1 wrkr=1 slot=4 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=18280773 id=360 clt=1 wrkr=8 slot=3 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=18289420 id=360 clt=1 wrkr=8 slot=3 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=18336601 id=339 start_ns=17196513 dur_ns=1140088 clt=1 wrkr=8 slot=0 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=18336601 id=366 clt=1 wrkr=6 slot=2 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=18343672 id=361 clt=1 wrkr=1 slot=4 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=18352319 id=361 clt=1 wrkr=1 slot=4 size=10 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=18399823 id=366 clt=1 wrkr=6 slot=2 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=18408470 id=366 clt=1 wrkr=6 slot=2 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=18446542 id=343 start_ns=17266045 dur_ns=1180497 clt=1 wrkr=8 slot=1 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=18446542 id=368 clt=1 wrkr=5 slot=1 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=18501427 id=368 clt=1 wrkr=5 slot=1 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=18510074 id=368 clt=1 wrkr=5 slot=1 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=19011929 id=349 start_ns=17785023 dur_ns=1226906 clt=1 wrkr=1 slot=3 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=19011929 id=372 clt=1 wrkr=7 slot=5 size=17 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=19013381 id=346 start_ns=17708329 dur_ns=1305052 clt=1 wrkr=9 slot=7 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=19013381 id=373 clt=1 wrkr=1 slot=5 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=19060060 id=372 clt=1 wrkr=7 slot=5 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=19068707 id=372 clt=1 wrkr=7 slot=5 size=10 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=19077070 id=373 clt=1 wrkr=1 slot=5 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=19085717 id=373 clt=1 wrkr=1 slot=5 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=19205454 id=348 start_ns=17771194 dur_ns=1434260 clt=1 wrkr=8 slot=2 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=19205454 id=375 clt=1 wrkr=8 slot=4 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=19263200 id=375 clt=1 wrkr=8 slot=4 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=19271847 id=375 clt=1 wrkr=8 slot=4 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=19442380 id=361 start_ns=18352319 dur_ns=1090061 clt=1 wrkr=1 slot=4 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=19442380 id=379 clt=1 wrkr=3 slot=7 size=17 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=19459951 id=360 start_ns=18289420 dur_ns=1170531 clt=1 wrkr=8 slot=3 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=19459951 id=380 clt=1 wrkr=11 slot=4 size=17 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=19469171 id=368 start_ns=18510074 dur_ns=959097 clt=1 wrkr=5 slot=1 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=19469171 id=382 clt=1 wrkr=9 slot=0 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=19502843 id=379 clt=1 wrkr=3 slot=7 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=19511490 id=379 clt=1 wrkr=3 slot=7 size=10 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=19520665 id=380 clt=1 wrkr=11 slot=4 size=41 src=worker:11 dst=client:1
+event=resp_rdma_read ts_ns=19525417 id=366 start_ns=18408470 dur_ns=1116947 clt=1 wrkr=6 slot=2 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=19525417 id=388 clt=1 wrkr=11 slot=5 size=17 src=client:1 dst=worker:11
+event=hand_send ts_ns=19529312 id=380 clt=1 wrkr=11 slot=4 size=10 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=19529757 id=382 clt=1 wrkr=9 slot=0 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=19538404 id=382 clt=1 wrkr=9 slot=0 size=10 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=19587354 id=388 clt=1 wrkr=11 slot=5 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=19596001 id=388 clt=1 wrkr=11 slot=5 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=19756588 id=356 start_ns=18021473 dur_ns=1735115 clt=1 wrkr=4 slot=1 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=19756588 id=392 clt=1 wrkr=4 slot=2 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=19813198 id=392 clt=1 wrkr=4 slot=2 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=19821845 id=392 clt=1 wrkr=4 slot=2 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=19955737 id=373 start_ns=19085717 dur_ns=870020 clt=1 wrkr=1 slot=5 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=19955737 id=395 clt=1 wrkr=7 slot=6 size=17 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=19966350 id=375 start_ns=19271847 dur_ns=694503 clt=1 wrkr=8 slot=4 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=19966350 id=396 clt=1 wrkr=0 slot=1 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=20015068 id=395 clt=1 wrkr=7 slot=6 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=20023715 id=395 clt=1 wrkr=7 slot=6 size=10 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=20032330 id=396 clt=1 wrkr=0 slot=1 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=20040977 id=396 clt=1 wrkr=0 slot=1 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=20128047 id=372 start_ns=19068707 dur_ns=1059340 clt=1 wrkr=7 slot=5 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=20128047 id=397 clt=1 wrkr=5 slot=2 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=20167991 id=397 clt=1 wrkr=5 slot=2 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=20176638 id=397 clt=1 wrkr=5 slot=2 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=20705231 id=379 start_ns=19511490 dur_ns=1193741 clt=1 wrkr=3 slot=7 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=20705231 id=403 clt=1 wrkr=9 slot=1 size=17 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=20725687 id=380 start_ns=19529312 dur_ns=1196375 clt=1 wrkr=11 slot=4 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=20725687 id=404 clt=1 wrkr=2 slot=0 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=20763419 id=403 clt=1 wrkr=9 slot=1 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=20772066 id=403 clt=1 wrkr=9 slot=1 size=10 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=20780071 id=404 clt=1 wrkr=2 slot=0 size=41 src=worker:2 dst=client:1
+event=resp_rdma_read ts_ns=20783228 id=382 start_ns=19538404 dur_ns=1244824 clt=1 wrkr=9 slot=0 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=20783228 id=408 clt=1 wrkr=1 slot=6 size=17 src=client:1 dst=worker:1
+event=hand_send ts_ns=20788718 id=404 clt=1 wrkr=2 slot=0 size=10 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=20843536 id=408 clt=1 wrkr=1 slot=6 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=20852183 id=408 clt=1 wrkr=1 slot=6 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=20900324 id=396 start_ns=20040977 dur_ns=859347 clt=1 wrkr=0 slot=1 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=20900324 id=411 clt=1 wrkr=9 slot=2 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=20962363 id=411 clt=1 wrkr=9 slot=2 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=20971010 id=411 clt=1 wrkr=9 slot=2 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=21103447 id=395 start_ns=20023715 dur_ns=1079732 clt=1 wrkr=7 slot=6 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=21103447 id=419 clt=1 wrkr=4 slot=3 size=17 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=21105015 id=392 start_ns=19821845 dur_ns=1283170 clt=1 wrkr=4 slot=2 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=21105015 id=420 clt=1 wrkr=1 slot=7 size=17 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=21168486 id=388 start_ns=19596001 dur_ns=1572485 clt=1 wrkr=11 slot=5 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=21168486 id=421 clt=1 wrkr=4 slot=4 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=21173905 id=419 clt=1 wrkr=4 slot=3 size=41 src=worker:4 dst=client:1
+event=resp_recv_ud ts_ns=21175512 id=420 clt=1 wrkr=1 slot=7 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=21182552 id=419 clt=1 wrkr=4 slot=3 size=10 src=client:1 dst=worker:4
+event=hand_send ts_ns=21184159 id=420 clt=1 wrkr=1 slot=7 size=10 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=21239047 id=421 clt=1 wrkr=4 slot=4 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=21247694 id=421 clt=1 wrkr=4 slot=4 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=21268629 id=397 start_ns=20176638 dur_ns=1091991 clt=1 wrkr=5 slot=2 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=21268629 id=423 clt=1 wrkr=10 slot=0 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=21336922 id=423 clt=1 wrkr=10 slot=0 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=21345569 id=423 clt=1 wrkr=10 slot=0 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=21790787 id=403 start_ns=20772066 dur_ns=1018721 clt=1 wrkr=9 slot=1 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=21790787 id=428 clt=1 wrkr=4 slot=5 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=21841977 id=428 clt=1 wrkr=4 slot=5 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=21850624 id=428 clt=1 wrkr=4 slot=5 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=21903256 id=404 start_ns=20788718 dur_ns=1114538 clt=1 wrkr=2 slot=0 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=21903256 id=429 clt=1 wrkr=2 slot=1 size=17 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=21918595 id=411 start_ns=20971010 dur_ns=947585 clt=1 wrkr=9 slot=2 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=21918595 id=430 clt=1 wrkr=3 slot=0 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=21952884 id=429 clt=1 wrkr=2 slot=1 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=21961531 id=429 clt=1 wrkr=2 slot=1 size=10 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=21969596 id=430 clt=1 wrkr=3 slot=0 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=21978243 id=430 clt=1 wrkr=3 slot=0 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=22032270 id=408 start_ns=20852183 dur_ns=1180087 clt=1 wrkr=1 slot=6 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=22032270 id=434 clt=1 wrkr=5 slot=3 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=22091044 id=434 clt=1 wrkr=5 slot=3 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=22099691 id=434 clt=1 wrkr=5 slot=3 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=22605129 id=423 start_ns=21345569 dur_ns=1259560 clt=1 wrkr=10 slot=0 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=22605129 id=442 clt=1 wrkr=0 slot=2 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=22655949 id=442 clt=1 wrkr=0 slot=2 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=22664596 id=442 clt=1 wrkr=0 slot=2 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=22770715 id=428 start_ns=21850624 dur_ns=920091 clt=1 wrkr=4 slot=5 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=22770715 id=446 clt=1 wrkr=10 slot=1 size=17 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=22821105 id=430 start_ns=21978243 dur_ns=842862 clt=1 wrkr=3 slot=0 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=22821105 id=447 clt=1 wrkr=10 slot=2 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=22835427 id=446 clt=1 wrkr=10 slot=1 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=22844074 id=446 clt=1 wrkr=10 slot=1 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=22860006 id=421 start_ns=21247694 dur_ns=1612312 clt=1 wrkr=4 slot=4 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=22860006 id=450 clt=1 wrkr=5 slot=4 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=22882353 id=447 clt=1 wrkr=10 slot=2 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=22891000 id=447 clt=1 wrkr=10 slot=2 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=22912886 id=419 start_ns=21182552 dur_ns=1730334 clt=1 wrkr=4 slot=3 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=22912886 id=452 clt=1 wrkr=7 slot=7 size=17 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=22916940 id=429 start_ns=21961531 dur_ns=955409 clt=1 wrkr=2 slot=1 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=22916940 id=453 clt=1 wrkr=2 slot=2 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=22922318 id=450 clt=1 wrkr=5 slot=4 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=22930965 id=450 clt=1 wrkr=5 slot=4 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=22948046 id=420 start_ns=21184159 dur_ns=1763887 clt=1 wrkr=1 slot=7 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=22948046 id=454 clt=1 wrkr=10 slot=3 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=22976344 id=452 clt=1 wrkr=7 slot=7 size=41 src=worker:7 dst=client:1
+event=resp_recv_ud ts_ns=22980184 id=453 clt=1 wrkr=2 slot=2 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=22984991 id=452 clt=1 wrkr=7 slot=7 size=10 src=client:1 dst=worker:7
+event=hand_send ts_ns=22988831 id=453 clt=1 wrkr=2 slot=2 size=10 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=23012842 id=454 clt=1 wrkr=10 slot=3 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=23021489 id=454 clt=1 wrkr=10 slot=3 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=23160968 id=434 start_ns=22099691 dur_ns=1061277 clt=1 wrkr=5 slot=3 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=23160968 id=457 clt=1 wrkr=4 slot=6 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=23226471 id=457 clt=1 wrkr=4 slot=6 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=23235118 id=457 clt=1 wrkr=4 slot=6 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=23876400 id=454 start_ns=23021489 dur_ns=854911 clt=1 wrkr=10 slot=3 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=23876400 id=467 clt=1 wrkr=2 slot=3 size=17 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=23883060 id=442 start_ns=22664596 dur_ns=1218464 clt=1 wrkr=0 slot=2 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=23883060 id=468 clt=1 wrkr=5 slot=5 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=23915581 id=467 clt=1 wrkr=2 slot=3 size=41 src=worker:2 dst=client:1
+event=resp_rdma_read ts_ns=23922556 id=446 start_ns=22844074 dur_ns=1078482 clt=1 wrkr=10 slot=1 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=23922556 id=470 clt=1 wrkr=3 slot=1 size=17 src=client:1 dst=worker:3
+event=hand_send ts_ns=23924228 id=467 clt=1 wrkr=2 slot=3 size=10 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=23938926 id=468 clt=1 wrkr=5 slot=5 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=23947573 id=468 clt=1 wrkr=5 slot=5 size=10 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=23983496 id=470 clt=1 wrkr=3 slot=1 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=23992143 id=470 clt=1 wrkr=3 slot=1 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=24034122 id=452 start_ns=22984991 dur_ns=1049131 clt=1 wrkr=7 slot=7 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=24034122 id=472 clt=1 wrkr=1 slot=0 size=17 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=24065364 id=447 start_ns=22891000 dur_ns=1174364 clt=1 wrkr=10 slot=2 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=24065364 id=474 clt=1 wrkr=3 slot=2 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=24098454 id=472 clt=1 wrkr=1 slot=0 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=24107101 id=472 clt=1 wrkr=1 slot=0 size=10 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=24121183 id=474 clt=1 wrkr=3 slot=2 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=24129830 id=474 clt=1 wrkr=3 slot=2 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=24190515 id=450 start_ns=22930965 dur_ns=1259550 clt=1 wrkr=5 slot=4 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=24190515 id=476 clt=1 wrkr=0 slot=3 size=17 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=24237083 id=453 start_ns=22988831 dur_ns=1248252 clt=1 wrkr=2 slot=2 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=24237083 id=478 clt=1 wrkr=10 slot=4 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=24254177 id=476 clt=1 wrkr=0 slot=3 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=24262824 id=476 clt=1 wrkr=0 slot=3 size=10 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=24305490 id=478 clt=1 wrkr=10 slot=4 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=24314137 id=478 clt=1 wrkr=10 slot=4 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=24515133 id=457 start_ns=23235118 dur_ns=1280015 clt=1 wrkr=4 slot=6 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=24515133 id=484 clt=1 wrkr=10 slot=5 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=24582109 id=484 clt=1 wrkr=10 slot=5 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=24590756 id=484 clt=1 wrkr=10 slot=5 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=24782133 id=470 start_ns=23992143 dur_ns=789990 clt=1 wrkr=3 slot=1 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=24782133 id=491 clt=1 wrkr=6 slot=3 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=24849552 id=491 clt=1 wrkr=6 slot=3 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=24858199 id=491 clt=1 wrkr=6 slot=3 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=25052604 id=467 start_ns=23924228 dur_ns=1128376 clt=1 wrkr=2 slot=3 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=25052604 id=492 clt=1 wrkr=11 slot=6 size=17 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=25078860 id=468 start_ns=23947573 dur_ns=1131287 clt=1 wrkr=5 slot=5 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=25078860 id=493 clt=1 wrkr=5 slot=6 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=25093755 id=492 clt=1 wrkr=11 slot=6 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=25102402 id=492 clt=1 wrkr=11 slot=6 size=10 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=25143491 id=493 clt=1 wrkr=5 slot=6 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=25152138 id=493 clt=1 wrkr=5 slot=6 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=25177009 id=478 start_ns=24314137 dur_ns=862872 clt=1 wrkr=10 slot=4 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=25177009 id=496 clt=1 wrkr=10 slot=6 size=17 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=25195251 id=474 start_ns=24129830 dur_ns=1065421 clt=1 wrkr=3 slot=2 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=25195251 id=497 clt=1 wrkr=2 slot=4 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=25237595 id=496 clt=1 wrkr=10 slot=6 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=25246242 id=496 clt=1 wrkr=10 slot=6 size=10 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=25256563 id=497 clt=1 wrkr=2 slot=4 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=25265210 id=497 clt=1 wrkr=2 slot=4 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=25346780 id=472 start_ns=24107101 dur_ns=1239679 clt=1 wrkr=1 slot=0 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=25346780 id=499 clt=1 wrkr=4 slot=7 size=17 src=client:1 dst=worker:4
+event=resp_recv_ud ts_ns=25396171 id=499 clt=1 wrkr=4 slot=7 size=41 src=worker:4 dst=client:1
+event=hand_send ts_ns=25404818 id=499 clt=1 wrkr=4 slot=7 size=10 src=client:1 dst=worker:4
+event=resp_rdma_read ts_ns=25630100 id=476 start_ns=24262824 dur_ns=1367276 clt=1 wrkr=0 slot=3 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=25630100 id=502 clt=1 wrkr=1 slot=1 size=17 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=25640164 id=484 start_ns=24590756 dur_ns=1049408 clt=1 wrkr=10 slot=5 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=25640164 id=503 clt=1 wrkr=3 slot=3 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=25683640 id=502 clt=1 wrkr=1 slot=1 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=25692287 id=502 clt=1 wrkr=1 slot=1 size=10 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=25703195 id=503 clt=1 wrkr=3 slot=3 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=25711842 id=503 clt=1 wrkr=3 slot=3 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=25803514 id=491 start_ns=24858199 dur_ns=945315 clt=1 wrkr=6 slot=3 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=25803514 id=511 clt=1 wrkr=10 slot=7 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=25867157 id=511 clt=1 wrkr=10 slot=7 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=25875804 id=511 clt=1 wrkr=10 slot=7 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=26290742 id=496 start_ns=25246242 dur_ns=1044500 clt=1 wrkr=10 slot=6 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=26290742 id=519 clt=1 wrkr=11 slot=7 size=17 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=26301502 id=493 start_ns=25152138 dur_ns=1149364 clt=1 wrkr=5 slot=6 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=26301502 id=520 clt=1 wrkr=6 slot=4 size=17 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=26312509 id=492 start_ns=25102402 dur_ns=1210107 clt=1 wrkr=11 slot=6 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=26312509 id=521 clt=1 wrkr=8 slot=5 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=26352776 id=519 clt=1 wrkr=11 slot=7 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=26361423 id=519 clt=1 wrkr=11 slot=7 size=10 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=26365146 id=520 clt=1 wrkr=6 slot=4 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=26373793 id=520 clt=1 wrkr=6 slot=4 size=10 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=26376372 id=521 clt=1 wrkr=8 slot=5 size=41 src=worker:8 dst=client:1
+event=resp_rdma_read ts_ns=26383024 id=497 start_ns=25265210 dur_ns=1117814 clt=1 wrkr=2 slot=4 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=26383024 id=523 clt=1 wrkr=2 slot=5 size=17 src=client:1 dst=worker:2
+event=hand_send ts_ns=26385019 id=521 clt=1 wrkr=8 slot=5 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=26444244 id=523 clt=1 wrkr=2 slot=5 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=26452891 id=523 clt=1 wrkr=2 slot=5 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=26493247 id=499 start_ns=25404818 dur_ns=1088429 clt=1 wrkr=4 slot=7 size=307208 src=worker:4 dst=client:1
+event=req_send ts_ns=26493247 id=524 clt=1 wrkr=9 slot=3 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=26541927 id=524 clt=1 wrkr=9 slot=3 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=26550574 id=524 clt=1 wrkr=9 slot=3 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=26823984 id=502 start_ns=25692287 dur_ns=1131697 clt=1 wrkr=1 slot=1 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=26823984 id=526 clt=1 wrkr=10 slot=0 size=17 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=26843081 id=503 start_ns=25711842 dur_ns=1131239 clt=1 wrkr=3 slot=3 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=26843081 id=528 clt=1 wrkr=1 slot=2 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=26886935 id=526 clt=1 wrkr=10 slot=0 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=26895582 id=526 clt=1 wrkr=10 slot=0 size=10 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=26902591 id=528 clt=1 wrkr=1 slot=2 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=26911238 id=528 clt=1 wrkr=1 slot=2 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=27331567 id=520 start_ns=26373793 dur_ns=957774 clt=1 wrkr=6 slot=4 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=27331567 id=539 clt=1 wrkr=2 slot=6 size=17 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=27373086 id=524 start_ns=26550574 dur_ns=822512 clt=1 wrkr=9 slot=3 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=27373086 id=541 clt=1 wrkr=9 slot=4 size=17 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=27380782 id=511 start_ns=25875804 dur_ns=1504978 clt=1 wrkr=10 slot=7 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=27380782 id=542 clt=1 wrkr=6 slot=5 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=27399188 id=539 clt=1 wrkr=2 slot=6 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=27407835 id=539 clt=1 wrkr=2 slot=6 size=10 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=27410658 id=523 start_ns=26452891 dur_ns=957767 clt=1 wrkr=2 slot=5 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=27410658 id=543 clt=1 wrkr=5 slot=7 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=27442097 id=541 clt=1 wrkr=9 slot=4 size=41 src=worker:9 dst=client:1
+event=resp_rdma_read ts_ns=27444067 id=519 start_ns=26361423 dur_ns=1082644 clt=1 wrkr=11 slot=7 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=27444067 id=545 clt=1 wrkr=5 slot=0 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=27449719 id=542 clt=1 wrkr=6 slot=5 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=27450744 id=541 clt=1 wrkr=9 slot=4 size=10 src=client:1 dst=worker:9
+event=hand_send ts_ns=27458366 id=542 clt=1 wrkr=6 slot=5 size=10 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=27481518 id=543 clt=1 wrkr=5 slot=7 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=27490165 id=543 clt=1 wrkr=5 slot=7 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=27490239 id=521 start_ns=26385019 dur_ns=1105220 clt=1 wrkr=8 slot=5 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=27490239 id=547 clt=1 wrkr=10 slot=1 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=27515533 id=545 clt=1 wrkr=5 slot=0 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=27524180 id=545 clt=1 wrkr=5 slot=0 size=10 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=27562081 id=547 clt=1 wrkr=10 slot=1 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=27570728 id=547 clt=1 wrkr=10 slot=1 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=27981503 id=526 start_ns=26895582 dur_ns=1085921 clt=1 wrkr=10 slot=0 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=27981503 id=549 clt=1 wrkr=10 slot=2 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=28024712 id=549 clt=1 wrkr=10 slot=2 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=28033359 id=549 clt=1 wrkr=10 slot=2 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=28035193 id=528 start_ns=26911238 dur_ns=1123955 clt=1 wrkr=1 slot=2 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=28035193 id=551 clt=1 wrkr=8 slot=6 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=28100873 id=551 clt=1 wrkr=8 slot=6 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=28109520 id=551 clt=1 wrkr=8 slot=6 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=28848711 id=547 start_ns=27570728 dur_ns=1277983 clt=1 wrkr=10 slot=1 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=28848711 id=563 clt=1 wrkr=6 slot=6 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=28897879 id=563 clt=1 wrkr=6 slot=6 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=28906526 id=563 clt=1 wrkr=6 slot=6 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=28961259 id=539 start_ns=27407835 dur_ns=1553424 clt=1 wrkr=2 slot=6 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=28961259 id=565 clt=1 wrkr=5 slot=1 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=29017874 id=565 clt=1 wrkr=5 slot=1 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=29026521 id=565 clt=1 wrkr=5 slot=1 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=29035717 id=545 start_ns=27524180 dur_ns=1511537 clt=1 wrkr=5 slot=0 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=29035717 id=567 clt=1 wrkr=6 slot=7 size=17 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=29036235 id=551 start_ns=28109520 dur_ns=926715 clt=1 wrkr=8 slot=6 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=29036235 id=568 clt=1 wrkr=2 slot=7 size=17 src=client:1 dst=worker:2
+event=resp_recv_ud ts_ns=29093073 id=568 clt=1 wrkr=2 slot=7 size=41 src=worker:2 dst=client:1
+event=resp_recv_ud ts_ns=29096199 id=567 clt=1 wrkr=6 slot=7 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=29101720 id=568 clt=1 wrkr=2 slot=7 size=10 src=client:1 dst=worker:2
+event=hand_send ts_ns=29104846 id=567 clt=1 wrkr=6 slot=7 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=29124346 id=549 start_ns=28033359 dur_ns=1090987 clt=1 wrkr=10 slot=2 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=29124346 id=571 clt=1 wrkr=8 slot=7 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=29182619 id=571 clt=1 wrkr=8 slot=7 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=29191266 id=571 clt=1 wrkr=8 slot=7 size=10 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=29192115 id=541 start_ns=27450744 dur_ns=1741371 clt=1 wrkr=9 slot=4 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=29192115 id=572 clt=1 wrkr=10 slot=3 size=17 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=29246163 id=543 start_ns=27490165 dur_ns=1755998 clt=1 wrkr=5 slot=7 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=29246163 id=574 clt=1 wrkr=10 slot=4 size=17 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=29253022 id=572 clt=1 wrkr=10 slot=3 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=29261669 id=572 clt=1 wrkr=10 slot=3 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=29271370 id=542 start_ns=27458366 dur_ns=1813004 clt=1 wrkr=6 slot=5 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=29271370 id=576 clt=1 wrkr=5 slot=2 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=29309006 id=574 clt=1 wrkr=10 slot=4 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=29317653 id=574 clt=1 wrkr=10 slot=4 size=10 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=29333627 id=576 clt=1 wrkr=5 slot=2 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=29342274 id=576 clt=1 wrkr=5 slot=2 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=29747642 id=563 start_ns=28906526 dur_ns=841116 clt=1 wrkr=6 slot=6 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=29747642 id=586 clt=1 wrkr=3 slot=4 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=29813083 id=586 clt=1 wrkr=3 slot=4 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=29821730 id=586 clt=1 wrkr=3 slot=4 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=30069029 id=565 start_ns=29026521 dur_ns=1042508 clt=1 wrkr=5 slot=1 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=30069029 id=588 clt=1 wrkr=7 slot=0 size=17 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=30118898 id=588 clt=1 wrkr=7 slot=0 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=30127545 id=588 clt=1 wrkr=7 slot=0 size=10 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=30169370 id=571 start_ns=29191266 dur_ns=978104 clt=1 wrkr=8 slot=7 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=30169370 id=592 clt=1 wrkr=8 slot=0 size=17 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=30171578 id=567 start_ns=29104846 dur_ns=1066732 clt=1 wrkr=6 slot=7 size=307208 src=worker:6 dst=client:1
+event=req_send ts_ns=30171578 id=593 clt=1 wrkr=2 slot=0 size=17 src=client:1 dst=worker:2
+event=resp_rdma_read ts_ns=30178708 id=568 start_ns=29101720 dur_ns=1076988 clt=1 wrkr=2 slot=7 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=30178708 id=594 clt=1 wrkr=3 slot=5 size=17 src=client:1 dst=worker:3
+event=resp_recv_ud ts_ns=30223258 id=592 clt=1 wrkr=8 slot=0 size=41 src=worker:8 dst=client:1
+event=resp_recv_ud ts_ns=30231583 id=593 clt=1 wrkr=2 slot=0 size=41 src=worker:2 dst=client:1
+event=hand_send ts_ns=30231905 id=592 clt=1 wrkr=8 slot=0 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=30237800 id=594 clt=1 wrkr=3 slot=5 size=41 src=worker:3 dst=client:1
+event=hand_send ts_ns=30240230 id=593 clt=1 wrkr=2 slot=0 size=10 src=client:1 dst=worker:2
+event=hand_send ts_ns=30246447 id=594 clt=1 wrkr=3 slot=5 size=10 src=client:1 dst=worker:3
+event=resp_rdma_read ts_ns=30469260 id=572 start_ns=29261669 dur_ns=1207591 clt=1 wrkr=10 slot=3 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=30469260 id=597 clt=1 wrkr=0 slot=4 size=17 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=30511500 id=576 start_ns=29342274 dur_ns=1169226 clt=1 wrkr=5 slot=2 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=30511500 id=598 clt=1 wrkr=0 slot=5 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=30519513 id=597 clt=1 wrkr=0 slot=4 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=30528160 id=597 clt=1 wrkr=0 slot=4 size=10 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=30574050 id=598 clt=1 wrkr=0 slot=5 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=30582697 id=598 clt=1 wrkr=0 slot=5 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=30594455 id=574 start_ns=29317653 dur_ns=1276802 clt=1 wrkr=10 slot=4 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=30594455 id=603 clt=1 wrkr=1 slot=3 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=30661067 id=603 clt=1 wrkr=1 slot=3 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=30669714 id=603 clt=1 wrkr=1 slot=3 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=30858532 id=586 start_ns=29821730 dur_ns=1036802 clt=1 wrkr=3 slot=4 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=30858532 id=607 clt=1 wrkr=11 slot=0 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=30912945 id=607 clt=1 wrkr=11 slot=0 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=30921592 id=607 clt=1 wrkr=11 slot=0 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=31176620 id=588 start_ns=30127545 dur_ns=1049075 clt=1 wrkr=7 slot=0 size=307208 src=worker:7 dst=client:1
+event=req_send ts_ns=31176620 id=611 clt=1 wrkr=11 slot=1 size=17 src=client:1 dst=worker:11
+event=resp_recv_ud ts_ns=31229106 id=611 clt=1 wrkr=11 slot=1 size=41 src=worker:11 dst=client:1
+event=hand_send ts_ns=31237753 id=611 clt=1 wrkr=11 slot=1 size=10 src=client:1 dst=worker:11
+event=resp_rdma_read ts_ns=31276499 id=592 start_ns=30231905 dur_ns=1044594 clt=1 wrkr=8 slot=0 size=307208 src=worker:8 dst=client:1
+event=req_send ts_ns=31276499 id=615 clt=1 wrkr=1 slot=4 size=17 src=client:1 dst=worker:1
+event=resp_recv_ud ts_ns=31336225 id=615 clt=1 wrkr=1 slot=4 size=41 src=worker:1 dst=client:1
+event=hand_send ts_ns=31344872 id=615 clt=1 wrkr=1 slot=4 size=10 src=client:1 dst=worker:1
+event=resp_rdma_read ts_ns=31367811 id=594 start_ns=30246447 dur_ns=1121364 clt=1 wrkr=3 slot=5 size=307208 src=worker:3 dst=client:1
+event=req_send ts_ns=31367811 id=618 clt=1 wrkr=10 slot=5 size=17 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=31387017 id=593 start_ns=30240230 dur_ns=1146787 clt=1 wrkr=2 slot=0 size=307208 src=worker:2 dst=client:1
+event=req_send ts_ns=31387017 id=619 clt=1 wrkr=9 slot=5 size=17 src=client:1 dst=worker:9
+event=resp_recv_ud ts_ns=31427354 id=618 clt=1 wrkr=10 slot=5 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=31436001 id=618 clt=1 wrkr=10 slot=5 size=10 src=client:1 dst=worker:10
+event=resp_recv_ud ts_ns=31447876 id=619 clt=1 wrkr=9 slot=5 size=41 src=worker:9 dst=client:1
+event=hand_send ts_ns=31456523 id=619 clt=1 wrkr=9 slot=5 size=10 src=client:1 dst=worker:9
+event=resp_rdma_read ts_ns=31652840 id=598 start_ns=30582697 dur_ns=1070143 clt=1 wrkr=0 slot=5 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=31652840 id=621 clt=1 wrkr=0 slot=6 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=31702377 id=621 clt=1 wrkr=0 slot=6 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=31711024 id=621 clt=1 wrkr=0 slot=6 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=31747366 id=597 start_ns=30528160 dur_ns=1219206 clt=1 wrkr=0 slot=4 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=31747366 id=622 clt=1 wrkr=5 slot=3 size=17 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=31796400 id=622 clt=1 wrkr=5 slot=3 size=41 src=worker:5 dst=client:1
+event=hand_send ts_ns=31805047 id=622 clt=1 wrkr=5 slot=3 size=10 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=32084892 id=603 start_ns=30669714 dur_ns=1415178 clt=1 wrkr=1 slot=3 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=32084892 id=628 clt=1 wrkr=0 slot=7 size=17 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=32142276 id=607 start_ns=30921592 dur_ns=1220684 clt=1 wrkr=11 slot=0 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=32142276 id=630 clt=1 wrkr=0 slot=0 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=32143782 id=628 clt=1 wrkr=0 slot=7 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=32152429 id=628 clt=1 wrkr=0 slot=7 size=10 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=32203458 id=630 clt=1 wrkr=0 slot=0 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=32212105 id=630 clt=1 wrkr=0 slot=0 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=32369411 id=611 start_ns=31237753 dur_ns=1131658 clt=1 wrkr=11 slot=1 size=307208 src=worker:11 dst=client:1
+event=req_send ts_ns=32369411 id=636 clt=1 wrkr=7 slot=1 size=17 src=client:1 dst=worker:7
+event=resp_rdma_read ts_ns=32379667 id=619 start_ns=31456523 dur_ns=923144 clt=1 wrkr=9 slot=5 size=307208 src=worker:9 dst=client:1
+event=req_send ts_ns=32379667 id=637 clt=1 wrkr=8 slot=1 size=17 src=client:1 dst=worker:8
+event=resp_rdma_read ts_ns=32393717 id=615 start_ns=31344872 dur_ns=1048845 clt=1 wrkr=1 slot=4 size=307208 src=worker:1 dst=client:1
+event=req_send ts_ns=32393717 id=638 clt=1 wrkr=0 slot=1 size=17 src=client:1 dst=worker:0
+event=resp_recv_ud ts_ns=32436426 id=636 clt=1 wrkr=7 slot=1 size=41 src=worker:7 dst=client:1
+event=hand_send ts_ns=32445073 id=636 clt=1 wrkr=7 slot=1 size=10 src=client:1 dst=worker:7
+event=resp_recv_ud ts_ns=32445763 id=637 clt=1 wrkr=8 slot=1 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=32454410 id=637 clt=1 wrkr=8 slot=1 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=32461145 id=638 clt=1 wrkr=0 slot=1 size=41 src=worker:0 dst=client:1
+event=hand_send ts_ns=32469792 id=638 clt=1 wrkr=0 slot=1 size=10 src=client:1 dst=worker:0
+event=resp_rdma_read ts_ns=32591681 id=618 start_ns=31436001 dur_ns=1155680 clt=1 wrkr=10 slot=5 size=307208 src=worker:10 dst=client:1
+event=req_send ts_ns=32591681 id=642 clt=1 wrkr=5 slot=4 size=17 src=client:1 dst=worker:5
+event=resp_rdma_read ts_ns=32612422 id=622 start_ns=31805047 dur_ns=807375 clt=1 wrkr=5 slot=3 size=307208 src=worker:5 dst=client:1
+event=req_send ts_ns=32612422 id=643 clt=1 wrkr=8 slot=2 size=17 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=32657047 id=642 clt=1 wrkr=5 slot=4 size=41 src=worker:5 dst=client:1
+event=resp_rdma_read ts_ns=32659784 id=621 start_ns=31711024 dur_ns=948760 clt=1 wrkr=0 slot=6 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=32659784 id=644 clt=1 wrkr=10 slot=6 size=17 src=client:1 dst=worker:10
+event=hand_send ts_ns=32665694 id=642 clt=1 wrkr=5 slot=4 size=10 src=client:1 dst=worker:5
+event=resp_recv_ud ts_ns=32675818 id=643 clt=1 wrkr=8 slot=2 size=41 src=worker:8 dst=client:1
+event=hand_send ts_ns=32684465 id=643 clt=1 wrkr=8 slot=2 size=10 src=client:1 dst=worker:8
+event=resp_recv_ud ts_ns=32728397 id=644 clt=1 wrkr=10 slot=6 size=41 src=worker:10 dst=client:1
+event=hand_send ts_ns=32737044 id=644 clt=1 wrkr=10 slot=6 size=10 src=client:1 dst=worker:10
+event=resp_rdma_read ts_ns=33005887 id=630 start_ns=32212105 dur_ns=793782 clt=1 wrkr=0 slot=0 size=307208 src=worker:0 dst=client:1
+event=req_send ts_ns=33005887 id=645 clt=1 wrkr=6 slot=0 size=17 src=client:1 dst=worker:6
+event=resp_recv_ud ts_ns=33046786 id=645 clt=1 wrkr=6 slot=0 size=41 src=worker:6 dst=client:1
+event=hand_send ts_ns=33055433 id=645 clt=1 wrkr=6 slot=0 size=10 src=client:1 dst=worker:6
+event=resp_rdma_read ts_ns=33295461 id=628 start_ns=32152429 dur_ns=1143032 clt=1 wrkr=0 slot=7 size=307208 src=worker:0 dst=client:1
+event=resp_rdma_read ts_ns=33610855 id=644 start_ns=32737044 dur_ns=873811 clt=1 wrkr=10 slot=6 size=307208 src=worker:10 dst=client:1
+event=resp_rdma_read ts_ns=33723645 id=638 start_ns=32469792 dur_ns=1253853 clt=1 wrkr=0 slot=1 size=307208 src=worker:0 dst=client:1
+event=resp_rdma_read ts_ns=33824059 id=643 start_ns=32684465 dur_ns=1139594 clt=1 wrkr=8 slot=2 size=307208 src=worker:8 dst=client:1
+event=resp_rdma_read ts_ns=33865236 id=642 start_ns=32665694 dur_ns=1199542 clt=1 wrkr=5 slot=4 size=307208 src=worker:5 dst=client:1
+event=resp_rdma_read ts_ns=34060090 id=636 start_ns=32445073 dur_ns=1615017 clt=1 wrkr=7 slot=1 size=307208 src=worker:7 dst=client:1
+event=resp_rdma_read ts_ns=34063422 id=645 start_ns=33055433 dur_ns=1007989 clt=1 wrkr=6 slot=0 size=307208 src=worker:6 dst=client:1
+event=resp_rdma_read ts_ns=34071208 id=637 start_ns=32454410 dur_ns=1616798 clt=1 wrkr=8 slot=1 size=307208 src=worker:8 dst=client:1
