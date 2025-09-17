@@ -173,7 +173,7 @@ void setup_m4_tensors(torch::Device device, int32_t n_edges, int32_t n_links, in
 
     // Clone tensors to ensure ownership
     size_tensor = torch::from_blob(fsize.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
-    size_tensor = torch::log2(size_tensor / 1000.0f + 1.0f);
+    size_tensor = torch::log2(size_tensor + 1.0f);
 
     fat_tensor = torch::from_blob(fat.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);
     i_fct_tensor = torch::from_blob(fct_i.data(), {n_flows}, options_int64).to(torch::kFloat32).to(device);

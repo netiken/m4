@@ -702,7 +702,7 @@ int main(int argc, char* argv[]) {
     // ====================== HERD single client/worker mode =======================
     // Topology switch: single client/server or multi-client tree
     bool multi_client_topo = false; // flip to false for single-link topology
-    double bw_bpns = 10.0/8;
+    double bw_bpns = 10.0;
     if (!multi_client_topo) {
         // Single client (0) <-> server (1)
         topology = std::make_shared<Topology>(2, 2);
