@@ -47,6 +47,11 @@ class Chunk {
   [[nodiscard]] const Route& get_route() const noexcept;
   [[nodiscard]] std::shared_ptr<Device> get_dest_device() const noexcept; // New method
 
+  // Path latency accounting helpers
+  void set_initial_path_latency(Latency total_latency) noexcept;
+  [[nodiscard]] Latency get_remaining_path_latency() const noexcept;
+  void consume_path_latency(Latency elapsed_ns) noexcept;
+
  private:
   ChunkSize chunk_size;
   ChunkSize remaining_size;
@@ -57,6 +62,7 @@ class Chunk {
   double rate;
   EventId completion_event_id_;
   Topology* topology;
+  Latency remaining_path_latency;
 };
 
 #endif // _CHUNK_

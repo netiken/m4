@@ -1,14 +1,10 @@
 #include "EventQueue.h"
 #include <cassert>
-#include <iostream>
-#include <limits>
+#include <iostream> 
 
 EventQueue::EventQueue() noexcept : current_time(0), next_event_id(0) {
   // Create empty event queue
-  //event_queue = std::list<EventList>();
-  //event_queue = std::vector<EventEntry>();
-    next_arrival = nullptr;
-    next_completion = nullptr;
+  event_queue = std::list<EventList>();
 }
 
 EventTime EventQueue::get_current_time() const noexcept {
@@ -17,11 +13,7 @@ EventTime EventQueue::get_current_time() const noexcept {
 
 bool EventQueue::finished() const noexcept {
   // Check whether event queue is empty
-  // std::cerr << "Checking if event queue is empty" << std::endl;
-    if (next_arrival == nullptr && next_completion == nullptr) {
-        return true;
-    }
-    return false;
+  return event_queue.empty();
 }
 
 void EventQueue::proceed() noexcept {
@@ -29,65 +21,71 @@ void EventQueue::proceed() noexcept {
   assert(!finished());
 
   // Proceed to the next event time
-  //auto& current_event_list = event_queue.front();
-    EventTime arrival_time = std::numeric_limits<uint64_t>::max();
-    EventTime completion_time = std::numeric_limits<uint64_t>::max();
+  auto& current_event_list = event_queue.front();
 
-    if (next_arrival != nullptr) {
-        arrival_time = next_arrival->get_time();
-    }
+  // Check the validity and update current time
+  assert(current_event_list.get_event_time() >= current_time);
+  current_time = current_event_list.get_event_time();
 
-    if (next_completion != nullptr) {
-        completion_time = next_completion->get_time();
-    }
+  // Invoke events
+  while (!current_event_list.empty()) {
+    current_event_list.invoke_event();
+  }
+  //current_event_list.invoke_events();
 
-    if (arrival_time < completion_time) {
-        assert(next_arrival != nullptr);
-        Event arrival = *next_arrival;
-        delete next_arrival;
-        next_arrival = nullptr;
-        current_time = arrival_time;
-        arrival.invoke_event();
-    } else {
-        assert(next_completion != nullptr);
-        Event completion = *next_completion;
-        delete next_completion;
-        next_completion = nullptr;
-        current_time = completion_time;
-        completion.invoke_event();
-    }
+  // Drop processed event list
+  event_queue.pop_front();
 }
 
 void EventQueue::log_events() {
-    std::cout << "Event logs\n";
+    // Debug function - currently unused in production
 }
 
-void EventQueue::schedule_arrival(
-    const EventTime arrival_time,
+EventId EventQueue::schedule_event(
+    const EventTime event_time,
     const Callback callback,
     const CallbackArg callback_arg) noexcept {
+  // Time should be at least larger than current time
+  assert(event_time >= current_time);
 
-    assert(arrival_time >= current_time);
+  // Find the entry to insert the event
+  auto event_list_it = event_queue.begin();
+  while (event_list_it != event_queue.end() &&
+         event_list_it->get_event_time() < event_time) {
+    event_list_it++;
+  }
 
-    delete next_arrival;
+  // There can be three scenarios:
+  // (1) Event list matching with event_time is found
+  // (2) There's no event list matching with event_time
+  //   (2-1) The event_time requested is
+  //   larger than the largest event time scheduled
+  //   (2-2) The event_time requested is
+  //   smaller than the largest event time scheduled
+  // For both (2-1) or (2-2), a new event should be created
+  if (event_list_it == event_queue.end() ||
+      event_time < event_list_it->get_event_time()) {
+    // Insert new event_list
+    event_list_it = event_queue.insert(event_list_it, EventList(event_time));
+  }
 
-    next_arrival = new Event(arrival_time, callback, callback_arg);
+  // Generate a new event ID
+  EventId event_id = next_event_id++;
+
+  // Now, whether (1) or (2), the entry to insert the event is found
+  // Add event to event_list
+  event_list_it->add_event(callback, callback_arg, event_id);
+
+  // Store event in map for cancellation
+  event_map[event_id] = event_list_it;
+  return event_id;
 }
 
-void EventQueue::schedule_completion(
-    const EventTime completion_time,
-    const Callback callback,
-    const CallbackArg callback_arg) noexcept {
-
-    assert(completion_time >= current_time);
-
-    delete next_completion;
-    next_completion = new Event(completion_time, callback, callback_arg);
-
+void EventQueue::cancel_event(EventId event_id) noexcept {
+  auto it = event_map.find(event_id);
+  if (it != event_map.end()) {
+    auto& event_list_it = it->second;
+    event_list_it->remove_event(event_id);
+    event_map.erase(it);
+  }
 }
-
-void EventQueue::cancel_completion() {
-    //delete next_completion;
-    //next_completion = nullptr;
-}
-

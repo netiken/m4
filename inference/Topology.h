@@ -85,7 +85,7 @@ class Topology {
   void reschedule_active_chunks();
   void add_chunk_to_links(Chunk* chunk);
   void remove_chunk_from_links(Chunk* chunk);
-  //static void chunk_completion_callback(void* arg) noexcept;
+  static void chunk_completion_callback(void* arg) noexcept;
   void cancel_all_events() noexcept;
 };
 

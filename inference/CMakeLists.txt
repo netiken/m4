@@ -34,43 +34,7 @@ include_directories(${TORCH_INCLUDE_DIRS})
 #add_library(inference_shared SHARED src/inference.cpp)
 #add_library(flowsim SHARED main.cpp)
 
-set(SOURCES
-    main_m4.cpp
-    Device.h
-    Device.cpp
-    Chunk.h
-    Chunk.cpp
-    Event.h
-    Event.cpp
-    EventQueue.h 
-    EventQueue.cpp 
-    Link.h 
-    Link.cpp 
-    TopologyBuilder.h 
-    TopologyBuilder.cpp 
-    Topology.h 
-    Topology.cpp 
-    Type.h
-)
-
-set(FLOWSIM
-    flowsim.cpp
-    Device.h
-    Device.cpp
-    Chunk.h
-    Chunk.cpp
-    Event.h
-    Event.cpp
-    EventQueue.h 
-    EventQueue.cpp 
-    Link.h 
-    Link.cpp 
-    TopologyBuilder.h 
-    TopologyBuilder.cpp 
-    Topology.h 
-    Topology.cpp 
-    Type.h
-)
+# Only keep the integrated no_flowsim target - no separate flowsim needed
 
 SET(NOFLOWSIM_SOURCES
     main_m4_noflowsim.cpp
@@ -82,6 +46,8 @@ SET(NOFLOWSIM_SOURCES
     Event.cpp
     EventQueue.h 
     EventQueue.cpp 
+    EventList.h
+    EventList.cpp
     Link.h 
     Link.cpp 
     TopologyBuilder.h 
@@ -91,52 +57,47 @@ SET(NOFLOWSIM_SOURCES
     Type.h
 )
 
-# Add executable target (only main.cpp)
-add_executable(flowsim ${SOURCES})
+# Add executable target - only the integrated no_flowsim
 add_executable(no_flowsim ${NOFLOWSIM_SOURCES})
-add_executable(pure_flowsim ${FLOWSIM})
 
-# Link the Torch library and inference_shared to inference_executable
-target_link_libraries(flowsim "${TORCH_LIBRARIES}")
+# Link the Torch library to the integrated executable
 target_link_libraries(no_flowsim "${TORCH_LIBRARIES}")
 
 #add_subdirectory(rapidyaml/ext/c4core)
 add_subdirectory(rapidyaml)
 
-target_include_directories(flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
-target_link_libraries(flowsim ryml)
-
 target_include_directories(no_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
+target_include_directories(no_flowsim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rdma_bench)
 target_link_libraries(no_flowsim ryml)
 
-target_include_directories(pure_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
+# Link CityHash C object to satisfy CityHash128 used via mica.h
+add_library(cityhash_c OBJECT rdma_bench/mica/city.c)
+target_link_libraries(no_flowsim cityhash_c)
+
+# Ensure C symbols are visible when linking with C++
+set_target_properties(no_flowsim PROPERTIES LINKER_LANGUAGE CXX)
+
+# Compile city.c as C++ so symbols match C++ caller
+set_source_files_properties(rdma_bench/mica/city.c PROPERTIES LANGUAGE CXX)
 
 # Enable link-time optimization
-#set_property(TARGET inference_shared PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-set_property(TARGET flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 set_property(TARGET no_flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-set_property(TARGET pure_flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 
 # CUDA-specific optimizations (if using GPU)
 if (TORCH_CUDA_ARCH_LIST)
-    #set_target_properties(inference_shared PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
-    set_target_properties(flowsim PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
     set_target_properties(no_flowsim PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
 endif()
 
 # Set RPATH to find Torch libraries at runtime
-#set_target_properties(inference_shared PROPERTIES
-#    BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib"
-#    INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
-#)
-
-set_target_properties(flowsim PROPERTIES
-    BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib"
-    INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
-)
-
 set_target_properties(no_flowsim PROPERTIES
     BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib"
     INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
 )
+
+# Prepend the system libstdc++ path to RPATH so runtime prefers GLIBCXX from the system
+# This mirrors the manual LD_LIBRARY_PATH workaround (using /usr/lib/x86_64-linux-gnu first)
+set(SYSTEM_CXXLIB_PATH "/usr/lib/x86_64-linux-gnu")
+set_property(TARGET no_flowsim APPEND PROPERTY BUILD_RPATH "${SYSTEM_CXXLIB_PATH}")
+set_property(TARGET no_flowsim APPEND PROPERTY INSTALL_RPATH "${SYSTEM_CXXLIB_PATH}")
+target_link_options(no_flowsim PRIVATE -Wl,-rpath,${SYSTEM_CXXLIB_PATH})
 
