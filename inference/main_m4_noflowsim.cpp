@@ -213,7 +213,7 @@ void setup_m4(torch::Device device) {
     // Load models
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "models";
+        const std::string model_dir = "models_t0";
         try {
             lstmcell_time = torch::jit::load(model_dir + "/lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "/lstmcell_rate.pt", device);
@@ -967,10 +967,10 @@ int main(int argc, char *argv[]) {
             params.assign(13, 0.0); // Default parameters
 
             // Load ML models
-    setup_m4(device);
+            setup_m4(device);
             
             // Initialize ML state tensors for HERD flows
-            int max_herd_flows = 2600; // 4 * 650 operations (request, UD, handshake, RDMA per op)
+            int max_herd_flows = 2600*3; // 4 * 650 operations (request, UD, handshake, RDMA per op)
             setup_m4_tensors_for_herd(device, max_herd_flows, n_links, hidden_size);
             
             std::cout << "M4 ML models and tensors loaded successfully for HERD prediction service\n";
@@ -981,7 +981,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Initialize per-client limits and state - copied exactly from flowsim
-        const int default_ops = 650;
+        const int default_ops = 650*3;
         g_pending_completions.assign(NUM_CLIENTS, std::deque<FlowCtx*>());
         g_poll_scheduled.assign(NUM_CLIENTS, false);
         g_total_sent_per_client.assign(NUM_CLIENTS, 0);
