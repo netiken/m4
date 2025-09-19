@@ -9,13 +9,17 @@ import sys
 from typing import List
 
 
-WINDOW_SIZES: List[int] = [2, 4, 8, 12, 16]
+WINDOW_SIZES: List[int] = [2] #1,2,16
 RDMA_SIZES: List[int] = [
-    102408, 204808, 256008, 307208, 409608,
-    512008, 665608, 768008, 921608, 1024008, 1048584,
+    #102408, 204808, 256008, 307208, 409608,
+    #512008, 665608, 768008, 921608, 
+    #1024008#, # 
+    1048584,
 ]
 RDMA_TITLES = [
-    "100", "200", "250", "300", "400", "500", "650", "750", "900", "1000", "10000"
+    #"100", "200", "250", "300", "400", "500", "650", "750", "900", 
+    #"1000" #, 
+    "10000"
 ]
 RDMA_TITLES = {rdma: title for rdma, title in zip(RDMA_SIZES, RDMA_TITLES)}
 
@@ -63,8 +67,8 @@ def main() -> None:
     # flowsim_dir = pathlib.Path("/home/ubuntu/flowsim/flowsim")
     flowsim_dir = pathlib.Path("/data1/lichenni/projects/om/m4/inference")
     binary = flowsim_dir / "build/no_flowsim"
-    os.system("rm -rf " + str(flowsim_dir / "sweeps"))
-    os.system("mkdir -p " + str(flowsim_dir / "sweeps"))
+    #os.system("rm -rf " + str(flowsim_dir / "sweeps"))
+    #os.system("mkdir -p " + str(flowsim_dir / "sweeps"))
     results_root = flowsim_dir / "sweeps" 
     results_root.mkdir(parents=True, exist_ok=True)
 

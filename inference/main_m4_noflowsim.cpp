@@ -1,5 +1,3 @@
-#include "npy.hpp"
-#include <vector>
 #include <string>
 #include <chrono>
 #include <filesystem>
@@ -13,6 +11,7 @@
 
 #include <iomanip>
 #include <queue>
+#include <algorithm>
 
 // CityHash for 128-bit key generation (exactly as in HERD)
 #include "rdma_bench/mica/mica.h" // Brings in city.h and MICA_MAX_VALUE
@@ -213,7 +212,7 @@ void setup_m4(torch::Device device) {
     // Load models
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "models_t0";
+        const std::string model_dir = "/data1/lichenni/m4/testbed/models_new_v3";
         try {
             lstmcell_time = torch::jit::load(model_dir + "/lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "/lstmcell_rate.pt", device);
@@ -310,7 +309,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         float normalized_size = std::log2f((float)flow_size + 1.0f);
         h_vec[flow_id][0] = 1.0f;  // Constant feature
         h_vec[flow_id][2] = normalized_size;  // Normalized flow size
-        h_vec[flow_id][3] = 1.0f;  // Number of links (1 for HERD)
+        h_vec[flow_id][3] = 6.0f; //1.0f;  // Number of links (1 for HERD)
         
         // For HERD, create simple topology mapping (client -> server path)
         // This is a simplified version - in full M4, this comes from topology files
@@ -422,7 +421,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         // Check if this is the first/only flow (n_active == 1 means only current flow is active)
         if (n_active == 1) {
             // First flow - use ML prediction with initial state
-            torch::Tensor nlinks_single = torch::ones({1, 1}, options_float);
+            torch::Tensor nlinks_single = torch::full({1, 1}, 6.0f, options_float);
             torch::Tensor params_single = params_input.unsqueeze(0); // [1, 13]
             torch::Tensor h_single = h_vec.slice(0, flow_id, flow_id + 1); // [1, h_dim]
             
@@ -435,7 +434,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             predicted_fct = sldn_pred * ideal_fct;
         } else if (n_active > 1) {
             // Multiple flows active - use full ML pipeline with contention
-            torch::Tensor nlinks_expanded = torch::ones({n_active, 1}, options_float); // All flows use 1 link
+            torch::Tensor nlinks_expanded = torch::full({n_active, 1}, 6.0f, options_float);
             torch::Tensor params_expanded = params_input.unsqueeze(0).repeat({n_active, 1}); // [n_active, 13]
             torch::Tensor h_active = h_vec.index_select(0, active_flow_indices); // [n_active, h_dim]
             
@@ -885,7 +884,8 @@ int main(int argc, char *argv[]) {
         Topology::set_event_queue(g_event_queue);
 
         // Topology switch: single client/server or multi-client tree (matching flowsim)
-        bool multi_client_topo = true; // Start with single-client for testing
+        bool multi_client_topo = false; // use multi-client topologies
+        bool twelve_node_topo = true; // true: 12-endpoint tree, false: original 4-endpoint (server + 3 clients)
         double bw_bpns = 10.0;
         
         if (!multi_client_topo) {
@@ -906,8 +906,73 @@ int main(int argc, char *argv[]) {
             Route s2c; s2c.push_back(g_topology->get_device(1)); s2c.push_back(g_topology->get_device(0));
             g_routes_c2s[0] = c2s; g_routes_s2c[0] = s2c;
             g_client_logs[0].open("client_0.log");
+        } else if (twelve_node_topo) {
+            // 12-endpoint multi-client topology with dual roots R and R2 and top T
+            // Device indices:
+            // 0:T (worker/server), 1:R, 2:R2, 3:S1, 4:S2, 5:S3, 6:S4, 7:S5, 8:S6,
+            // 10:C1, 11:C2, 12:C3, 13:C4, 14:C5, 15:C6, 16:C7, 17:C8, 18:C9, 19:C10, 20:C11
+            g_topology = std::make_shared<Topology>(21, 4);
+            // Core links
+            g_topology->connect(0, 1, bw_bpns, 800.0, true); // T<->R
+            g_topology->connect(0, 2, bw_bpns, 800.0, true); // T<->R2
+            // Aggregation: R side
+            g_topology->connect(1, 3, bw_bpns, 800.0, true); // R<->S1
+            g_topology->connect(1, 4, bw_bpns, 800.0, true); // R<->S2
+            g_topology->connect(1, 5, bw_bpns, 800.0, true); // R<->S3
+            // Aggregation: R2 side
+            g_topology->connect(2, 6, bw_bpns, 800.0, true); // R2<->S4
+            g_topology->connect(2, 7, bw_bpns, 800.0, true); // R2<->S5
+            g_topology->connect(2, 8, bw_bpns, 800.0, true); // R2<->S6
+            // Leaves to ToR switches per mapping
+            g_topology->connect(13, 3, bw_bpns, 800.0, true); // C4<->S1
+            g_topology->connect(10, 4, bw_bpns, 800.0, true); // C1<->S2
+            g_topology->connect(14, 4, bw_bpns, 800.0, true); // C5<->S2
+            g_topology->connect(11, 5, bw_bpns, 800.0, true); // C2<->S3
+            g_topology->connect(12, 5, bw_bpns, 800.0, true); // C3<->S3
+            g_topology->connect(15, 6, bw_bpns, 800.0, true); // C6<->S4
+            g_topology->connect(16, 6, bw_bpns, 800.0, true); // C7<->S4
+            g_topology->connect(17, 7, bw_bpns, 800.0, true); // C8<->S5
+            g_topology->connect(18, 7, bw_bpns, 800.0, true); // C9<->S5
+            g_topology->connect(19, 8, bw_bpns, 800.0, true); // C10<->S6
+            g_topology->connect(20, 8, bw_bpns, 800.0, true); // C11<->S6
+
+            NUM_CLIENTS = 11; // C1..C11 (Server is the worker at T)
+            g_clients.assign(NUM_CLIENTS, ClientState());
+            g_client_logs.resize(NUM_CLIENTS);
+            for (int i = 0; i < NUM_CLIENTS; i++) {
+                g_clients[i].id = i;
+                g_clients[i].key_perm = herd_get_random_permutation(HERD_NUM_KEYS, i, &g_clients[i].seed);
+            }
+            g_routes_c2s.resize(NUM_CLIENTS);
+            g_routes_s2c.resize(NUM_CLIENTS);
+
+            auto build_route = [&](std::vector<int> path){ Route r; for(int id: path) r.push_back(g_topology->get_device(id)); return r; };
+            // Clients 0..10 map to: C4, C1, C5, C2, C3, C6, C7, C8, C9, C10, C11
+            std::vector<std::vector<int>> c2s_paths = {
+                {13,3,1,0},
+                {10,4,1,0},
+                {14,4,1,0},
+                {11,5,1,0},
+                {12,5,1,0},
+                {15,6,2,0},
+                {16,6,2,0},
+                {17,7,2,0},
+                {18,7,2,0},
+                {19,8,2,0},
+                {20,8,2,0}
+            };
+            for (int cid = 0; cid < NUM_CLIENTS; cid++) {
+                g_routes_c2s[cid] = build_route(c2s_paths[cid]);
+                auto rev = c2s_paths[cid];
+                std::reverse(rev.begin(), rev.end());
+                g_routes_s2c[cid] = build_route(rev);
+            }
+            for (int i = 0; i < NUM_CLIENTS; i++) {
+                g_client_logs[i].open((std::string("client_") + std::to_string(i) + ".log").c_str());
+            }
         } else {
-            // Multi-client: Server A (0) -> S (1) -> Root R (2)
+            // Original 4-endpoint topology: 1 server + 3 clients (8 devices total with switches)
+            // Server A (0) -> S (1) -> Root R (2)
             // Client B (3) -> S1 (7) -> R (2)
             // Client C (4) -> S2 (5) -> R (2)
             // Client D (6) -> S2 (5) -> R (2)
@@ -970,7 +1035,7 @@ int main(int argc, char *argv[]) {
             setup_m4(device);
             
             // Initialize ML state tensors for HERD flows
-            int max_herd_flows = 2600*3; // 4 * 650 operations (request, UD, handshake, RDMA per op)
+            int max_herd_flows = 4 * 650; 2600*11; // 4 * 650 operations (request, UD, handshake, RDMA per op)
             setup_m4_tensors_for_herd(device, max_herd_flows, n_links, hidden_size);
             
             std::cout << "M4 ML models and tensors loaded successfully for HERD prediction service\n";
@@ -981,7 +1046,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Initialize per-client limits and state - copied exactly from flowsim
-        const int default_ops = 650*3;
+        const int default_ops = 650;//*11;
         g_pending_completions.assign(NUM_CLIENTS, std::deque<FlowCtx*>());
         g_poll_scheduled.assign(NUM_CLIENTS, false);
         g_total_sent_per_client.assign(NUM_CLIENTS, 0);
@@ -1023,4 +1088,3 @@ int main(int argc, char *argv[]) {
     std::cout << "M4 HERD-sim completed ops: " << g_flow_records.size() << ", wrote flows.txt\n";
     return 0;
 }
-
