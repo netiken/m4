@@ -170,8 +170,8 @@ class DataModulePerFlow(LightningDataModule):
             #         for n_hosts in n_hosts_list:
             for spec in os.listdir(dir_input):
                 n_hosts = 12
-                if float(spec.split("_")[0])>1000:
-                    continue
+                # if float(spec.split("_")[0])>1000:
+                #     continue
                 spec+=f"/ns3"
                 if enable_topo:
                     topo_type_cur = topo_type

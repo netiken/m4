@@ -80,8 +80,8 @@ class Inference:
             self.z_t_link[:, 2] = 1.0
         else:
             self.z_t_link = None
-        self.save_models("./testbed/models_new")
-
+        # self.save_models("./testbed/models_new_v3")
+        # exit()
     def save_models(self, directory="./inference/models_topo"):
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -354,7 +354,7 @@ def interactive_inference(
     )
     h_vec[:, 0] = 1.0
     h_vec[:, 2] = size_tensor
-    h_vec[:, 3] = flowid_to_nlinks
+    h_vec[:, 3] = 6
     # h_vec[:, 4 : param_data_tensor.size(1) + 4] = param_data_tensor
 
     time_last = torch.zeros((n_flows_active_max, 1), dtype=torch.float32, device=device)
@@ -370,7 +370,7 @@ def interactive_inference(
         (
             size_tensor.unsqueeze(1),
             sldn_flowsim_tensor.unsqueeze(1),
-            flowid_to_nlinks.unsqueeze(1),
+            torch.ones_like(flowid_to_nlinks).unsqueeze(1)*6,
             param_data_tensor,
         ),
         dim=1,
@@ -601,38 +601,109 @@ def main():
     max_inflight_flows = 0
     dataset_list = [
         ("eval_train", ["100_2","100_4","100_8","100_12","100_16"], 4000),
+        # ("eval_train", None, 4000),
     ]
     model_list = [
-        # ("m4_cut_1500", 15, 6),
-        ("m4_cut_1500", 23, 6),
-        # ("m4_cut_1500", 16, 6),
-        # ("m4_cut_1500", 17, 6),
-        # ("m4_cut_1500", 18, 6),
-        # ("m4_cut_1500", 19, 6),
-        # ("m4_cut_1500", 20, 6),
-        # ("m4_cut_1500", 21, 6),
-        # ("m4_cut_1500", 22, 6),
+        # ("m4", 35, 6),
+        # ("m4_cut_all", 31, 6),
         # ("m4_cut_1500", 23, 6),
-        # ("m4_cut_1500", 24, 6),
-        # ("m4_cut_1500", 25, 6),
-        # ("m4_cut_1500", 26, 6),
-        # ("m4", 7, 6),
-        # ("m4", 8, 6),
-        # ("m4", 9, 6),
-        # ("m4", 10, 6),
-        # ("m4", 11, 6),
-        # ("m4_cut", 9, 6),
-        # ("m4_cut", 10, 6),
-        # ("m4_cut", 11, 6),
-        # ("m4_cut", 12, 6),
-        # ("m4_cut", 13, 6),
-        # ("m4_cut", 14, 6),
-        # ("m4_noqueue", 10, 4000),
-        # ("m4_nosize", 10, 4000),
-        # ("m4_noseq", 10, 4000),
-        # ("m4_nognn", 10, 4000),
-        # ("m4_gnn2", 10, 4000),
-        # ("m4_gnn4", 10, 4000),
+        # ("m4_cut_1500", 15, 6),
+        # ("m4_cut_1500", 23, 6),
+        # ("m4_cut_1500", 35, 6),
+        # ("m4_cut_1500", 40, 6),
+        # ("m4_cut_1500", 45, 6),
+        # ("m4_cut_1500", 50, 6),
+        # ("m4_cut_1500", 55, 6),
+        # ("m4_cut_1500", 60, 6),
+        # ("m4_cut_1500", 65, 6),
+        # ("m4_cut_1500", 70, 6),
+        # ("m4_cut_1500", 75, 6),
+        # ("m4_cut_1500", 80, 6),
+        # ("m4_cut_1500", 85, 6),
+        # ("m4_cut_1500", 90, 6),
+        # ("m4_cut_1500", 95, 6),
+        # ("m4_cut_1500", 99, 6),
+        # ("m4", 15, 6),
+        # ("m4", 20, 6),
+        # ("m4", 25, 6),
+        # ("m4", 30, 6),
+        # ("m4", 35, 6),
+        # ("m4", 40, 6),
+        # ("m4", 45, 6),
+        # ("m4", 50, 6),
+        # ("m4", 55, 6),
+        # ("m4", 60, 6),
+        # ("m4", 65, 6),
+        # ("m4", 70, 6),
+        # ("m4", 75, 6),
+        # ("m4", 80, 6),
+        # ("m4", 85, 6),
+        # ("m4", 90, 6),
+        ("m4", 95, 6),
+        # ("m4", 99, 6),
+        # ("m4_cut", 20, 6),
+        # ("m4_cut", 25, 6),
+        # ("m4_cut", 30, 6),
+        # ("m4_cut", 35, 6),
+        # ("m4_cut", 40, 6),
+        # ("m4_cut", 45, 6),
+        # ("m4_cut", 50, 6),
+        # ("m4_cut", 55, 6),
+        # ("m4_cut", 60, 6),
+        # ("m4_cut", 65, 6),
+        # ("m4_cut", 70, 6),
+        # ("m4_cut", 75, 6),
+        # ("m4_cut", 80, 6),
+        # ("m4_cut", 85, 6),
+        # ("m4_cut", 90, 6),
+        # ("m4_cut", 95, 6),
+        # ("m4_cut", 99, 6),
+        # ("m4_cut_all", 11, 6),
+        # ("m4_cut_all", 13, 6),
+        # ("m4_cut_all", 15, 6),
+        # ("m4_cut_all", 17, 6),
+        # ("m4_cut_all", 19, 6),
+        # ("m4_cut_all", 21, 6),
+        # ("m4_cut_all", 23, 6),
+        # ("m4_cut_all", 25, 6),
+        # ("m4_cut_all", 27, 6),
+        # ("m4_cut_all", 29, 6),
+        # ("m4_cut_all", 31, 6),
+        # ("m4_cut_all", 33, 6),
+        # ("m4_cut_all", 35, 6),
+        # ("m4_cut_all", 37, 6),
+        # ("m4_cut_1500", 40, 6),
+        # ("m4_cut_1500", 45, 6),
+        # ("m4_cut_1500", 50, 6),
+        # ("m4_cut_1500", 55, 6),
+        # ("m4_cut_1500", 60, 6),
+        # ("m4_cut_1500", 65, 6),
+        # ("m4_cut_1500", 70, 6),
+        # ("m4_cut_1500", 75, 6),
+        # ("m4_cut_1500", 80, 6),
+        # ("m4_cut_1500", 85, 6),
+        # ("m4_cut_1500", 90, 6),
+        # ("m4_cut_1500", 95, 6),
+        # ("m4_cut_1500", 99, 6),
+        # ("m4_1500", 10, 6),
+        # ("m4_1500", 15, 6),
+        # ("m4_1500", 20, 6),
+        # ("m4_1500", 25, 6),
+        # ("m4_1500", 30, 6),
+        # ("m4_1500", 35, 6),
+        # ("m4_1500", 40, 6),
+        # ("m4_1500", 45, 6),
+        # ("m4_1500", 50, 6),
+        # ("m4_1500", 55, 6),
+        # ("m4_1500", 60, 6),
+        # ("m4_1500", 65, 6),
+        # ("m4_1500", 70, 6),
+        # ("m4_1500", 75, 6),
+        # ("m4_1500", 80, 6),
+        # ("m4_1500", 85, 6),
+        # ("m4_1500", 90, 6),
+        # ("m4_1500", 95, 6),
+        # ("m4_1500", 99, 6),
     ]
     if args.flowsim:
         print("Running flow simulation")
@@ -719,6 +790,8 @@ def main():
                 )
                 print(f"Loaded model: {model_instance}/{model_name_loaded}")
                 fct_list, sldn_list = [], []
+                if spec_list is None:
+                    spec_list=os.listdir(input_dir)
                 for spec in spec_list:
                     try:
                         spec = f"{spec}/ns3"
