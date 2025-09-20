@@ -82,7 +82,6 @@ class FlowSimLstm(LightningModule):
         enable_val=True,
         output_size=1,
         input_size=2,
-        enable_positional_encoding=False,
         enable_gnn=False,
         enable_lstm=False,
         enable_link_state=False,
@@ -166,7 +165,7 @@ class FlowSimLstm(LightningModule):
         self.save_dir = save_dir
         self.loss_average = loss_average
         logging.info(
-            f"Call model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, enable_positional_encoding: {enable_positional_encoding}, dropout: {dropout}, loss_average: {loss_average}"
+            f"Call model: {n_layer}, input_size: {input_size}, loss_fn: {loss_fn_type}, learning_rate: {learning_rate}, batch_size: {batch_size}, hidden_size: {hidden_size}, gcn_hidden_size: {gcn_hidden_size}, dropout: {dropout}, loss_average: {loss_average}"
         )
         self.rtt = 0
 

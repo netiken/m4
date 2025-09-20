@@ -111,8 +111,6 @@ class DataModulePerFlow(LightningDataModule):
     def __init__(
         self,
         dir_input,
-        n_samples_sampled,
-        threadhold_sampled,
         batch_size,
         num_workers,
         train_frac,
@@ -126,6 +124,8 @@ class DataModulePerFlow(LightningDataModule):
         enable_remainsize=False,
         enable_queuelen=False,
         sampling_method="uniform",  # uniform, weighted, balanced
+        n_samples_sampled,
+        threadhold_sampled,
         test_on_train=False,
         test_on_empirical=False,
         test_on_manual=False,
@@ -154,7 +154,7 @@ class DataModulePerFlow(LightningDataModule):
         self.n_samples_sampled = n_samples_sampled
         self.threadhold_sampled = threadhold_sampled
         logging.info(
-            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, sampling_method={sampling_method}, n_samples_sampled={n_samples_sampled}, threadhold_sampled={threadhold_sampled}"
+            f"call DataModulePerFlow: lr={lr}, sampling_method={sampling_method}, n_samples_sampled={n_samples_sampled}, threadhold_sampled={threadhold_sampled}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}, enable_flowsim_gt={enable_flowsim_gt}"
         )
         data_list = []
         if mode == "train":
@@ -163,10 +163,9 @@ class DataModulePerFlow(LightningDataModule):
             len_per_period_stats_all = []
             for spec in os.listdir(dir_input):
                 spec+=f"/ns3"
-                topo_type_cur = topo_type
                 file_suffix = ""
                 fid = np.load(
-                    f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+                    f"{dir_input}/{spec}/fid{topo_type}{file_suffix}.npy"
                 )
                 if (
                     len(fid) == len(set(fid))
@@ -177,7 +176,7 @@ class DataModulePerFlow(LightningDataModule):
                     # )
                 ):
                     busy_periods = np.load(
-                        f"{dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy",
+                        f"{dir_input}/{spec}/period{topo_type}{file_suffix}_t{flow_size_threshold}.npy",
                         allow_pickle=True,
                     )
 
@@ -185,7 +184,7 @@ class DataModulePerFlow(LightningDataModule):
                         len(period) for period in busy_periods
                     ]
 
-                    remainsize_path = f"{dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{flow_size_threshold}.npy"
+                    remainsize_path = f"{dir_input}/{spec}/period_remainsize_num{topo_type}{file_suffix}_t{flow_size_threshold}.npy"
 
                     if os.path.exists(remainsize_path):
                         len_per_period_active = np.load(remainsize_path)
@@ -207,7 +206,7 @@ class DataModulePerFlow(LightningDataModule):
                         data_list_per_period = [
                             (
                                 spec,
-                                topo_type_cur + file_suffix,
+                                topo_type + file_suffix,
                                 int(segment_id),
                                 len_per_period_stats[segment_id],
                             )
@@ -327,14 +326,13 @@ class DataModulePerFlow(LightningDataModule):
                 len_per_period_stats_all = []
                 len_per_period_active_all = []
 
-                topo_type_cur = self.topo_type
                 for spec in os.listdir(self.dir_input):
                    
                     spec = f"{spec}/ns3"
                 
                     file_suffix = ""
                     fid = np.load(
-                        f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
+                        f"{self.dir_input}/{spec}/fid{self.topo_type}{file_suffix}.npy"
                     )
                     if (
                         len(fid) == len(set(fid))
@@ -345,7 +343,7 @@ class DataModulePerFlow(LightningDataModule):
                         )
                     ):
                         busy_periods = np.load(
-                            f"{self.dir_input}/{spec}/period{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy",
+                            f"{self.dir_input}/{spec}/period{self.topo_type}{file_suffix}_t{self.flow_size_threshold}.npy",
                             allow_pickle=True,
                         )
 
@@ -353,7 +351,7 @@ class DataModulePerFlow(LightningDataModule):
                             len(period) for period in busy_periods
                         ]
 
-                        remainsize_path = f"{self.dir_input}/{spec}/period_remainsize_num{topo_type_cur}{file_suffix}_t{self.flow_size_threshold}.npy"
+                        remainsize_path = f"{self.dir_input}/{spec}/period_remainsize_num{self.topo_type}{file_suffix}_t{self.flow_size_threshold}.npy"
 
                         if os.path.exists(remainsize_path):
                             len_per_period_active = np.load(
@@ -368,7 +366,7 @@ class DataModulePerFlow(LightningDataModule):
                             data_list_per_period = [
                                 (
                                     spec,
-                                    topo_type_cur + file_suffix,
+                                    self.topo_type + file_suffix,
                                     int(segment_id),
                                     len_per_period_stats[segment_id],
                                 )
@@ -588,7 +586,6 @@ class TopoFctSldnSegment(Dataset):
     ):
         self.data_list = data_list
         self.dir_input = dir_input
-        self.use_first_epoch_logic = True
         self.lr = 10.0
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
@@ -597,7 +594,7 @@ class TopoFctSldnSegment(Dataset):
         self.enable_queuelen = enable_queuelen
         self.n_links = 96
         logging.info(
-            f"call TopoFctSldnSegment. data_list={len(data_list)}, use_first_epoch_logic={self.use_first_epoch_logic}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}, enable_flowsim_gt={enable_flowsim_gt}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
+            f"call TopoFctSldnSegment. data_list={len(data_list)}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}"
         )
 
     def __len__(self):
