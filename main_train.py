@@ -31,8 +31,6 @@ if __name__ == "__main__":
     fix_seed(shard)
 
     # get dataset configurations
-    n_samples_sampled = dataset_config["n_samples_sampled"]
-    threadhold_sampled = dataset_config["threadhold_sampled"]
     lr = dataset_config["lr"]
     program_name = f"{args.note}" if args.note else ""
     override_epoch_step_callback = OverrideEpochStepCallback()
