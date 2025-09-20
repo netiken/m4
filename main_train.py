@@ -82,7 +82,8 @@ if __name__ == "__main__":
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
-            enable_topo=dataset_config.get("enable_topo", False),
+            n_samples_sampled=dataset_config.get("n_samples_sampled", 4000),
+            threadhold_sampled=dataset_config.get("threadhold_sampled", 150),
         )
 
         # Init checkpointer
@@ -161,7 +162,6 @@ if __name__ == "__main__":
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
-                enable_topo=dataset_config.get("enable_topo", False),
                 loss_average=(
                     "perperiod"
                     if dataset_config.get("sampling_method", "uniform") == "balanced"
@@ -198,7 +198,8 @@ if __name__ == "__main__":
             enable_remainsize=dataset_config.get("enable_remainsize", False),
             enable_queuelen=dataset_config.get("enable_queuelen", False),
             sampling_method=dataset_config.get("sampling_method", "uniform"),
-            enable_topo=dataset_config.get("enable_topo", False),
+            n_samples_sampled=dataset_config.get("n_samples_sampled", 4000),
+            threadhold_sampled=dataset_config.get("threadhold_sampled", 150),
             mode=args.mode,
             test_on_train=args.test_on_train,
             test_on_empirical=args.test_on_empirical,
@@ -248,7 +249,6 @@ if __name__ == "__main__":
                 enable_link_state=model_config.get("enable_link_state", False),
                 enable_remainsize=dataset_config.get("enable_remainsize", False),
                 enable_queuelen=dataset_config.get("enable_queuelen", False),
-                enable_topo=dataset_config.get("enable_topo", False),
                 loss_average=(
                     "perperiod"
                     if dataset_config.get("sampling_method", "uniform") == "balanced"
