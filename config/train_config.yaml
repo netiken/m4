@@ -16,7 +16,6 @@ dataset:
 
 # Model parameters
 model:
-  model_name: "lstm"
   input_size: 2
   n_layer: 2
   gcn_n_layer: 3
@@ -31,7 +30,7 @@ model:
 
 # Training parameters
 training:
-  gpu: [1]
+  gpu: [0]
   n_epochs: 15
   batch_size: 2
   learning_rate: 0.0001

@@ -42,10 +42,9 @@ if __name__ == "__main__":
 
         # configure logging at the root level of Lightning
         os.makedirs(tb_logger.log_dir, exist_ok=True)
-        model_name = "bs{}_lr{}_{}_nlayer{}".format(
+        model_name = "bs{}_lr{}_nlayer{}".format(
             training_config["batch_size"],
             training_config["learning_rate"],
-            model_config["model_name"],
             model_config["n_layer"],
         )
         create_logger(os.path.join(tb_logger.log_dir, f"{model_name}.log"))
@@ -137,35 +136,30 @@ if __name__ == "__main__":
             # limit_val_batches=1,
             # enable_progress_bar=True,
         )
-        model_name = model_config["model_name"]
-        if model_name == "lstm":
-            model = FlowSimLstm(
-                n_layer=model_config["n_layer"],
-                gcn_n_layer=model_config["gcn_n_layer"],
-                loss_fn_type=model_config["loss_fn_type"],
-                learning_rate=training_config["learning_rate"],
-                batch_size=training_config["batch_size"],
-                hidden_size=model_config["hidden_size"],
-                gcn_hidden_size=model_config["gcn_hidden_size"],
-                dropout=model_config["dropout"],
-                enable_val=enable_val,
-                enable_dist=enable_dist,
-                input_size=model_config["input_size"],
-                output_size=1,
-                enable_positional_encoding=model_config.get(
-                    "enable_positional_encoding", False
-                ),
-                enable_gnn=model_config.get("enable_gnn", False),
-                enable_lstm=model_config.get("enable_lstm", False),
-                enable_link_state=model_config.get("enable_link_state", False),
-                enable_remainsize=dataset_config.get("enable_remainsize", False),
-                enable_queuelen=dataset_config.get("enable_queuelen", False),
-                loss_average=(
-                    "perperiod"
-                    if dataset_config.get("sampling_method", "uniform") == "balanced"
-                    else "perflow"
-                ),
-            )
+        model = FlowSimLstm(
+            n_layer=model_config["n_layer"],
+            gcn_n_layer=model_config["gcn_n_layer"],
+            loss_fn_type=model_config["loss_fn_type"],
+            learning_rate=training_config["learning_rate"],
+            batch_size=training_config["batch_size"],
+            hidden_size=model_config["hidden_size"],
+            gcn_hidden_size=model_config["gcn_hidden_size"],
+            dropout=model_config["dropout"],
+            enable_val=enable_val,
+            enable_dist=enable_dist,
+            input_size=model_config["input_size"],
+            output_size=1,
+            enable_gnn=model_config.get("enable_gnn", False),
+            enable_lstm=model_config.get("enable_lstm", False),
+            enable_link_state=model_config.get("enable_link_state", False),
+            enable_remainsize=dataset_config.get("enable_remainsize", False),
+            enable_queuelen=dataset_config.get("enable_queuelen", False),
+            loss_average=(
+                "perperiod"
+                if dataset_config.get("sampling_method", "uniform") == "balanced"
+                else "perflow"
+            ),
+        )
         trainer.fit(model, datamodule=datamodule, ckpt_path=args.ckpt_path)
     else:
         DEVICE = torch.device(training_config["gpu"][0])
@@ -221,37 +215,31 @@ if __name__ == "__main__":
             # limit_val_batches=1,
             # enable_progress_bar=False,
         )
-        model_name = model_config["model_name"]
-        if model_name == "lstm":
-            model = FlowSimLstm.load_from_checkpoint(
-                # f"{dir_train}/checkpoints/best.ckpt",
-                f"{dir_train}/checkpoints/last_epoch=014.ckpt",
-                map_location=DEVICE,
-                n_layer=model_config["n_layer"],
-                gcn_n_layer=model_config["gcn_n_layer"],
-                loss_fn_type=model_config["loss_fn_type"],
-                learning_rate=training_config["learning_rate"],
-                batch_size=training_config["batch_size"],
-                hidden_size=model_config["hidden_size"],
-                gcn_hidden_size=model_config["gcn_hidden_size"],
-                dropout=model_config["dropout"],
-                enable_val=training_config["enable_val"],
-                enable_dist=training_config["enable_dist"],
-                input_size=model_config["input_size"],
-                output_size=1,
-                enable_positional_encoding=model_config.get(
-                    "enable_positional_encoding", False
-                ),
-                enable_gnn=model_config.get("enable_gnn", False),
-                enable_lstm=model_config.get("enable_lstm", False),
-                enable_link_state=model_config.get("enable_link_state", False),
-                enable_remainsize=dataset_config.get("enable_remainsize", False),
-                enable_queuelen=dataset_config.get("enable_queuelen", False),
-                loss_average=(
-                    "perperiod"
-                    if dataset_config.get("sampling_method", "uniform") == "balanced"
-                    else "perflow"
-                ),
-                save_dir=tb_logger.log_dir,
-            )
+        model = FlowSimLstm.load_from_checkpoint(
+            f"{dir_train}/checkpoints/best.ckpt",
+            map_location=DEVICE,
+            n_layer=model_config["n_layer"],
+            gcn_n_layer=model_config["gcn_n_layer"],
+            loss_fn_type=model_config["loss_fn_type"],
+            learning_rate=training_config["learning_rate"],
+            batch_size=training_config["batch_size"],
+            hidden_size=model_config["hidden_size"],
+            gcn_hidden_size=model_config["gcn_hidden_size"],
+            dropout=model_config["dropout"],
+            enable_val=training_config["enable_val"],
+            enable_dist=training_config["enable_dist"],
+            input_size=model_config["input_size"],
+            output_size=1,
+            enable_gnn=model_config.get("enable_gnn", False),
+            enable_lstm=model_config.get("enable_lstm", False),
+            enable_link_state=model_config.get("enable_link_state", False),
+            enable_remainsize=dataset_config.get("enable_remainsize", False),
+            enable_queuelen=dataset_config.get("enable_queuelen", False),
+            loss_average=(
+                "perperiod"
+                if dataset_config.get("sampling_method", "uniform") == "balanced"
+                else "perflow"
+            ),
+            save_dir=tb_logger.log_dir,
+        )
         trainer.test(model, datamodule=datamodule)
