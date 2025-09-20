@@ -25,21 +25,22 @@ To quickly reproduce the results in the paper, follow these steps:
    git submodule update --init --recursive
    ```
 
-2. Set up the environment and run the evaluation script to replicate results from Sections 5.2 and 5.6:
+2. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+
+3. Set up the python environment:
    ```bash
    uv sync
    source .venv/bin/activate
-   jupyter notebook plot_results.ipynb
    ```
+4. Please run the notebook `plot_results.ipynb` to generate the paper figures from Sections 5.2 and 5.6.
 
 ---
 
 ## **Setup and Installation**
 
 ### **Install Dependencies**
-1. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
 
-2. Set up Python environment:
+1. Set up Python environment:
    ```bash
    uv sync
    source .venv/bin/activate  # Activate the virtual environment
@@ -47,21 +48,24 @@ To quickly reproduce the results in the paper, follow these steps:
    
    **Note**: You can either activate the environment as shown above, or use `uv run <command>` to run commands directly (e.g., `uv run python main_train.py`).
 
-3. Install Rust and Cargo:
+2. Install Rust and Cargo:
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    rustup install nightly
    rustup default nightly
    ```
 
-4. Install gcc-9:
+3. Install gcc-9:
    ```bash
    sudo apt-get install gcc-9 g++-9
    ```
 
-5. Set up ns-3 for data generation:
+4. Set up ns-3 (for training dataset with packet traces) and UNISON (for fast simulation) for data generation:
    ```bash
    cd High-Precision-Congestion-Control/UNISON-for-ns-3
+   ./configure.sh
+   ./ns3 run 'scratch/third mix/config_test.txt'
+   cd ../ns-3.39
    ./configure.sh
    ./ns3 run 'scratch/third mix/config_test.txt'
    ```
@@ -76,6 +80,19 @@ This section shows how to reproduce the experimental results from the paper usin
 ### **Replicating Paper Results**
 
 This section shows how to reproduce the experimental results from the paper. You can either use our provided demo data or generate the full dataset yourself.
+
+**For Quick Test (Small Scale):**
+```bash
+cd parsimon-eval/expts/fig_8
+cargo run --release -- --root=./demo --mixes spec/0.mix.json --nr-flows 2000 --enable-train ns3
+cargo run --release -- --root=./demo --mixes spec/0.mix.json --nr-flows 2000 --enable-train mlsys
+```
+Results will be saved in the `demo` directory.
+
+**Note**: 
+- Use the `--enable-train` flag for commands that need the training-specific ns-3 version (`ns-3.39`) to generate training datasets with packet traces.
+- Use the `--enable-app` flag for application completion time scenarios (Appendix 1) to synchronize flow start times.
+
 
 #### **Step 1: Generate Test Data**
 
@@ -106,8 +123,8 @@ Results will be saved in the `eval_test` directory.
 **For Appendix 1 (Application completion time):**
 ```bash
 cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 ns3
-cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 mlsys
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app ns3
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app mlsys
 ```
 Results will be saved in the `eval_app` directory.
 
@@ -115,13 +132,7 @@ Results will be saved in the `eval_app` directory.
 TODO: add the instructions to run the test.
 
 #### **Step 3: Visualize Results**
-After completing the data generation and inference steps above, create the paper figures:
-```bash
-cd ../../../
-source .venv/bin/activate
-jupyter notebook plot_results.ipynb
-```
-This will open Jupyter with the plotting notebook to generate all paper figures.
+After completing the data generation and inference steps above, create the paper figures in the notebook `plot_results.ipynb`.
 
 ---
 
@@ -139,11 +150,11 @@ We provide pre-generated demo training data in the `parsimon-eval/expts/fig_8/ev
 Or you can generate the complete training dataset yourself:
    ```bash
    cd parsimon-eval/expts/fig_8
-   cargo run --release -- --root={dir_to_data} --mixes={config_for_sim_scenarios} ns3
+   cargo run --release -- --root={dir_to_data} --mixes={config_for_sim_scenarios} --enable-train ns3
    ```
    Example:
    ```bash
-   cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json --nr-flows 2000 ns3
+   cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json --nr-flows 2000 --enable-train ns3
    ```
 
 ### **Step 2: Train the Model**
