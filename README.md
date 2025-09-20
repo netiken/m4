@@ -72,8 +72,16 @@ To quickly reproduce the results in the paper, follow these steps:
 
 The pre-trained checkpoints for the full m4 pipeline are available in the `checkpoints` directory. You can use them directly or train your own model (see [Training Your Own Model](#training-your-own-model)).
 
+
 ### **Replicating Paper Results**
-#### **Section 5.4**
+
+#### **Generate Test Data**
+
+We provide the demo data in the `parsimon-eval/expts/fig_8/eval_test_demo` directory.
+
+Or you can generate the data yourself.
+
+##### **Section 5.4**
 ```bash
 cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
@@ -81,12 +89,7 @@ cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json ns3
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json mlsys
 cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
 ```
-Then, you can find the results in the `data` directory and visualize the results using the following script:
-```bash
-cd ../../../
-source .venv/bin/activate
-jupyter notebook plot_results.ipynb
-```
+Then, you can find the results in the `data` directory.
 
 #### **Section 5.5**
 ```bash
@@ -94,12 +97,7 @@ cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
 ```
-Then, you can find the results in the `eval_test` directory and visualize the results using the following script:
-```bash
-cd ../../../
-source .venv/bin/activate
-jupyter notebook plot_results.ipynb
-```
+Then, you can find the results in the `eval_test` directory.
 
 #### **Appendix 1**
 ```bash
@@ -107,20 +105,21 @@ cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 mlsys
 ```
-Then, you can find the results in the `eval_app` directory and visualize the results using the following script:
-```bash
-cd ../../../
-source .venv/bin/activate
-jupyter notebook plot_results.ipynb
-```
+Then, you can find the results in the `eval_app` directory.
+
+#### **Run test**
+TODO: add the instructions to run the test.
 
 ---
+
 
 ## **Training Your Own Model**
 
 To train a new model, follow these steps:
 
 1. **Generate training data**:
+   We provide the demo data in the `parsimon-eval/expts/fig_8/eval_train_demo` directory.
+   Or you can generate the data yourself.
    ```bash
    cd parsimon-eval/expts/fig_8
    cargo run --release -- --root={dir_to_data} --mixes={config_for_sim_scenarios} ns3
@@ -152,6 +151,21 @@ To train a new model, follow these steps:
    ```
    Then, you can open the tensorboard in your browser following the instructions in the terminal.
 
+3. **Test the model**:
+   - Ensure you are in the correct Python environment.
+   - Modify `config/test_config.yaml` if needed.
+   - Run:
+     ```bash
+     cd m4
+     uv run python main_train.py --mode=test --test_config={path_to_config_file} --dir_input={dir_to_save_data} --dir_output={dir_to_save_results} --note={note}
+     ```
+   Example:
+   ```bash
+   # test on the demo data
+   uv run python main_train.py --mode=test
+   # validate on the simulation data used in the paper
+   uv run python main_train.py --mode=test --test_config=./config/test_config.yaml --dir_input=./parsimon-eval/expts/fig_8/eval_train --dir_output=./results_train --note m4
+   ```
 ---
 
 ## **Repository Structure**
@@ -163,6 +177,7 @@ To train a new model, follow these steps:
 ├── inference/                     # C++ inference engine for m4
 ├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
 ├── results/                       # Experimental results and outputs
+├── results_train/                 # Training results and outputs
 ├── util/                          # Utility functions for m4, including data loaders and ML model implementations
 ├── main_train.py                  # Main script for training and testing m4
 └── plot_results.ipynb            # Jupyter notebook for visualizing results
