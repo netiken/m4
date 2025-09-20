@@ -3,7 +3,6 @@ import random
 import numpy as np
 from scipy.stats import rankdata
 import logging
-import struct
 
 
 def fix_seed(seed):

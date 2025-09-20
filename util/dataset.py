@@ -557,6 +557,7 @@ class DataModulePerFlow(LightningDataModule):
             enable_flowsim_gt,
             enable_remainsize=enable_remainsize,
             enable_queuelen=enable_queuelen,
+            lr=self.lr,
         )
 
     def __dump_data_list(self, path):
@@ -583,10 +584,11 @@ class TopoFctSldnSegment(Dataset):
         enable_flowsim_gt=False,
         enable_remainsize=False,
         enable_queuelen=False,
+        lr=10.0,
     ):
         self.data_list = data_list
         self.dir_input = dir_input
-        self.lr = 10.0
+        self.lr = lr
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
         self.enable_flowsim_gt = enable_flowsim_gt

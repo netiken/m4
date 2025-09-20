@@ -1,5 +1,4 @@
 import numpy as np
-from enum import Enum
 
 UNIT_G = 1000000000
 UNIT_M = 1000000
@@ -12,8 +11,6 @@ HEADER_SIZE = 48
 BYTE_TO_BIT = 8
 
 DELAY_PROPAGATION_BASE = {"link": 1000, "path": 1000}  # 1us
-
-SIZE_BUCKET_LIST_OUTPUT = ["(0, MTU)", "(MTU, BDP)", "(BDP, 5BDP)", "(5BDP, $\infty$)"]
 
 EPS = 1e-12
 
