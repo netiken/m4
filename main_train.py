@@ -31,20 +31,10 @@ if __name__ == "__main__":
     fix_seed(shard)
 
     # get dataset configurations
-    shard_list_config = dataset_config["shard_list"]
-    shard_list = sorted(
-        np.random.choice(
-            np.arange(shard_list_config[0], shard_list_config[1]),
-            size=shard_list_config[2],
-            replace=False,
-        )
-    )
-    n_flows_list = dataset_config["n_flows_list"]
-    n_hosts_list = dataset_config["n_hosts_list"]
-
+    n_samples_sampled = dataset_config["n_samples_sampled"]
+    threadhold_sampled = dataset_config["threadhold_sampled"]
     lr = dataset_config["lr"]
-    note_str = f"{args.note}_" if args.note else ""
-    program_name = f"{note_str}shard{len(shard_list)}_nflows{len(n_flows_list)}_nhosts{len(n_hosts_list)}_lr{lr}Gbps"
+    program_name = f"{args.note}" if args.note else ""
     override_epoch_step_callback = OverrideEpochStepCallback()
     dir_output = args.dir_output
     dir_input = args.dir_input
@@ -78,16 +68,12 @@ if __name__ == "__main__":
 
         datamodule = DataModulePerFlow(
             dir_input=dir_input,
-            shard_list=shard_list,
-            n_flows_list=n_flows_list,
-            n_hosts_list=n_hosts_list,
             batch_size=training_config["batch_size"],
             num_workers=training_config["num_workers"],
             train_frac=dataset_config["train_frac"],
             dir_output=tb_logger.log_dir,
             lr=lr,
             topo_type=dataset_config.get("topo_type", ""),
-            enable_segmentation=dataset_config.get("enable_segmentation", False),
             enable_positional_encoding=model_config.get(
                 "enable_positional_encoding", False
             ),
@@ -197,9 +183,6 @@ if __name__ == "__main__":
 
         datamodule = DataModulePerFlow(
             dir_input=dir_input,
-            shard_list=shard_list,
-            n_flows_list=n_flows_list,
-            n_hosts_list=n_hosts_list,
             batch_size=training_config["batch_size"],
             num_workers=training_config["num_workers"],
             train_frac=dataset_config["train_frac"],
@@ -207,7 +190,6 @@ if __name__ == "__main__":
             # customized config
             lr=dataset_config["lr"],
             topo_type=dataset_config.get("topo_type", ""),
-            enable_segmentation=dataset_config.get("enable_segmentation", False),
             enable_positional_encoding=model_config.get(
                 "enable_positional_encoding", False
             ),

@@ -20,15 +20,15 @@ def create_config():
     parser.add_argument(
         "--dir_input",
         help="input directory (dataset)",
-        default="/data2/lichenni/path_perflow",
+        default="./parsimon-eval/expts/fig_8/eval_train_demo",
     )
     parser.add_argument(
         "--dir_output",
         help="output directory (checkpotins)",
-        default="/data2/lichenni/output_perflow",
+        default="./results_train",
     )
     parser.add_argument("--timestamp", type=str, default=None)
-    parser.add_argument("--note", type=str, default="m3")
+    parser.add_argument("--note", type=str, default="demo")
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--mode", type=str, default="train")
     parser.add_argument("--test_on_train", action="store_true")
@@ -40,7 +40,7 @@ def create_config():
         default=0,
     )
     parser.add_argument("--shard", type=int, default=0, help="random seed")
-    parser.add_argument("--device", type=str, help="Compute device", default="cuda:1")
+    parser.add_argument("--device", type=str, help="Compute device", default="cuda:0")
     args = parser.parse_args()
     args.timestamp = datetime.datetime.fromtimestamp(time.time()).strftime(
         "%m%d_%H%M%S"

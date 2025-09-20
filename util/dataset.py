@@ -111,9 +111,8 @@ class DataModulePerFlow(LightningDataModule):
     def __init__(
         self,
         dir_input,
-        shard_list,
-        n_flows_list,
-        n_hosts_list,
+        n_samples_sampled,
+        threadhold_sampled,
         batch_size,
         num_workers,
         train_frac,
@@ -121,7 +120,6 @@ class DataModulePerFlow(LightningDataModule):
         lr,
         topo_type="",
         mode="train",
-        enable_segmentation=False,
         enable_positional_encoding=False,
         flow_size_threshold=100000,
         enable_flowsim_gt=False,
@@ -148,7 +146,6 @@ class DataModulePerFlow(LightningDataModule):
         self.dir_output = dir_output
         self.lr = lr
         self.topo_type = topo_type
-        self.enable_segmentation = enable_segmentation
         self.sampling_method = sampling_method
         self.enable_positional_encoding = enable_positional_encoding
         self.flow_size_threshold = flow_size_threshold
@@ -156,26 +153,21 @@ class DataModulePerFlow(LightningDataModule):
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
         self.enable_topo = enable_topo
+        self.n_samples_sampled = n_samples_sampled
+        self.threadhold_sampled = threadhold_sampled
         logging.info(
-            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, enable_segmentation={enable_segmentation}, sampling_method={sampling_method}, enable_topo={enable_topo}"
+            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, sampling_method={sampling_method}, enable_topo={enable_topo}"
         )
         data_list = []
         if mode == "train":
-            if enable_segmentation:
-                len_per_period_all = []
-                len_per_period_active_all = []
-                len_per_period_stats_all = []
-            # for shard in shard_list:
-            #     for n_flows in n_flows_list:
-            #         for n_hosts in n_hosts_list:
+            len_per_period_all = []
+            len_per_period_active_all = []
+            len_per_period_stats_all = []
             for spec in os.listdir(dir_input):
                 n_hosts = 12
-                # if float(spec.split("_")[0])>1000:
-                #     continue
                 spec+=f"/ns3"
                 if enable_topo:
                     topo_type_cur = topo_type
-                    # spec = f"{shard}/ns3"
                     file_suffix = ""
                     fid = np.load(
                         f"{dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
@@ -209,8 +201,7 @@ class DataModulePerFlow(LightningDataModule):
                         len_per_period = [
                             (
                                 len_per_period[i]
-                                # if len_per_period_active[i] < 150
-                                if len_per_period_active[i] < 1500
+                                if len_per_period_active[i] < threadhold_sampled
                                 else 0
                             )
                             for i in range(len(len_per_period))
@@ -251,57 +242,52 @@ class DataModulePerFlow(LightningDataModule):
                                 ]
                             )
 
-            if enable_segmentation:
-                len_per_period_all = np.array(len_per_period_all)
-                n_samples = (
-                    len(shard_list)
-                    * len(n_flows_list)
-                    * len(n_hosts_list)
+            len_per_period_all = np.array(len_per_period_all)
+            n_samples = self.n_samples_sampled
+            # Sample indices from the array based on the weights
+            if sampling_method == "uniform":
+                weights = len_per_period_all > 0
+            elif sampling_method == "weighted":
+                weights = len_per_period_all
+            elif sampling_method == "balanced":
+                # Bin the lengths
+                binned_lengths = np.digitize(len_per_period_all, balance_len_bins)
+
+                # Create a dictionary to count the number of periods for each length
+                unique_lengths, counts = np.unique(
+                    binned_lengths, return_counts=True
                 )
-                # Sample indices from the array based on the weights
-                if sampling_method == "uniform":
-                    weights = len_per_period_all > 0
-                elif sampling_method == "weighted":
-                    weights = len_per_period_all
-                elif sampling_method == "balanced":
-                    # Bin the lengths
-                    binned_lengths = np.digitize(len_per_period_all, balance_len_bins)
-
-                    # Create a dictionary to count the number of periods for each length
-                    unique_lengths, counts = np.unique(
-                        binned_lengths, return_counts=True
-                    )
-                    logging.info(
-                        f"# of unique_lengths: {len(unique_lengths)}, {unique_lengths}, # of counts: {counts}"
-                    )
-                    # Assign equal weight to each length category
-                    length_weights = 1.0 / unique_lengths.size
-                    # Calculate the weight for each period
-                    weights = np.zeros(len(binned_lengths))
-                    for length, count in zip(unique_lengths, counts):
-                        if length == unique_lengths[0]:
-                            continue
-                        period_indices = np.where(binned_lengths == length)[0]
-                        weights[period_indices] = length_weights / count
-                else:
-                    raise ValueError(f"Unsupported sampling method: {sampling_method}")
-
-                weights = weights / np.sum(weights)
-                sample_indices = np.random.choice(
-                    len(weights), min(max(n_samples,600), len(weights)), replace=False, p=weights
-                )
-
-                data_list = [data_list[i] for i in sample_indices]
-
-                n_mean = np.mean([len_per_period_active_all[i] for i in sample_indices])
-                n_max = np.max([len_per_period_active_all[i] for i in sample_indices])
                 logging.info(
-                    f"# of active flows per busy period: mean-{n_mean}, max-{n_max}"
+                    f"# of unique_lengths: {len(unique_lengths)}, {unique_lengths}, # of counts: {counts}"
                 )
+                # Assign equal weight to each length category
+                length_weights = 1.0 / unique_lengths.size
+                # Calculate the weight for each period
+                weights = np.zeros(len(binned_lengths))
+                for length, count in zip(unique_lengths, counts):
+                    if length == unique_lengths[0]:
+                        continue
+                    period_indices = np.where(binned_lengths == length)[0]
+                    weights[period_indices] = length_weights / count
+            else:
+                raise ValueError(f"Unsupported sampling method: {sampling_method}")
 
-                n_mean = np.mean([len_per_period_stats_all[i] for i in sample_indices])
-                n_max = np.max([len_per_period_stats_all[i] for i in sample_indices])
-                logging.info(f"# of flows per busy period: mean-{n_mean}, max-{n_max}")
+            weights = weights / np.sum(weights)
+            sample_indices = np.random.choice(
+                len(weights), min(self.n_samples_sampled, len(weights)), replace=False, p=weights
+            )
+
+            data_list = [data_list[i] for i in sample_indices]
+
+            n_mean = np.mean([len_per_period_active_all[i] for i in sample_indices])
+            n_max = np.max([len_per_period_active_all[i] for i in sample_indices])
+            logging.info(
+                f"# of active flows per busy period: mean-{n_mean}, max-{n_max}"
+            )
+
+            n_mean = np.mean([len_per_period_stats_all[i] for i in sample_indices])
+            n_max = np.max([len_per_period_stats_all[i] for i in sample_indices])
+            logging.info(f"# of flows per busy period: mean-{n_mean}, max-{n_max}")
 
             np.random.shuffle(data_list)
         self.data_list = data_list
@@ -351,10 +337,9 @@ class DataModulePerFlow(LightningDataModule):
                     n_hosts_list = [32]
                     n_flows_list = [2000]
 
-                if self.enable_segmentation:
-                    len_per_period_all = []
-                    len_per_period_stats_all = []
-                    len_per_period_active_all = []
+                len_per_period_all = []
+                len_per_period_stats_all = []
+                len_per_period_active_all = []
 
                 for shard in shard_list:
                     for n_flows in n_flows_list:
@@ -362,10 +347,7 @@ class DataModulePerFlow(LightningDataModule):
                             if self.enable_topo:
                                 topo_type_cur = self.topo_type
                                 spec = f"{shard}/ns3"
-                                # statss = np.load(f'{self.dir_input}/{spec}/stats.npy', allow_pickle=True)
-                                # if float(statss.item().get("load_bottleneck_target")) > 0.8: continue
-
-                                # file_suffix = f"s{sample}_i0"
+                           
                                 file_suffix = ""
                                 fid = np.load(
                                     f"{self.dir_input}/{spec}/fid{topo_type_cur}{file_suffix}.npy"
@@ -443,65 +425,64 @@ class DataModulePerFlow(LightningDataModule):
                                         data_list_test
                                     )
 
-                if self.enable_segmentation:
-                    len_per_period_all = np.array(len_per_period_all)
-                    n_samples = 1000
+                len_per_period_all = np.array(len_per_period_all)
+                n_samples = 1000
 
-                    if self.sampling_method == "uniform":
-                        weights = len_per_period_all > 0
-                    elif self.sampling_method == "balanced":
-                        # Bin the lengths
-                        binned_lengths = np.digitize(
-                            len_per_period_all, balance_len_bins
-                        )
-
-                        # Create a dictionary to count the number of periods for each length
-                        unique_lengths, counts = np.unique(
-                            binned_lengths, return_counts=True
-                        )
-                        logging.info(
-                            f"# of unique_lengths: {len(unique_lengths)}, # of counts: {counts}"
-                        )
-                        # Assign equal weight to each length category
-                        length_weights = 1.0 / unique_lengths.size
-                        # Calculate the weight for each period
-                        weights = np.zeros(len(binned_lengths))
-                        for length, count in zip(unique_lengths, counts):
-                            if length == unique_lengths[0]:
-                                continue
-                            period_indices = np.where(binned_lengths == length)[0]
-                            weights[period_indices] = length_weights / count
-
-                    weights = weights / np.sum(weights)
-
-                    sample_indices = np.random.choice(
-                        len(weights),
-                        min(n_samples, len(weights)),
-                        replace=False,
-                        p=weights,
+                if self.sampling_method == "uniform":
+                    weights = len_per_period_all > 0
+                elif self.sampling_method == "balanced":
+                    # Bin the lengths
+                    binned_lengths = np.digitize(
+                        len_per_period_all, balance_len_bins
                     )
 
-                    data_list_test = [data_list_test[i] for i in sample_indices]
-
-                    n_mean = np.mean(
-                        [len_per_period_active_all[i] for i in sample_indices]
-                    )
-                    n_max = np.max(
-                        [len_per_period_active_all[i] for i in sample_indices]
+                    # Create a dictionary to count the number of periods for each length
+                    unique_lengths, counts = np.unique(
+                        binned_lengths, return_counts=True
                     )
                     logging.info(
-                        f"# of active flows per busy period: mean-{n_mean}, max-{n_max}"
+                        f"# of unique_lengths: {len(unique_lengths)}, # of counts: {counts}"
                     )
+                    # Assign equal weight to each length category
+                    length_weights = 1.0 / unique_lengths.size
+                    # Calculate the weight for each period
+                    weights = np.zeros(len(binned_lengths))
+                    for length, count in zip(unique_lengths, counts):
+                        if length == unique_lengths[0]:
+                            continue
+                        period_indices = np.where(binned_lengths == length)[0]
+                        weights[period_indices] = length_weights / count
 
-                    n_mean = np.mean(
-                        [len_per_period_stats_all[i] for i in sample_indices]
-                    )
-                    n_max = np.max(
-                        [len_per_period_stats_all[i] for i in sample_indices]
-                    )
-                    logging.info(
-                        f"# of flows per busy period: mean-{n_mean}, max-{n_max}"
-                    )
+                weights = weights / np.sum(weights)
+
+                sample_indices = np.random.choice(
+                    len(weights),
+                    min(n_samples, len(weights)),
+                    replace=False,
+                    p=weights,
+                )
+
+                data_list_test = [data_list_test[i] for i in sample_indices]
+
+                n_mean = np.mean(
+                    [len_per_period_active_all[i] for i in sample_indices]
+                )
+                n_max = np.max(
+                    [len_per_period_active_all[i] for i in sample_indices]
+                )
+                logging.info(
+                    f"# of active flows per busy period: mean-{n_mean}, max-{n_max}"
+                )
+
+                n_mean = np.mean(
+                    [len_per_period_stats_all[i] for i in sample_indices]
+                )
+                n_max = np.max(
+                    [len_per_period_stats_all[i] for i in sample_indices]
+                )
+                logging.info(
+                    f"# of flows per busy period: mean-{n_mean}, max-{n_max}"
+                )
             else:
                 data_list = self.__read_data_list(self.dir_output)
                 if self.test_on_train:
@@ -588,17 +569,16 @@ class DataModulePerFlow(LightningDataModule):
         data_list_filtered = data_list
         logging.info(f"Using all samples: {len(data_list_filtered)}")
 
-        if self.enable_segmentation:
-            if self.enable_topo:
-                return TopoFctSldnSegment(
-                    data_list_filtered,
-                    dir_input,
-                    enable_positional_encoding,
-                    flow_size_threshold,
-                    enable_flowsim_gt,
-                    enable_remainsize=enable_remainsize,
-                    enable_queuelen=enable_queuelen,
-                )
+        if self.enable_topo:
+            return TopoFctSldnSegment(
+                data_list_filtered,
+                dir_input,
+                enable_positional_encoding,
+                flow_size_threshold,
+                enable_flowsim_gt,
+                enable_remainsize=enable_remainsize,
+                enable_queuelen=enable_queuelen,
+            )
 
     def __dump_data_list(self, path):
         with open(f"{path}/data_list.json", "w") as fp:
