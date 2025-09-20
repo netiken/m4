@@ -70,18 +70,22 @@ To quickly reproduce the results in the paper, follow these steps:
 
 ## **Running Experiments from Scratch**
 
-The pre-trained checkpoints for the full m4 pipeline are available in the `checkpoints` directory. You can use them directly or train your own model (see [Training Your Own Model](#training-your-own-model)).
+This section shows how to reproduce the experimental results from the paper using pre-trained models. The pre-trained checkpoints for the full m4 pipeline are available in the `checkpoints` directory. You can use them directly or train your own model (see [Training Your Own Model](#training-your-own-model)).
 
 
 ### **Replicating Paper Results**
 
-#### **Generate Test Data**
+This section shows how to reproduce the experimental results from the paper. You can either use our provided demo data or generate the full dataset yourself.
 
-We provide the demo data in the `parsimon-eval/expts/fig_8/eval_test_demo` directory.
+#### **Step 1: Generate Test Data**
 
-Or you can generate the data yourself.
+**Option A: Use Demo Data (Recommended for Quick Start)**
+We provide pre-generated demo data in the `parsimon-eval/expts/fig_8/eval_test_demo` directory.
 
-##### **Section 5.4**
+**Option B: Generate Full Dataset**
+Or you can generate the complete dataset yourself:
+
+**For Section 5.4 (Large-scale evaluation):**
 ```bash
 cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
@@ -89,37 +93,50 @@ cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json ns3
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json mlsys
 cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
 ```
-Then, you can find the results in the `data` directory.
+Results will be saved in the `data` directory.
 
-#### **Section 5.5**
+**For Section 5.5 (Flow-level evaluation):**
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
 ```
-Then, you can find the results in the `eval_test` directory.
+Results will be saved in the `eval_test` directory.
 
-#### **Appendix 1**
+**For Appendix 1 (Application completion time):**
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 mlsys
 ```
-Then, you can find the results in the `eval_app` directory.
+Results will be saved in the `eval_app` directory.
 
-#### **Run test**
+#### **Step 2: Run Inference and Generate Results**  
 TODO: add the instructions to run the test.
+
+#### **Step 3: Visualize Results**
+After completing the data generation and inference steps above, create the paper figures:
+```bash
+cd ../../../
+source .venv/bin/activate
+jupyter notebook plot_results.ipynb
+```
+This will open Jupyter with the plotting notebook to generate all paper figures.
 
 ---
 
 
 ## **Training Your Own Model**
 
-To train a new model, follow these steps:
+This section shows how to train and test your own m4 model from scratch. Follow these steps in order:
 
-1. **Generate training data**:
-   We provide the demo data in the `parsimon-eval/expts/fig_8/eval_train_demo` directory.
-   Or you can generate the data yourself.
+### **Step 1: Prepare Training Data**
+
+**Option A: Use Demo Data (Recommended for Quick Start)**
+We provide pre-generated demo training data in the `parsimon-eval/expts/fig_8/eval_train_demo` directory.
+
+**Option B: Generate Full Training Dataset** 
+Or you can generate the complete training dataset yourself:
    ```bash
    cd parsimon-eval/expts/fig_8
    cargo run --release -- --root={dir_to_data} --mixes={config_for_sim_scenarios} ns3
@@ -129,7 +146,8 @@ To train a new model, follow these steps:
    cargo run --release -- --root=./eval_train --mixes spec/eval_train.mix.json --nr-flows 2000 ns3
    ```
 
-2. **Train the model**:
+### **Step 2: Train the Model**
+Train the neural network using the generated or demo training data:
    - Ensure you are in the correct Python environment.
    - Modify `config/train_config.yaml` if needed.
    - Run:
@@ -151,7 +169,8 @@ To train a new model, follow these steps:
    ```
    Then, you can open the tensorboard in your browser following the instructions in the terminal.
 
-3. **Test the model**:
+### **Step 3: Test the Model**
+Validate your trained model using the training data to check performance:
    - Ensure you are in the correct Python environment.
    - Modify `config/test_config.yaml` if needed.
    - Run:
