@@ -25,40 +25,41 @@ To quickly reproduce the results in the paper, follow these steps:
    git submodule update --init --recursive
    ```
 
-2. Run the evaluation script to replicate results from Sections 5.2 and 5.4:
+2. Set up the environment and run the evaluation script to replicate results from Sections 5.2 and 5.6:
    ```bash
-   jupyter notebook plot_eval.ipynb
+   uv sync
+   source .venv/bin/activate
+   jupyter notebook plot_results.ipynb
    ```
 
 ---
 
 ## **Setup and Installation**
 
-Ensure you have the following installed:
-- **Python 3**
-- **Rust & Cargo**
-- **gcc-9**
-
 ### **Install Dependencies**
-1. Set up Python environment:
-   ```bash
-   conda env create -f environment.yml
-   conda activate m4
-   ```
+1. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
 
-2. Install Rust and Cargo:
+2. Set up Python environment:
+   ```bash
+   uv sync
+   source .venv/bin/activate  # Activate the virtual environment
+   ```
+   
+   **Note**: You can either activate the environment as shown above, or use `uv run <command>` to run commands directly (e.g., `uv run python main_train.py`).
+
+3. Install Rust and Cargo:
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    rustup install nightly
    rustup default nightly
    ```
 
-3. Install gcc-9:
+4. Install gcc-9:
    ```bash
    sudo apt-get install gcc-9 g++-9
    ```
 
-4. Set up ns-3 for data generation:
+5. Set up ns-3 for data generation:
    ```bash
    cd High-Precision-Congestion-Control/UNISON-for-ns-3
    ./configure.sh
@@ -69,10 +70,10 @@ Ensure you have the following installed:
 
 ## **Running Experiments from Scratch**
 
-The pre-trained checkpoints for the full m4 pipeline are available in the `XXX` directory. You can use them directly or train your own model (see [Training Your Own Model](#training-your-own-model)).
+The pre-trained checkpoints for the full m4 pipeline are available in the `checkpoints` directory. You can use them directly or train your own model (see [Training Your Own Model](#training-your-own-model)).
 
 ### **Replicating Paper Results**
-#### **Section 5.2**
+#### **Section 5.4**
 ```bash
 cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
@@ -80,34 +81,37 @@ cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json ns3
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json mlsys
 cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
 ```
-Then, visualize the results using:
+Then, you can find the results in the `data` directory and visualize the results using the following script:
 ```bash
-jupyter notebook plot_eval.ipynb
+cd ../../../
+source .venv/bin/activate
+jupyter notebook plot_results.ipynb
 ```
 
-#### **Section 5.3**
+#### **Section 5.5**
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
-
-cargo run --release -- --root=./eval_debug --mixes spec/0.mix.json --nr-flows 2000 ns3
-cargo run --release -- --root=./eval_debug --mixes spec/0.mix.json --nr-flows 2000 mlsys
 ```
-Then, visualize the results using:
+Then, you can find the results in the `eval_test` directory and visualize the results using the following script:
 ```bash
-jupyter notebook plot_eval.ipynb
+cd ../../../
+source .venv/bin/activate
+jupyter notebook plot_results.ipynb
 ```
 
-#### **Section 5.4**
+#### **Appendix 1**
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 mlsys
 ```
-Then, visualize the results using:
+Then, you can find the results in the `eval_app` directory and visualize the results using the following script:
 ```bash
-jupyter notebook plot_eval.ipynb
+cd ../../../
+source .venv/bin/activate
+jupyter notebook plot_results.ipynb
 ```
 
 ---
@@ -128,26 +132,40 @@ To train a new model, follow these steps:
 
 2. **Train the model**:
    - Ensure you are in the correct Python environment.
-   - Modify `config/train_config_lstm_topo.yaml` if needed.
+   - Modify `config/train_config.yaml` if needed.
    - Run:
      ```bash
      cd m4
-     python main_train.py --train_config={path_to_config_file} --mode=train --dir_input={dir_to_save_data} --dir_output={dir_to_save_ckpts} --note={note}
+     uv run python main_train.py --train_config={path_to_config_file} --mode=train --dir_input={dir_to_save_data} --dir_output={dir_to_save_ckpts} --note={note}
      ```
    Example:
    ```bash
-   python main_train.py --train_config=./config/train_config_lstm_topo.yaml --mode=train --dir_input=./parsimon-eval/expts/fig_8/eval_train --dir_output=/data2/lichenni/output_perflow --note m4
+   # train on demo data
+   uv run python main_train.py
+   # train on the simulation data used in the paper
+   uv run python main_train.py --train_config=./config/train_config.yaml --mode=train --dir_input=./parsimon-eval/expts/fig_8/eval_train --dir_output=./results_train --note m4
    ```
+
+   Note: You can also use tensorboard to visualize the training process:
+   ```bash
+   uv run tensorboard --logdir ./results_train/ --port 8009 --bind_all
+   ```
+   Then, you can open the tensorboard in your browser following the instructions in the terminal.
 
 ---
 
 ## **Repository Structure**
 ```
-├── config                          # Configuration files for training and testing m4
-├── High-Precision-Congestion-Control # HPCC repository for data generation
-├── parsimon-eval                   # Scripts to reproduce m4 experiments and comparisons
-├── util                             # Utility functions for m4, including data loaders and ML model implementations
-└── main_train.py                    # Main script for training and testing m4
+├── checkpoints/                    # Pre-trained model checkpoints
+├── config/                         # Configuration files for training and testing m4
+├── figs/                          # Generated figures and plots from experiments
+├── High-Precision-Congestion-Control/ # HPCC repository for data generation
+├── inference/                     # C++ inference engine for m4
+├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
+├── results/                       # Experimental results and outputs
+├── util/                          # Utility functions for m4, including data loaders and ML model implementations
+├── main_train.py                  # Main script for training and testing m4
+└── plot_results.ipynb            # Jupyter notebook for visualizing results
 ```
 
 ---

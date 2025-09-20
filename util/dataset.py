@@ -124,8 +124,8 @@ class DataModulePerFlow(LightningDataModule):
         enable_remainsize=False,
         enable_queuelen=False,
         sampling_method="uniform",  # uniform, weighted, balanced
-        n_samples_sampled,
-        threadhold_sampled,
+        n_samples_sampled=4000,
+        threadhold_sampled=150,
         test_on_train=False,
         test_on_empirical=False,
         test_on_manual=False,
