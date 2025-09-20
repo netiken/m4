@@ -89,7 +89,6 @@ class FlowSimLstm(LightningModule):
         enable_remainsize=False,
         enable_queuelen=False,
         enable_log_norm=True,
-        enable_topo=False,
         loss_average="perflow",  # perflow, perperiod
         save_dir=None,
     ):
@@ -106,8 +105,7 @@ class FlowSimLstm(LightningModule):
         self.enable_log_norm = enable_log_norm
         self.loss_efficiency_size = 0.005
         self.loss_efficiency_queue = 0.005
-        if enable_topo:
-            self.n_links = 96
+        self.n_links = 96
         logging.info(
             f"enable_link_state={enable_link_state}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}"
         )
