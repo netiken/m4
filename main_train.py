@@ -216,7 +216,7 @@ if __name__ == "__main__":
             # enable_progress_bar=False,
         )
         model = FlowSimLstm.load_from_checkpoint(
-            f"{dir_train}/checkpoints/best.ckpt",
+            f"{dir_train}/checkpoints/last.ckpt",
             map_location=DEVICE,
             n_layer=model_config["n_layer"],
             gcn_n_layer=model_config["gcn_n_layer"],
