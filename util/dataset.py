@@ -154,7 +154,7 @@ class DataModulePerFlow(LightningDataModule):
         self.n_samples_sampled = n_samples_sampled
         self.threadhold_sampled = threadhold_sampled
         logging.info(
-            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, sampling_method={sampling_method}"
+            f"call DataModulePerFlow: lr={lr}, topo_type={topo_type}, sampling_method={sampling_method}, n_samples_sampled={n_samples_sampled}, threadhold_sampled={threadhold_sampled}"
         )
         data_list = []
         if mode == "train":
@@ -162,7 +162,6 @@ class DataModulePerFlow(LightningDataModule):
             len_per_period_active_all = []
             len_per_period_stats_all = []
             for spec in os.listdir(dir_input):
-                n_hosts = 12
                 spec+=f"/ns3"
                 topo_type_cur = topo_type
                 file_suffix = ""
@@ -208,7 +207,6 @@ class DataModulePerFlow(LightningDataModule):
                         data_list_per_period = [
                             (
                                 spec,
-                                (0, n_hosts - 1),
                                 topo_type_cur + file_suffix,
                                 int(segment_id),
                                 len_per_period_stats[segment_id],
@@ -240,7 +238,6 @@ class DataModulePerFlow(LightningDataModule):
                         )
 
             len_per_period_all = np.array(len_per_period_all)
-            n_samples = self.n_samples_sampled
             # Sample indices from the array based on the weights
             if sampling_method == "uniform":
                 weights = len_per_period_all > 0
@@ -330,7 +327,7 @@ class DataModulePerFlow(LightningDataModule):
                 len_per_period_stats_all = []
                 len_per_period_active_all = []
 
-                 topo_type_cur = self.topo_type
+                topo_type_cur = self.topo_type
                 for spec in os.listdir(self.dir_input):
                    
                     spec = f"{spec}/ns3"
@@ -371,7 +368,6 @@ class DataModulePerFlow(LightningDataModule):
                             data_list_per_period = [
                                 (
                                     spec,
-                                    (0, n_hosts - 1),
                                     topo_type_cur + file_suffix,
                                     int(segment_id),
                                     len_per_period_stats[segment_id],
@@ -413,7 +409,6 @@ class DataModulePerFlow(LightningDataModule):
                         )
 
                 len_per_period_all = np.array(len_per_period_all)
-                n_samples = 1000
 
                 if self.sampling_method == "uniform":
                     weights = len_per_period_all > 0
@@ -444,7 +439,7 @@ class DataModulePerFlow(LightningDataModule):
 
                 sample_indices = np.random.choice(
                     len(weights),
-                    min(n_samples, len(weights)),
+                    min(1000, len(weights)),
                     replace=False,
                     p=weights,
                 )
@@ -609,10 +604,8 @@ class TopoFctSldnSegment(Dataset):
         return len(self.data_list)
 
     def __getitem__(self, idx):
-        spec, src_dst_pair_target, topo_type, segment_id, _ = self.data_list[idx]
-        src_dst_pair_target_str = (
-            "_".join([str(x) for x in src_dst_pair_target]) + f"_seg{segment_id}"
-        )
+        spec, topo_type, segment_id, _ = self.data_list[idx]
+        src_dst_pair_target_str = f"_seg{segment_id}"
 
         dir_input_tmp = f"{self.dir_input}/{spec}"
 
@@ -732,7 +725,7 @@ class TopoFctSldnSegment(Dataset):
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
 
-        sizes = np.log2(sizes + 1)
+        sizes = np.log2(sizes / 1000.0 + 1) if self.enable_remainsize else np.log2(sizes + 1)
         param_path = f"{dir_input_tmp}/param{topo_type}.npy"
         if os.path.exists(param_path):
             param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
