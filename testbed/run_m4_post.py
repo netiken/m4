@@ -15,9 +15,6 @@ os.chdir(cur_dir)
 def fix_seed(seed):
     np.random.seed(seed)
 
-
-
-
 def gen_busy_periods(flows, flow_size_threshold, remainsize_list):
     if flow_size_threshold == 100000000:
         flow_size_threshold = np.inf
@@ -338,7 +335,7 @@ if __name__ == "__main__":
             print(f"\n=== Processing single directory: {output_dir} ===")
         else:
             # Multi-scenario mode: generate output_dir from scenario name
-            output_dir = join(args.eval_train_dir, scenario, "ns3")
+            output_dir = join(args.eval_train_dir, scenario)
             print(f"\n=== Processing scenario {scenario}: {output_dir} ===")
         
         # Check if directory exists
