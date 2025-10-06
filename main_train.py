@@ -31,6 +31,10 @@ if __name__ == "__main__":
     fix_seed(shard)
 
     # get dataset configurations
+    enable_testbed = dataset_config.get("enable_testbed", False)
+    if enable_testbed:
+        args.dir_input = "./testbed/eval_train"
+        args.dir_output = "./testbed/results_train"
     lr = dataset_config["lr"]
     program_name = f"{args.note}" if args.note else ""
     override_epoch_step_callback = OverrideEpochStepCallback()
