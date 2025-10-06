@@ -198,6 +198,60 @@ Validate your trained model using the training data to check performance:
    ```
 ---
 
+## **Integrating m4 into SimAI**
+
+The `SimAI/` directory contains an integrated evaluation framework comparing three network simulation backends:
+
+| Backend | Description | Accuracy | Speed | Use Case |
+|---------|-------------|----------|-------|----------|
+| **ns-3** | Packet-level simulator with full RDMA/DCTCP/PFC modeling | Highest (ground truth) | Slowest | Validation & accuracy benchmark |
+| **flowSim** | Analytical simulator using max-min fairness | Medium | Fastest | Quick iteration & prototyping |
+| **m4** | ML-based simulator (LSTM+GNN+MLP) with bottleneck correction | Medium-High | Fast | Production workloads & realistic scenarios |
+
+### Quick Start
+
+**1. Build all backends** (requires GCC-9):
+```bash
+cd SimAI
+./scripts/build.sh -c ns3      # Build NS-3 backend
+./scripts/build.sh -c flowsim  # Build FlowSim backend
+./scripts/build.sh -c m4       # Build M4 backend
+```
+
+**2. Run a sweep experiment**:
+```bash
+./run_sweep.sh <backend> <N> <M>
+```
+
+**Parameters:**
+- `backend`: Network simulator to use (`ns3`, `flowsim`, or `m4`)
+- `N`: Number of GPUs with bottleneck links (out of 32 total GPUs)
+- `M`: Bandwidth throttling ratio — each throttled GPU gets `400 Gbps / M` bandwidth
+
+**Example Scenarios:**
+```bash
+# Scenario 1: Heavy bottleneck - 16 GPUs @ 50 Gbps, 16 GPUs @ 400 Gbps
+./run_sweep.sh ns3 16 8
+
+# Scenario 2: Medium bottleneck - 4 GPUs @ 200 Gbps, 28 GPUs @ 400 Gbps
+./run_sweep.sh flowsim 4 2
+
+# Scenario 3: Light bottleneck - 8 GPUs @ 100 Gbps, 24 GPUs @ 400 Gbps
+./run_sweep.sh m4 8 4
+```
+
+3. Results are saved to `SimAI/results/<backend>_<N>_<M>/`, we provide the demo results in the `results_examples` directory
+
+### Output Files
+
+Each simulation generates an `EndToEnd.csv` file with workload-level performance metrics:
+
+| Backend | Output Location | What's Measured |
+|---------|-----------------|-----------------|
+| **ns-3** | `results/ns3_<N>_<M>/EndToEnd.csv` | Packet-level accurate workload completion time with full congestion control simulation |
+| **flowSim** | `results/flowsim_<N>_<M>/EndToEnd.csv` | Analytical workload completion time using max-min fair bandwidth sharing |
+| **m4** | `results/m4_<N>_<M>/EndToEnd.csv` | ML-predicted workload completion time with bottleneck-aware correction |
+
 ## **Repository Structure**
 ```
 ├── checkpoints/                    # Pre-trained model checkpoints
@@ -208,6 +262,22 @@ Validate your trained model using the training data to check performance:
 ├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
 ├── results/                       # Experimental results and outputs
 ├── results_train/                 # Training results and outputs
+├── SimAI/                         # SimAI integration with ns-3, FlowSim, and m4 backends
+│   ├── astra-sim-alibabacloud/    # Core simulation framework
+│   │   ├── astra-sim/             # AstraSim system layer
+│   │   │   ├── network_frontend/  # Network backend implementations
+│   │   │   │   ├── ns3/           # NS-3 packet-level simulator (ground truth)
+│   │   │   │   ├── flowsim/       # FlowSim analytical simulator
+│   │   │   │   └── m4/            # M4 ML-based simulator
+│   │   │   └── system/            # System components (routing, collective ops)
+│   │   ├── extern/                # NS-3 source code
+│   │   ├── inputs/                # Configuration files and topologies
+│   │   └── build.sh               # Build script for all backends
+│   ├── example/                   # Example workloads and topologies
+│   │   └── sweep/                 # Sweep experiment configurations
+│   ├── scripts/                   # Build and run scripts
+│   ├── results/                   # Simulation results (we provide the demo results in the `results_examples` directory)
+│   └── run_sweep.sh               # Sweep experiment runner
 ├── util/                          # Utility functions for m4, including data loaders and ML model implementations
 ├── main_train.py                  # Main script for training and testing m4
 └── plot_results.ipynb            # Jupyter notebook for visualizing results
