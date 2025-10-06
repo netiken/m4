@@ -126,7 +126,7 @@ class DataModulePerFlow(LightningDataModule):
         sampling_method="uniform",  # uniform, weighted, balanced
         n_samples_sampled=4000,
         threadhold_sampled=150,
-        train_on_testbed=False,
+        enable_testbed=False,
         test_on_train=False,
         test_on_empirical=False,
         test_on_manual=False,
@@ -723,7 +723,7 @@ class TopoFctSldnSegment(Dataset):
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
 
-        sizes = np.log2(sizes / 1000.0 + 1) if self.enable_remainsize else np.log2(sizes + 1)
+        sizes = np.log2(sizes / 1000.0 + 1)
         param_path = f"{dir_input_tmp}/param{topo_type}.npy"
         if os.path.exists(param_path):
             param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
