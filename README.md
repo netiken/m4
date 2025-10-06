@@ -1,38 +1,75 @@
 # **m4: A Learned Flow-level Network Simulator**
 
-This repository provides scripts and instructions to replicate the experiments from our paper, [*m4: A Learned Flow-level Network Simulator.*](https://arxiv.org/pdf/2503.01770) It includes all necessary tools to reproduce the experimental results documented in Sections 5.2 and 5.6 of the paper.
+This repository provides scripts and instructions to replicate the experiments from our paper, [*m4: A Learned Flow-level Network Simulator.*](https://arxiv.org/pdf/2503.01770) It includes all necessary tools to reproduce the experimental results documented in Sections 5.2 to 5.6 of the paper.
 
 ## **Contents**
 
+- [Repository Structure](#repository-structure)
 - [Quick Reproduction](#quick-reproduction)
 - [Setup and Installation](#setup-and-installation)
 - [Running Experiments from Scratch](#running-experiments-from-scratch)
 - [Training Your Own Model](#training-your-own-model)
-- [Repository Structure](#repository-structure)
+- [Integrating m4 into SimAI](#integrating-m4-into-simai)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
 - [Contact](#contact)
 
 ---
 
+## **Repository Structure**
+```
+├── checkpoints/                    # Pre-trained model checkpoints
+├── config/                         # Configuration files for training and testing m4
+├── figs/                          # Generated figures and plots from experiments
+├── High-Precision-Congestion-Control/ # HPCC repository for data generation
+├── inference/                     # C++ inference engine for m4
+├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
+├── results/                       # Experimental results and outputs
+├── results_train/                 # Training results and outputs
+├── SimAI/                         # SimAI integration with ns-3, FlowSim, and m4 backends
+│   ├── astra-sim-alibabacloud/    # Core simulation framework
+│   │   ├── astra-sim/             # AstraSim system layer
+│   │   │   ├── network_frontend/  # Network backend implementations
+│   │   │   │   ├── ns3/           # NS-3 packet-level simulator (ground truth)
+│   │   │   │   ├── flowsim/       # FlowSim analytical simulator
+│   │   │   │   └── m4/            # M4 ML-based simulator
+│   │   │   └── system/            # System components (routing, collective ops)
+│   │   ├── extern/                # NS-3 source code
+│   │   ├── inputs/                # Configuration files and topologies
+│   │   └── build.sh               # Build script for all backends
+│   ├── example/                   # Example workloads and topologies
+│   │   └── sweep/                 # Sweep experiment configurations
+│   ├── scripts/                   # Build and run scripts
+│   ├── results/                   # Simulation results
+│   ├── results_examples/          # Pre-computed demo results for reference
+│   └── run_sweep.sh               # Sweep experiment runner
+├── util/                          # Utility functions for m4, including data loaders and ML model implementations
+├── main_train.py                  # Main script for training and testing m4
+└── plot_results.ipynb            # Jupyter notebook for visualizing results
+```
+
+---
+
 ## **Quick Reproduction**
+
 To quickly reproduce the results in the paper, follow these steps:
 
-1. Clone the repository and initialize submodules:
-   ```bash
-   git clone https://github.com/netiken/m4.git
-   cd m4
-   git submodule update --init --recursive
-   ```
+**1. Clone the repository and initialize submodules:**
+```bash
+git clone https://github.com/netiken/m4.git
+cd m4
+git submodule update --init --recursive
+```
 
-2. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+**2. Set up Python environment:**
+```bash
+uv sync
+source .venv/bin/activate
+```
 
-3. Set up the python environment:
-   ```bash
-   uv sync
-   source .venv/bin/activate
-   ```
-4. Please run the notebook `plot_results.ipynb` to generate the paper figures from Sections 5.2 and 5.6.
+**3. Reproduce paper results:**
+- **Section 5.3** (SimAI Integration): Check pre-computed results in `SimAI/results_examples/`
+- **Sections 5.4-5.6** (M4 Evaluation): Run the notebook `plot_results.ipynb` to generate paper figures
 
 ---
 
@@ -40,7 +77,9 @@ To quickly reproduce the results in the paper, follow these steps:
 
 ### **Install Dependencies**
 
-1. Set up Python environment:
+1. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+
+2. Set up Python environment:
    ```bash
    uv sync
    source .venv/bin/activate  # Activate the virtual environment
@@ -240,7 +279,9 @@ cd SimAI
 ./run_sweep.sh m4 8 4
 ```
 
-3. Results are saved to `SimAI/results/<backend>_<N>_<M>/`, we provide the demo results in the `results_examples` directory
+**3. View results:**
+
+Results are saved to `SimAI/results/<backend>_<N>_<M>/`. Pre-computed demo results are available in `SimAI/results_examples/` for reference.
 
 ### Output Files
 
@@ -251,37 +292,6 @@ Each simulation generates an `EndToEnd.csv` file with workload-level performance
 | **ns-3** | `results/ns3_<N>_<M>/EndToEnd.csv` | Packet-level accurate workload completion time with full congestion control simulation |
 | **flowSim** | `results/flowsim_<N>_<M>/EndToEnd.csv` | Analytical workload completion time using max-min fair bandwidth sharing |
 | **m4** | `results/m4_<N>_<M>/EndToEnd.csv` | ML-predicted workload completion time with bottleneck-aware correction |
-
-## **Repository Structure**
-```
-├── checkpoints/                    # Pre-trained model checkpoints
-├── config/                         # Configuration files for training and testing m4
-├── figs/                          # Generated figures and plots from experiments
-├── High-Precision-Congestion-Control/ # HPCC repository for data generation
-├── inference/                     # C++ inference engine for m4
-├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
-├── results/                       # Experimental results and outputs
-├── results_train/                 # Training results and outputs
-├── SimAI/                         # SimAI integration with ns-3, FlowSim, and m4 backends
-│   ├── astra-sim-alibabacloud/    # Core simulation framework
-│   │   ├── astra-sim/             # AstraSim system layer
-│   │   │   ├── network_frontend/  # Network backend implementations
-│   │   │   │   ├── ns3/           # NS-3 packet-level simulator (ground truth)
-│   │   │   │   ├── flowsim/       # FlowSim analytical simulator
-│   │   │   │   └── m4/            # M4 ML-based simulator
-│   │   │   └── system/            # System components (routing, collective ops)
-│   │   ├── extern/                # NS-3 source code
-│   │   ├── inputs/                # Configuration files and topologies
-│   │   └── build.sh               # Build script for all backends
-│   ├── example/                   # Example workloads and topologies
-│   │   └── sweep/                 # Sweep experiment configurations
-│   ├── scripts/                   # Build and run scripts
-│   ├── results/                   # Simulation results (we provide the demo results in the `results_examples` directory)
-│   └── run_sweep.sh               # Sweep experiment runner
-├── util/                          # Utility functions for m4, including data loaders and ML model implementations
-├── main_train.py                  # Main script for training and testing m4
-└── plot_results.ipynb            # Jupyter notebook for visualizing results
-```
 
 ---
 
