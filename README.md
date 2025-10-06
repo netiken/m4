@@ -8,7 +8,8 @@ This repository provides scripts and instructions to replicate the experiments f
 - [Quick Reproduction](#quick-reproduction)
 - [Setup and Installation](#setup-and-installation)
 - [Running Experiments from Scratch](#running-experiments-from-scratch)
-  - [Section 5.2: SimAI Integration](#section-52-simai-integration-experiments)
+  - [Section 5.2: Testbed Integration](#section-52-testbed-integration)
+  - [Section 5.3: SimAI Integration](#section-53-simai-integration-experiments)
   - [Sections 5.4-5.6: M4 Evaluation](#sections-54-56-m4-evaluation-experiments)
 - [Training Your Own Model](#training-your-own-model)
 - [Citation](#citation)
@@ -27,6 +28,11 @@ This repository provides scripts and instructions to replicate the experiments f
 ├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
 ├── results/                       # Experimental results and outputs
 ├── results_train/                 # Training results and outputs
+├── testbed/                       # Testbed integration with ns-3, FlowSim, and m4 backends
+│   ├── eval_train/                # Evaluation training data
+│   ├── results_train/             # Training results and outputs
+│   ├── run_m4_post.py             # Post-processing script for testbed data
+│   └── plot_fct_slowdown.ipynb    # Plot script for testbed data
 ├── SimAI/                         # SimAI integration with ns-3, FlowSim, and m4 backends
 │   ├── astra-sim-alibabacloud/    # Core simulation framework
 │   │   ├── astra-sim/             # AstraSim system layer
@@ -116,7 +122,26 @@ source .venv/bin/activate
 
 This section shows how to reproduce the experimental results from the paper using pre-trained models. The pre-trained checkpoints are available in the `checkpoints/` directory.
 
-### **Section 5.2: SimAI Integration Experiments**
+### **Section 5.2: Testbed Integration**
+
+The `testbed/` directory contains the code to run the experiments on the testbed.
+
+Run the data processing script:
+```bash
+python testbed/run_m4_post.py
+```
+
+Run the training and testing scripts:
+```bash
+# training
+python main_train.py --train_config=./config/train_config_testbed.yaml
+# testing
+python main_train.py --test_config=./config/test_config_testbed.yaml
+```
+
+
+
+### **Section 5.3: SimAI Integration Experiments**
 
 The `SimAI/` directory contains an integrated evaluation framework with three network simulation backends:
 

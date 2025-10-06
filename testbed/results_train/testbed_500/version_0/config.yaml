@@ -1,0 +1,34 @@
+dataset:
+  enable_flowsim_gt: false
+  enable_queuelen: false
+  enable_remainsize: false
+  enable_testbed: true
+  flow_size_threshold: 100000000
+  lr: 10
+  n_samples_sampled: 2000
+  sampling_method: balanced
+  shard: 0
+  threadhold_sampled: 500
+  topo_type: _topology_flows
+  train_frac: 0.9
+model:
+  dropout: 0.2
+  enable_gnn: true
+  enable_link_state: true
+  enable_lstm: true
+  enable_positional_encoding: false
+  gcn_hidden_size: 300
+  gcn_n_layer: 3
+  hidden_size: 200
+  input_size: 2
+  loss_fn_type: l1
+  n_layer: 2
+training:
+  batch_size: 4
+  enable_dist: false
+  enable_val: true
+  gpu:
+  - 3
+  learning_rate: 0.0001
+  n_epochs: 100
+  num_workers: 4
