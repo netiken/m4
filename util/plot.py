@@ -24,7 +24,7 @@ linestyle_list = [
     "-.",
     ":",
 ]
-markertype_list = ["o", "^", "x", "x", "|"]
+markertype_list = ["o", "^", "x", "D", "|"]
 
 
 def plot_cdf(

@@ -81,6 +81,7 @@ if __name__ == "__main__":
             sampling_method=dataset_config.get("sampling_method", "uniform"),
             n_samples_sampled=dataset_config.get("n_samples_sampled", 4000),
             threadhold_sampled=dataset_config.get("threadhold_sampled", 150),
+            enable_testbed=dataset_config.get("enable_testbed", False),
         )
 
         # Init checkpointer
