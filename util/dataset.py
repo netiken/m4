@@ -126,6 +126,7 @@ class DataModulePerFlow(LightningDataModule):
         sampling_method="uniform",  # uniform, weighted, balanced
         n_samples_sampled=4000,
         threadhold_sampled=150,
+        train_on_testbed=False,
         test_on_train=False,
         test_on_empirical=False,
         test_on_manual=False,
@@ -153,6 +154,7 @@ class DataModulePerFlow(LightningDataModule):
         self.enable_queuelen = enable_queuelen
         self.n_samples_sampled = n_samples_sampled
         self.threadhold_sampled = threadhold_sampled
+        self.enable_testbed = enable_testbed
         logging.info(
             f"call DataModulePerFlow: lr={lr}, sampling_method={sampling_method}, n_samples_sampled={n_samples_sampled}, threadhold_sampled={threadhold_sampled}, enable_remainsize={enable_remainsize}, enable_queuelen={enable_queuelen}, enable_flowsim_gt={enable_flowsim_gt}"
         )
@@ -162,7 +164,8 @@ class DataModulePerFlow(LightningDataModule):
             len_per_period_active_all = []
             len_per_period_stats_all = []
             for spec in os.listdir(dir_input):
-                spec+=f"/ns3"
+                if not self.enable_testbed:
+                    spec+=f"/ns3"
                 file_suffix = ""
                 fid = np.load(
                     f"{dir_input}/{spec}/fid{topo_type}{file_suffix}.npy"
@@ -539,24 +542,18 @@ class DataModulePerFlow(LightningDataModule):
         self,
         data_list,
     ):
-        dir_input = self.dir_input
-        enable_positional_encoding = self.enable_positional_encoding
-        flow_size_threshold = self.flow_size_threshold
-        enable_flowsim_gt = self.enable_flowsim_gt
-        enable_remainsize = self.enable_remainsize
-        enable_queuelen = self.enable_queuelen
-
         data_list_filtered = data_list
         logging.info(f"Using all samples: {len(data_list_filtered)}")
 
         return TopoFctSldnSegment(
             data_list_filtered,
-            dir_input,
-            enable_positional_encoding,
-            flow_size_threshold,
-            enable_flowsim_gt,
-            enable_remainsize=enable_remainsize,
-            enable_queuelen=enable_queuelen,
+            self.dir_input,
+            self.enable_positional_encoding,
+            self.flow_size_threshold,
+            enable_flowsim_gt=self.enable_flowsim_gt,
+            enable_remainsize=self.enable_remainsize,
+            enable_queuelen=self.enable_queuelen,
+            enable_testbed=self.enable_testbed,
             lr=self.lr,
         )
 
@@ -584,6 +581,7 @@ class TopoFctSldnSegment(Dataset):
         enable_flowsim_gt=False,
         enable_remainsize=False,
         enable_queuelen=False,
+        enable_testbed=False,
         lr=10.0,
     ):
         self.data_list = data_list
@@ -594,6 +592,7 @@ class TopoFctSldnSegment(Dataset):
         self.enable_flowsim_gt = enable_flowsim_gt
         self.enable_remainsize = enable_remainsize
         self.enable_queuelen = enable_queuelen
+        self.enable_testbed = enable_testbed
         self.n_links = 96
         logging.info(
             f"call TopoFctSldnSegment. data_list={len(data_list)}, enable_positional_encoding={enable_positional_encoding}, flow_size_threshold={flow_size_threshold}"

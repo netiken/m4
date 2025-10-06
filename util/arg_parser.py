@@ -31,6 +31,7 @@ def create_config():
     parser.add_argument("--note", type=str, default="demo")
     parser.add_argument("--ckpt_path", type=str, default=None)
     parser.add_argument("--mode", type=str, default="train")
+    parser.add_argument("--train_on_testbed", action="store_true")
     parser.add_argument("--test_on_train", action="store_true")
     parser.add_argument("--test_on_empirical", action="store_true")
     parser.add_argument("--test_on_manual", action="store_true")
