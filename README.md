@@ -8,8 +8,9 @@ This repository provides scripts and instructions to replicate the experiments f
 - [Quick Reproduction](#quick-reproduction)
 - [Setup and Installation](#setup-and-installation)
 - [Running Experiments from Scratch](#running-experiments-from-scratch)
+  - [Section 5.2: SimAI Integration](#section-52-simai-integration-experiments)
+  - [Sections 5.4-5.6: M4 Evaluation](#sections-54-56-m4-evaluation-experiments)
 - [Training Your Own Model](#training-your-own-model)
-- [Integrating m4 into SimAI](#integrating-m4-into-simai)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
 - [Contact](#contact)
@@ -113,27 +114,89 @@ source .venv/bin/activate
 
 ## **Running Experiments from Scratch**
 
-This section shows how to reproduce the experimental results from the paper using pre-trained models. The pre-trained checkpoints for the full m4 pipeline are available in the `checkpoints` directory. You can use them directly or train your own model (see [Training Your Own Model](#training-your-own-model)).
+This section shows how to reproduce the experimental results from the paper using pre-trained models. The pre-trained checkpoints are available in the `checkpoints/` directory.
 
+### **Section 5.2: SimAI Integration Experiments**
 
-### **Replicating Paper Results**
+The `SimAI/` directory contains an integrated evaluation framework with three network simulation backends:
 
-This section shows how to reproduce the experimental results from the paper. You can either use our provided demo data or generate the full dataset yourself.
+| Backend | Description | Accuracy | Speed | Use Case |
+|---------|-------------|----------|-------|----------|
+| **ns-3** | Packet-level simulator with RDMA/DCTCP/PFC | Highest (ground truth) | Slowest | Validation & accuracy benchmark |
+| **flowSim** | Analytical simulator with max-min fairness | Medium | Fastest | Quick iteration & prototyping |
+| **m4** | ML-based simulator (LSTM+GNN+MLP) | Medium-High | Fast | Production workloads |
 
-**For Quick Test (Small Scale):**
+#### Build Backends
+
+Build all three backends (requires GCC-9):
+
+```bash
+cd SimAI
+./scripts/build.sh -c ns3      # Build NS-3 backend
+./scripts/build.sh -c flowsim  # Build FlowSim backend
+./scripts/build.sh -c m4       # Build M4 backend
+```
+
+#### Run Sweep Experiments
+
+Run parameter sweeps across heterogeneous network configurations:
+
+```bash
+./run_sweep.sh <backend> <N> <M>
+```
+
+**Parameters:**
+- `backend` — Network simulator: `ns3`, `flowsim`, or `m4`
+- `N` — Number of GPUs with bottleneck links (out of 32 total)
+- `M` — Bandwidth throttling ratio (throttled GPU gets `400 Gbps / M`)
+
+**Examples:**
+
+```bash
+# Heavy bottleneck: 16 GPUs @ 50 Gbps (400/8), 16 GPUs @ 400 Gbps
+./run_sweep.sh ns3 16 8
+
+# Medium bottleneck: 4 GPUs @ 200 Gbps (400/2), 28 GPUs @ 400 Gbps
+./run_sweep.sh flowsim 4 2
+
+# Light bottleneck: 8 GPUs @ 100 Gbps (400/4), 24 GPUs @ 400 Gbps
+./run_sweep.sh m4 8 4
+```
+
+#### Results
+
+- **Output**: Results saved to `SimAI/results/<backend>_<N>_<M>/EndToEnd.csv`
+- **Demo Results**: Pre-computed examples available in `SimAI/results_examples/`
+
+| Backend | Measures |
+|---------|----------|
+| **ns-3** | Packet-level accurate workload completion with full congestion control |
+| **flowSim** | Analytical workload completion using max-min fair bandwidth sharing |
+| **m4** | ML-predicted workload completion with bottleneck-aware correction |
+
+---
+
+### **Sections 5.4-5.6: M4 Evaluation Experiments**
+
+Reproduce m4's accuracy evaluation across diverse network scenarios using pre-trained models.
+
+#### Quick Test (Small Scale)
+
+For a quick test with reduced dataset size:
+
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./demo --mixes spec/0.mix.json --nr-flows 2000 --enable-train ns3
 cargo run --release -- --root=./demo --mixes spec/0.mix.json --nr-flows 2000 --enable-train mlsys
 ```
-Results will be saved in the `demo` directory.
 
-**Note**: 
-- Use the `--enable-train` flag for commands that need the training-specific ns-3 version (`ns-3.39`) to generate training datasets with packet traces.
-- Use the `--enable-app` flag for application completion time scenarios (Appendix 1) to synchronize flow start times.
+Results will be saved in the `demo/` directory.
 
+**Flags:**
+- `--enable-train` — Use training-specific ns-3 version (`ns-3.39`) for packet traces
+- `--enable-app` — Synchronize flow start times for application completion scenarios (Appendix 1)
 
-#### **Step 1: Generate Test Data**
+#### Generate Test Data
 
 **Option A: Use Demo Data (Recommended for Quick Start)**
 We provide pre-generated demo data in the `parsimon-eval/expts/fig_8/eval_test_demo` directory.
@@ -235,64 +298,6 @@ Validate your trained model using the training data to check performance:
    # validate on the simulation data used in the paper
    uv run python main_train.py --mode=test --test_config=./config/test_config.yaml --dir_input=./parsimon-eval/expts/fig_8/eval_train --dir_output=./results_train --note m4
    ```
----
-
-## **Integrating m4 into SimAI**
-
-The `SimAI/` directory contains an integrated evaluation framework comparing three network simulation backends:
-
-| Backend | Description | Accuracy | Speed | Use Case |
-|---------|-------------|----------|-------|----------|
-| **ns-3** | Packet-level simulator with full RDMA/DCTCP/PFC modeling | Highest (ground truth) | Slowest | Validation & accuracy benchmark |
-| **flowSim** | Analytical simulator using max-min fairness | Medium | Fastest | Quick iteration & prototyping |
-| **m4** | ML-based simulator (LSTM+GNN+MLP) with bottleneck correction | Medium-High | Fast | Production workloads & realistic scenarios |
-
-### Quick Start
-
-**1. Build all backends** (requires GCC-9):
-```bash
-cd SimAI
-./scripts/build.sh -c ns3      # Build NS-3 backend
-./scripts/build.sh -c flowsim  # Build FlowSim backend
-./scripts/build.sh -c m4       # Build M4 backend
-```
-
-**2. Run a sweep experiment**:
-```bash
-./run_sweep.sh <backend> <N> <M>
-```
-
-**Parameters:**
-- `backend`: Network simulator to use (`ns3`, `flowsim`, or `m4`)
-- `N`: Number of GPUs with bottleneck links (out of 32 total GPUs)
-- `M`: Bandwidth throttling ratio — each throttled GPU gets `400 Gbps / M` bandwidth
-
-**Example Scenarios:**
-```bash
-# Scenario 1: Heavy bottleneck - 16 GPUs @ 50 Gbps, 16 GPUs @ 400 Gbps
-./run_sweep.sh ns3 16 8
-
-# Scenario 2: Medium bottleneck - 4 GPUs @ 200 Gbps, 28 GPUs @ 400 Gbps
-./run_sweep.sh flowsim 4 2
-
-# Scenario 3: Light bottleneck - 8 GPUs @ 100 Gbps, 24 GPUs @ 400 Gbps
-./run_sweep.sh m4 8 4
-```
-
-**3. View results:**
-
-Results are saved to `SimAI/results/<backend>_<N>_<M>/`. Pre-computed demo results are available in `SimAI/results_examples/` for reference.
-
-### Output Files
-
-Each simulation generates an `EndToEnd.csv` file with workload-level performance metrics:
-
-| Backend | Output Location | What's Measured |
-|---------|-----------------|-----------------|
-| **ns-3** | `results/ns3_<N>_<M>/EndToEnd.csv` | Packet-level accurate workload completion time with full congestion control simulation |
-| **flowSim** | `results/flowsim_<N>_<M>/EndToEnd.csv` | Analytical workload completion time using max-min fair bandwidth sharing |
-| **m4** | `results/m4_<N>_<M>/EndToEnd.csv` | ML-predicted workload completion time with bottleneck-aware correction |
-
 ---
 
 ## **Citation**
