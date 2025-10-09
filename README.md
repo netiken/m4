@@ -147,9 +147,9 @@ The `SimAI/` directory contains an integrated evaluation framework with three ne
 
 | Backend | Description | Accuracy | Speed | Use Case |
 |---------|-------------|----------|-------|----------|
-| **ns-3** | Packet-level simulator with RDMA/DCTCP/PFC | Highest (ground truth) | Slowest | Validation & accuracy benchmark |
-| **flowSim** | Analytical simulator with max-min fairness | Medium | Fastest | Quick iteration & prototyping |
-| **m4** | ML-based simulator (LSTM+GNN+MLP) | Medium-High | Fast | Production workloads |
+| **UNISON (ns-3)** | Packet-level simulator with RDMA/DCTCP/PFC | Highest (ground truth) | Slowest (~17 min/run) | Validation & accuracy benchmark |
+| **flowSim** | Analytical simulator with max-min fairness | Medium (24% error) | Variable (1.7 min median) | Quick prototyping |
+| **m4** | ML-based simulator (LSTM+GNN+MLP) | High (10.85% error) | Fastest (22 sec/run) | Production workloads |
 
 #### Build Backends
 
@@ -157,47 +157,53 @@ Build all three backends (requires GCC-9):
 
 ```bash
 cd SimAI
-./scripts/build.sh -c ns3      # Build NS-3 backend
+./scripts/build.sh -c ns3      # Build UNISON (NS-3) backend
 ./scripts/build.sh -c flowsim  # Build FlowSim backend
 ./scripts/build.sh -c m4       # Build M4 backend
 ```
 
-#### Run Sweep Experiments
+#### Gray Failure Evaluation
 
-Run parameter sweeps across heterogeneous network configurations:
+We evaluate all three backends under **gray failure** conditions—scenarios where network links experience partial bandwidth degradation (e.g., due to cable aging or thermal throttling) rather than complete failures.
 
-```bash
-./run_sweep.sh <backend> <N> <M>
-```
+**Gray Failure Topologies:**
 
-**Parameters:**
-- `backend` — Network simulator: `ns3`, `flowsim`, or `m4`
-- `N` — Number of GPUs with bottleneck links (out of 32 total)
-- `M` — Bandwidth throttling ratio (throttled GPU gets `400 Gbps / M`)
+The repository includes 105 pre-generated topologies in `example/gray_failures/` with varying failure severities:
+- **N ∈ [2, 16]**: Number of degraded GPUs (6-50% of cluster)
+- **R ∈ [4, 10]**: Bandwidth reduction factor (75-90% loss)
+- Degraded GPUs follow **server-aligned patterns** mimicking realistic failure domains (e.g., N=8 affects GPUs 0-3 and 8-11; N=16 affects servers 0 and 2)
 
-**Examples:**
+**Run Gray Failure Sweep:**
 
 ```bash
-# Heavy bottleneck: 16 GPUs @ 50 Gbps (400/8), 16 GPUs @ 400 Gbps
-./run_sweep.sh ns3 16 8
+# Run all scenarios for a specific backend
+python gray_failure_run_sweep.py ns3      # UNISON (packet-level ground truth)
+python gray_failure_run_sweep.py flowsim  # FlowSim (analytical)
+python gray_failure_run_sweep.py m4       # M4 (ML-based, uses GPU auto-detection)
 
-# Medium bottleneck: 4 GPUs @ 200 Gbps (400/2), 28 GPUs @ 400 Gbps
-./run_sweep.sh flowsim 4 2
-
-# Light bottleneck: 8 GPUs @ 100 Gbps (400/4), 24 GPUs @ 400 Gbps
-./run_sweep.sh m4 8 4
+# Run a single scenario
+python gray_failure_run_sweep.py m4 --n 8 --r 4
 ```
 
-#### Results
+**Visualize Results:**
 
-- **Output**: Results saved to `SimAI/results/<backend>_<N>_<M>/EndToEnd.csv`
-- **Demo Results**: Pre-computed examples available in `SimAI/results_examples/`
+```bash
+python gray_failure_plot_results.py
+```
 
-| Backend | Measures |
-|---------|----------|
-| **ns-3** | Packet-level accurate workload completion with full congestion control |
-| **flowSim** | Analytical workload completion using max-min fair bandwidth sharing |
-| **m4** | ML-predicted workload completion with bottleneck-aware correction |
+Generates 6 plots showing:
+- Error magnitude and signed error CDFs
+- Runtime performance comparison
+- Error sensitivity to failure severity (N and R)
+- Completion time analysis for specific scenarios
+
+#### Output Files
+
+- **Simulation results**: `results_gray_failures/n_{N}_r_{R}_{backend}/EndToEnd.csv`
+- **Runtime logs**: `results_gray_failures/n_{N}_r_{R}_{backend}/runtime.txt`
+- **Summary**: `results_gray_failures/{backend}_sweep_summary.txt`
+- **Plots**: `gray_failure_*.png` (6 figures)
+- **Demo results**: Pre-computed examples in `SimAI/results_examples/`
 
 ---
 
