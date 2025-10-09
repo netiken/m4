@@ -212,7 +212,7 @@ void setup_m4(torch::Device device) {
     // Load models
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "/data1/lichenni/m4/testbed/models_new_v3";
+        const std::string model_dir = "../models_v1";
         try {
             lstmcell_time = torch::jit::load(model_dir + "/lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "/lstmcell_rate.pt", device);
@@ -306,7 +306,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         n_flows_active++;
         
         // Initialize h_vec for this flow (matching reference implementation)
-        float normalized_size = std::log2f((float)flow_size + 1.0f);
+        float normalized_size = std::log2f((float)flow_size/1000.0 + 1.0f);
         h_vec[flow_id][0] = 1.0f;  // Constant feature
         h_vec[flow_id][2] = normalized_size;  // Normalized flow size
         h_vec[flow_id][3] = 6.0f; //1.0f;  // Number of links (1 for HERD)
@@ -1015,18 +1015,19 @@ int main(int argc, char *argv[]) {
         
         try {
             // Read config file to get ML model parameters
-            std::string config_path = "config/test_config_testbed.yaml";
+            std::string config_path = "../../config/test_config_testbed.yaml";
             std::ifstream infile_cfg(config_path);
-    std::ostringstream contents;
-            contents << infile_cfg.rdbuf();
-    std::string config_contents = contents.str();
-    ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
-    ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
-    int32_t hidden_size;
-    hidden_size_node >> hidden_size;
-    ryml::NodeRef n_links_node = config["dataset"]["n_links_max"];
-    int32_t n_links;
-    n_links_node >> n_links;
+
+            std::ostringstream contents;
+                    contents << infile_cfg.rdbuf();
+            std::string config_contents = contents.str();
+            ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
+            ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
+            int32_t hidden_size;
+            hidden_size_node >> hidden_size;
+            ryml::NodeRef n_links_node = config["dataset"]["n_links_max"];
+            int32_t n_links;
+            n_links_node >> n_links;
 
             // Initialize basic parameters for ML prediction
             params.assign(13, 0.0); // Default parameters
