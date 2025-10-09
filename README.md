@@ -143,13 +143,7 @@ python main_train.py --test_config=./config/test_config_testbed.yaml
 
 ### **Section 5.3: SimAI Integration Experiments**
 
-The `SimAI/` directory contains an integrated evaluation framework with three network simulation backends:
-
-| Backend | Description | Accuracy | Speed | Use Case |
-|---------|-------------|----------|-------|----------|
-| **UNISON (ns-3)** | Packet-level simulator with RDMA/DCTCP/PFC | Highest (ground truth) | Slowest (~17 min/run) | Validation & accuracy benchmark |
-| **flowSim** | Analytical simulator with max-min fairness | Medium (24% error) | Variable (1.7 min median) | Quick prototyping |
-| **m4** | ML-based simulator (LSTM+GNN+MLP) | High (10.85% error) | Fastest (22 sec/run) | Production workloads |
+The `SimAI/` directory contains an integrated evaluation framework with three network simulation backends: **UNISON (ns-3)** , **flowSim** , and **m4** .
 
 #### Build Backends
 
@@ -190,20 +184,18 @@ python gray_failure_run_sweep.py m4 --n 8 --r 4
 ```bash
 python gray_failure_plot_results.py
 ```
+#### Results
 
-Generates 6 plots showing:
-- Error magnitude and signed error CDFs
-- Runtime performance comparison
-- Error sensitivity to failure severity (N and R)
-- Completion time analysis for specific scenarios
-
-#### Output Files
-
+Pre-computed results for all 105 scenarios (3 backends × 105 topologies = 315 simulations) are available in `results_gray_failures/`:
 - **Simulation results**: `results_gray_failures/n_{N}_r_{R}_{backend}/EndToEnd.csv`
 - **Runtime logs**: `results_gray_failures/n_{N}_r_{R}_{backend}/runtime.txt`
-- **Summary**: `results_gray_failures/{backend}_sweep_summary.txt`
-- **Plots**: `gray_failure_*.png` (6 figures)
-- **Demo results**: Pre-computed examples in `SimAI/results_examples/`
+- **Summary files**: `results_gray_failures/{backend}_sweep_summary.txt`
+- **Generated plots**: `gray_failure_*.png` (6 figures in SimAI directory)
+   - Error magnitude and signed error CDFs
+   - Runtime performance comparison
+   - Error sensitivity to failure severity (N and R)
+   - Completion time analysis for specific scenarios
+
 
 ---
 
