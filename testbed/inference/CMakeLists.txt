@@ -12,21 +12,26 @@ set(CMAKE_CXX_FLAGS_RELEASE "-g -O3")
 set(CMAKE_BUILD_TYPE Debug)
 
 
-# Use CONDA_PREFIX to dynamically locate the LibTorch path
+# Use PYTHON_PREFIX to dynamically locate the LibTorch path
+# First try CONDA_PREFIX (for conda users), then fallback to .venv
 if(DEFINED ENV{CONDA_PREFIX})
-    set(CONDA_PREFIX $ENV{CONDA_PREFIX})
+    set(PYTHON_PREFIX $ENV{CONDA_PREFIX})
+    message(STATUS "Using Conda environment: ${PYTHON_PREFIX}")
 else()
-    message(FATAL_ERROR "CONDA_PREFIX is not set. Please activate your conda environment.")
+    # Use .venv from the project root
+    get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+    set(PYTHON_PREFIX "${PROJECT_ROOT}/.venv")
+    message(STATUS "Using Python virtual environment: ${PYTHON_PREFIX}")
 endif()
 
 # Adjust the Python version in the path if necessary
-set(CMAKE_PREFIX_PATH "${CONDA_PREFIX}/lib/python3.10/site-packages/torch/share/cmake/Torch")
+set(CMAKE_PREFIX_PATH "${PYTHON_PREFIX}/lib/python3.10/site-packages/torch/share/cmake/Torch")
 
 # Find the Torch package
 find_package(Torch REQUIRED)
 
 # Include directories
-include_directories("${CONDA_PREFIX}/include")
+include_directories("${PYTHON_PREFIX}/include")
 include_directories(${TORCH_INCLUDE_DIRS})
 #include_directories("/data1/lichenni/projects/per-flow-sim/flowsim/yaml-cpp/build")
 
