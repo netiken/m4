@@ -33,23 +33,25 @@ This repository provides scripts and instructions to replicate the experiments f
 │   ├── results_train/             # Training results and outputs
 │   ├── run_m4_post.py             # Post-processing script for testbed data
 │   └── plot_fct_slowdown.ipynb    # Plot script for testbed data
-├── SimAI/                         # SimAI integration with ns-3, FlowSim, and m4 backends
+├── SimAI/                         # SimAI integration with UNISON, FlowSim, and m4 backends
 │   ├── astra-sim-alibabacloud/    # Core simulation framework
 │   │   ├── astra-sim/             # AstraSim system layer
 │   │   │   ├── network_frontend/  # Network backend implementations
-│   │   │   │   ├── ns3/           # NS-3 packet-level simulator (ground truth)
+│   │   │   │   ├── ns3/           # UNISON (NS-3) packet-level simulator
 │   │   │   │   ├── flowsim/       # FlowSim analytical simulator
-│   │   │   │   └── m4/            # M4 ML-based simulator
+│   │   │   │   └── m4/            # m4 ML-based simulator
 │   │   │   └── system/            # System components (routing, collective ops)
 │   │   ├── extern/                # NS-3 source code
 │   │   ├── inputs/                # Configuration files and topologies
 │   │   └── build.sh               # Build script for all backends
 │   ├── example/                   # Example workloads and topologies
+│   │   ├── gray_failures/         # 105 gray failure topology files
 │   │   └── sweep/                 # Sweep experiment configurations
 │   ├── scripts/                   # Build and run scripts
-│   ├── results/                   # Simulation results
-│   ├── results_examples/          # Pre-computed demo results for reference
-│   └── run_sweep.sh               # Sweep experiment runner
+│   ├── results_gray_failures/     # Gray failure evaluation results (315 simulations)
+│   ├── gray_failure_run_sweep.py  # Gray failure sweep runner
+│   ├── gray_failure_plot_results.py # Generate evaluation plots
+│   └── gray_failure_topo_viz.py   # Topology visualization tool
 ├── util/                          # Utility functions for m4, including data loaders and ML model implementations
 ├── main_train.py                  # Main script for training and testing m4
 └── plot_results.ipynb            # Jupyter notebook for visualizing results
