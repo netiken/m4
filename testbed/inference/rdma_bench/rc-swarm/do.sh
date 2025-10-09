@@ -1,0 +1,1 @@
+( cd ../; make rc-swarm )
