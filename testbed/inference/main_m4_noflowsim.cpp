@@ -130,7 +130,7 @@ static std::shared_ptr<Topology> g_topology;
 
 // ======================== ML Pipeline State Variables ========================
 // All ML state tensors for LSTM+GNN network simulation (from inference_old)
-torch::Device device = torch::kCPU;
+torch::Device device(torch::kCUDA, 0);
 
 // Model components
 torch::jit::script::Module lstmcell_time, lstmcell_rate;
@@ -306,10 +306,10 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         n_flows_active++;
         
         // Initialize h_vec for this flow (matching reference implementation)
-        float normalized_size = std::log2f((float)flow_size/1000.0 + 1.0f);
+        float normalized_size = std::log2f((float)flow_size / 1000.0 + 1.0f);
         h_vec[flow_id][0] = 1.0f;  // Constant feature
         h_vec[flow_id][2] = normalized_size;  // Normalized flow size
-        h_vec[flow_id][3] = 6.0f; //1.0f;  // Number of links (1 for HERD)
+        h_vec[flow_id][3] = 3.0f;  // Number of links (3 for 11-client topology)
         
         // For HERD, create simple topology mapping (client -> server path)
         // This is a simplified version - in full M4, this comes from topology files
@@ -421,7 +421,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         // Check if this is the first/only flow (n_active == 1 means only current flow is active)
         if (n_active == 1) {
             // First flow - use ML prediction with initial state
-            torch::Tensor nlinks_single = torch::full({1, 1}, 6.0f, options_float);
+            torch::Tensor nlinks_single = torch::full({1, 1}, 3.0f, options_float);
             torch::Tensor params_single = params_input.unsqueeze(0); // [1, 13]
             torch::Tensor h_single = h_vec.slice(0, flow_id, flow_id + 1); // [1, h_dim]
             
@@ -434,7 +434,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             predicted_fct = sldn_pred * ideal_fct;
         } else if (n_active > 1) {
             // Multiple flows active - use full ML pipeline with contention
-            torch::Tensor nlinks_expanded = torch::full({n_active, 1}, 6.0f, options_float);
+            torch::Tensor nlinks_expanded = torch::full({n_active, 1}, 3.0f, options_float);
             torch::Tensor params_expanded = params_input.unsqueeze(0).repeat({n_active, 1}); // [n_active, 13]
             torch::Tensor h_active = h_vec.index_select(0, active_flow_indices); // [n_active, h_dim]
             
