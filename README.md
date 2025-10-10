@@ -210,7 +210,7 @@ This produces `simai_topo_groups.png` showing the hierarchical network topology 
 
 Reproduce m4's accuracy evaluation across diverse network scenarios using pre-trained models.
 
-TODO for Anton: please add instructions to run flowSim and m4.
+TODO for Anton: add the instructions to run the flowSim and m4.
 
 #### Quick Test (Small Scale)
 
@@ -228,7 +228,7 @@ Results will be saved in the `demo/` directory.
 - `--enable-train` — Use training-specific ns-3 version (`ns-3.39`) for packet traces
 - `--enable-app` — Synchronize flow start times for application completion scenarios (Appendix 1)
 
-#### Generate Test Data
+#### Full Evaluation
 
 **Option A: Use Demo Data (Recommended for Quick Start)**
 We provide pre-generated demo data in the `parsimon-eval/expts/fig_8/eval_test_demo` directory.
@@ -262,10 +262,7 @@ cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flo
 ```
 Results will be saved in the `eval_app` directory.
 
-#### **Step 2: Run Inference and Generate Results**  
-TODO: add the instructions to run the test.
-
-#### **Step 3: Visualize Results**
+#### Visualize Results
 After completing the data generation and inference steps above, create the paper figures in the notebook `plot_results.ipynb`.
 
 ---
