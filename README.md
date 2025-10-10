@@ -214,8 +214,7 @@ TODO for Anton: add the instructions to run the flowSim and m4.
 
 #### Quick Test (Small Scale)
 
-For a quick test with reduced dataset size:
-
+For a quick test with one scenario:
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./demo --mixes spec/0.mix.json --nr-flows 2000 --enable-train ns3
@@ -230,13 +229,9 @@ Results will be saved in the `demo/` directory.
 
 #### Full Evaluation
 
-**Option A: Use Demo Data (Recommended for Quick Start)**
-We provide pre-generated demo data in the `parsimon-eval/expts/fig_8/eval_test_demo` directory.
+Note: we provide 5 pre-generated scenarios for ns-3 in the `parsimon-eval/expts/fig_8/eval_test_demo` directory. Please run the following commands to run the full evaluation:
 
-**Option B: Generate Full Dataset**
-Or you can generate the complete dataset yourself:
-
-**For Section 5.4 (Large-scale evaluation):**
+- **For Section 5.4 (Large-scale evaluation):**
 ```bash
 cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
@@ -246,7 +241,7 @@ cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
 ```
 Results will be saved in the `data` directory.
 
-**For Section 5.5 (Flow-level evaluation):**
+- **For Section 5.5 (Flow-level evaluation):**
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
@@ -254,7 +249,7 @@ cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-f
 ```
 Results will be saved in the `eval_test` directory.
 
-**For Appendix 1 (Application completion time):**
+- **For Appendix 1 (Application completion time):**
 ```bash
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app ns3
