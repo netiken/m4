@@ -28,29 +28,35 @@ This repository provides scripts and instructions to replicate the experiments f
 ├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
 ├── results/                       # Experimental results and outputs
 ├── results_train/                 # Training results and outputs
-├── testbed/                       # Testbed integration with ns-3, FlowSim, and m4 backends
+├── testbed/                       # Testbed integration with ns-3, flowSim, and m4 backends
 │   ├── eval_train/                # Evaluation training data
 │   ├── results_train/             # Training results and outputs
 │   ├── run_m4_post.py             # Post-processing script for testbed data
 │   └── plot_fct_slowdown.ipynb    # Plot script for testbed data
-├── SimAI/                         # SimAI integration with UNISON, FlowSim, and m4 backends
+├── SimAI/                         # SimAI integration with UNISON, flowSim, and m4 backends
 │   ├── astra-sim-alibabacloud/    # Core simulation framework
 │   │   ├── astra-sim/             # AstraSim system layer
 │   │   │   ├── network_frontend/  # Network backend implementations
-│   │   │   │   ├── ns3/           # UNISON (NS-3) packet-level simulator
-│   │   │   │   ├── flowsim/       # FlowSim analytical simulator
+│   │   │   │   ├── ns3/           # UNISON (ns-3) packet-level simulator
+│   │   │   │   ├── flowsim/       # flowSim analytical simulator
 │   │   │   │   └── m4/            # m4 ML-based simulator
 │   │   │   └── system/            # System components (routing, collective ops)
-│   │   ├── extern/                # NS-3 source code
+│   │   ├── extern/                # ns-3 source code
 │   │   ├── inputs/                # Configuration files and topologies
 │   │   └── build.sh               # Build script for all backends
 │   ├── example/                   # Example workloads and topologies
-│   │   ├── gray_failures/         # 105 gray failure topology files
-│   │   └── sweep/                 # Sweep experiment configurations
+│   │   ├── gray_failures/         # 105 pre-generated gray failure topology files
+│   │   │   ├── gray_topo_N{2-16}_R{4-10}.txt  # Topology files for N degraded GPUs, R reduction factor
+│   │   │   └── topology_metadata.txt          # Metadata with degraded GPU mappings
+│   │   ├── topo.txt               # Base 32-GPU topology (4 servers × 8 GPUs)
+│   │   ├── microAllReduce.txt     # AllReduce collective workload
+│   │   ├── SimAI.conf             # ns-3 configuration
+│   │   └── busbw.yaml             # Bus bandwidth configuration
 │   ├── scripts/                   # Build and run scripts
-│   ├── results_gray_failures/     # Gray failure evaluation results (315 simulations)
+│   ├── results_gray_failures/     # Pre-computed gray failure results (315 simulations)
+│   │   └── n_{N}_r_{R}_{backend}/ # Individual scenario results (ns3/flowsim/m4)
 │   ├── gray_failure_run_sweep.py  # Gray failure sweep runner
-│   ├── gray_failure_plot_results.py # Generate evaluation plots
+│   ├── gray_failure_plot_results.py # Generate evaluation plots (6 figures)
 │   └── gray_failure_topo_viz.py   # Topology visualization tool
 ├── util/                          # Utility functions for m4, including data loaders and ML model implementations
 ├── main_train.py                  # Main script for training and testing m4
@@ -71,31 +77,29 @@ git submodule update --init --recursive
 ```
 
 **2. Set up Python environment:**
-```bash
-uv sync
-source .venv/bin/activate
-```
+
+- 1. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+
+- 2. **Set up Python environment:**
+   ```bash
+   uv sync
+   source .venv/bin/activate  # Activate the virtual environment!
+   ```
 
 **3. Reproduce paper results:**
-- **Section 5.3** (SimAI Integration): Check pre-computed results in `SimAI/results_examples/`
+- **Section 5.3** (SimAI Integration): Check pre-computed results in `SimAI/results_examples/` and run the notebook `gray_failure_plot_results.ipynb` to generate paper figures
 - **Sections 5.4-5.6** (M4 Evaluation): Run the notebook `plot_results.ipynb` to generate paper figures
 
 ---
 
 ## **Setup and Installation**
 
-### **Install Dependencies**
-
-1. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
-
-2. Set up Python environment:
+1. Always activate the python environment before running any commands:
    ```bash
    uv sync
-   source .venv/bin/activate  # Activate the virtual environment
+   source .venv/bin/activate  # Activate the virtual environment!
    ```
    
-   **Note**: You can either activate the environment as shown above, or use `uv run <command>` to run commands directly (e.g., `uv run python main_train.py`).
-
 2. Install Rust and Cargo:
    ```bash
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -141,8 +145,6 @@ python main_train.py --train_config=./config/train_config_testbed.yaml
 python main_train.py --test_config=./config/test_config_testbed.yaml
 ```
 
-
-
 ### **Section 5.3: SimAI Integration Experiments**
 
 The `SimAI/` directory contains an integrated evaluation framework with three network simulation backends: **UNISON (ns-3)** , **flowSim** , and **m4** .
@@ -153,51 +155,60 @@ Build all three backends (requires GCC-9):
 
 ```bash
 cd SimAI
-./scripts/build.sh -c ns3      # Build UNISON (NS-3) backend
-./scripts/build.sh -c flowsim  # Build FlowSim backend
-./scripts/build.sh -c m4       # Build M4 backend
+./scripts/build.sh -c ns3      # Build UNISON (ns-3) backend
+./scripts/build.sh -c flowsim  # Build flowSim backend
+./scripts/build.sh -c m4       # Build m4 backend (requires CUDA)
 ```
 
 #### Gray Failure Evaluation
 
-We evaluate all three backends under **gray failure** conditions—scenarios where network links experience partial bandwidth degradation (e.g., due to cable aging or thermal throttling) rather than complete failures.
+We evaluate all three backends under **gray failure** conditions—scenarios where network components experience partial performance degradation rather than complete failures. This mimics real-world datacenter issues like cable aging, thermal throttling, or partial switch failures.
 
 **Gray Failure Topologies:**
 
-The repository includes 105 pre-generated topologies in `example/gray_failures/` with varying failure severities:
-- **N ∈ [2, 16]**: Number of degraded GPUs (6-50% of cluster)
-- **R ∈ [4, 10]**: Bandwidth reduction factor (75-90% loss)
-- Degraded GPUs follow **server-aligned patterns** mimicking realistic failure domains (e.g., N=8 affects GPUs 0-3 and 8-11; N=16 affects servers 0 and 2)
+The repository includes **105 pre-generated topologies** in `example/gray_failures/` covering a comprehensive parameter sweep:
+- **N ∈ {2, 3, ..., 16}**: Number of degraded GPUs (6%-50% of 32-GPU cluster)
+- **R ∈ {4, 5, ..., 10}**: Bandwidth reduction factor (degraded links operate at 1/R capacity, i.e., 75%-90% bandwidth loss)
 
 **Run Gray Failure Sweep:**
 
 ```bash
 # Run all scenarios for a specific backend
 python gray_failure_run_sweep.py ns3      # UNISON (packet-level ground truth)
-python gray_failure_run_sweep.py flowsim  # FlowSim (analytical)
-python gray_failure_run_sweep.py m4       # M4 (ML-based, uses GPU auto-detection)
+python gray_failure_run_sweep.py flowsim  # flowSim (analytical)
+python gray_failure_run_sweep.py m4       # m4 (ML-based, uses GPU auto-detection)
 
-# Run a single scenario
+# Run a single scenario (N=8 degraded GPUs, R=4 bandwidth reduction)
 python gray_failure_run_sweep.py m4 --n 8 --r 4
 ```
 
 **Visualize Results:**
 
+Generate all evaluation plots (CDFs, runtime comparison, MAE analysis, scatter plots):
 ```bash
 python gray_failure_plot_results.py
 ```
-#### Results
 
-Pre-computed results for all 105 scenarios (3 backends × 105 topologies = 315 simulations) are available in `results_gray_failures/`:
-- **Simulation results**: `results_gray_failures/n_{N}_r_{R}_{backend}/EndToEnd.csv`
-- **Runtime logs**: `results_gray_failures/n_{N}_r_{R}_{backend}/runtime.txt`
-- **Summary files**: `results_gray_failures/{backend}_sweep_summary.txt`
-- **Generated plots**: `gray_failure_*.png` (6 figures in SimAI directory)
-   - Error magnitude and signed error CDFs
-   - Runtime performance comparison
-   - Error sensitivity to failure severity (N and R)
-   - Completion time analysis for specific scenarios
+This produces 6 figures in the `SimAI/` directory:
+- `gray_failure_errors.png` — CDF of error magnitudes
+- `gray_failure_signed_errors.png` — CDF of signed errors (showing bias)
+- `gray_failure_runtimes.png` — Runtime comparison across backends
+- `gray_failure_mae_by_n.png` — Mean error vs. number of degraded GPUs
+- `gray_failure_mae_by_r.png` — Mean error vs. bandwidth reduction factor
+- `gray_failure_scatter_n8.png` — Completion time analysis for N=8
 
+**Visualize Network Topology:**
+
+Generate a visualization of the 32-GPU datacenter topology structure:
+```bash
+python gray_failure_topo_viz.py
+```
+
+This produces `simai_topo_groups.png` showing the hierarchical network topology with NVSwitch and rail switch layers.
+
+#### Results Summary
+
+Pre-computed results for all 315 simulations (3 backends × 105 scenarios) are available in `results_gray_failures/`:
 
 ---
 
