@@ -10,7 +10,7 @@ This repository provides scripts and instructions to replicate the experiments f
 - [Running Experiments from Scratch](#running-experiments-from-scratch)
   - [Section 5.2: Testbed Integration](#section-52-testbed-integration)
   - [Section 5.3: SimAI Integration](#section-53-simai-integration-experiments)
-  - [Sections 5.4-5.6: M4 Evaluation](#sections-54-56-m4-evaluation-experiments)
+  - [Sections 5.4-5.6: m4 Evaluation](#sections-54-56-m4-evaluation-experiments)
 - [Training Your Own Model](#training-your-own-model)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
@@ -31,8 +31,7 @@ This repository provides scripts and instructions to replicate the experiments f
 ├── testbed/                       # Testbed integration with ns-3, flowSim, and m4 backends
 │   ├── eval_train/                # Evaluation training data
 │   ├── results_train/             # Training results and outputs
-│   ├── run_m4_post.py             # Post-processing script for testbed data
-│   └── plot_fct_slowdown.ipynb    # Plot script for testbed data
+│   └──  run_m4_post.py             # Post-processing script for testbed data
 ├── SimAI/                         # SimAI integration with UNISON, flowSim, and m4 backends
 │   ├── astra-sim-alibabacloud/    # Core simulation framework
 │   │   ├── astra-sim/             # AstraSim system layer
@@ -42,16 +41,12 @@ This repository provides scripts and instructions to replicate the experiments f
 │   │   │   │   └── m4/            # m4 ML-based simulator
 │   │   │   └── system/            # System components (routing, collective ops)
 │   │   ├── extern/                # ns-3 source code
-│   │   ├── inputs/                # Configuration files and topologies
 │   │   └── build.sh               # Build script for all backends
 │   ├── example/                   # Example workloads and topologies
 │   │   ├── gray_failures/         # 105 pre-generated gray failure topology files
-│   │   │   ├── gray_topo_N{2-16}_R{4-10}.txt  # Topology files for N degraded GPUs, R reduction factor
-│   │   │   └── topology_metadata.txt          # Metadata with degraded GPU mappings
-│   │   ├── topo.txt               # Base 32-GPU topology (4 servers × 8 GPUs)
+│   │   │   └── gray_topo_N{2-16}_R{4-10}.txt  # Topology files for N degraded GPUs, R reduction factor
 │   │   ├── microAllReduce.txt     # AllReduce collective workload
-│   │   ├── SimAI.conf             # ns-3 configuration
-│   │   └── busbw.yaml             # Bus bandwidth configuration
+│   │   └── SimAI.conf             # ns-3 configuration
 │   ├── scripts/                   # Build and run scripts
 │   ├── results_gray_failures/     # Pre-computed gray failure results (315 simulations)
 │   │   └── n_{N}_r_{R}_{backend}/ # Individual scenario results (ns3/flowsim/m4)
@@ -78,9 +73,9 @@ git submodule update --init --recursive
 
 **2. Set up Python environment:**
 
-- 1. **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
+- **Install uv** (a fast Python package manager): Follow the installation guide at [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
 
-- 2. **Set up Python environment:**
+- **Set up Python environment:**
    ```bash
    uv sync
    source .venv/bin/activate  # Activate the virtual environment!
@@ -88,7 +83,7 @@ git submodule update --init --recursive
 
 **3. Reproduce paper results:**
 - **Section 5.3** (SimAI Integration): Check pre-computed results in `SimAI/results_examples/` and run the notebook `gray_failure_plot_results.ipynb` to generate paper figures
-- **Sections 5.4-5.6** (M4 Evaluation): Run the notebook `plot_results.ipynb` to generate paper figures
+- **Sections 5.4-5.6** (m4 Evaluation): Run the notebook `plot_results.ipynb` to generate paper figures
 
 ---
 
@@ -130,7 +125,8 @@ This section shows how to reproduce the experimental results from the paper usin
 
 ### **Section 5.2: Testbed Integration**
 
-The `testbed/` directory contains the code to run the experiments on the testbed.
+TODO for Om: add the instructions to run the testbed experiments.
+<!-- The `testbed/` directory contains the code to run the experiments on the testbed.
 
 Run the data processing script:
 ```bash
@@ -143,7 +139,7 @@ Run the training and testing scripts:
 python main_train.py --train_config=./config/train_config_testbed.yaml
 # testing
 python main_train.py --test_config=./config/test_config_testbed.yaml
-```
+``` -->
 
 ### **Section 5.3: SimAI Integration Experiments**
 
@@ -171,6 +167,8 @@ The repository includes **105 pre-generated topologies** in `example/gray_failur
 - **R ∈ {4, 5, ..., 10}**: Bandwidth reduction factor (degraded links operate at 1/R capacity, i.e., 75%-90% bandwidth loss)
 
 **Run Gray Failure Sweep:**
+
+Note: Pre-computed results for all 315 simulations (3 backends × 105 scenarios) are available in `results_gray_failures/`. Running the sweep script will overwrite the pre-computed results.
 
 ```bash
 # Run all scenarios for a specific backend
@@ -206,15 +204,13 @@ python gray_failure_topo_viz.py
 
 This produces `simai_topo_groups.png` showing the hierarchical network topology with NVSwitch and rail switch layers.
 
-#### Results Summary
-
-Pre-computed results for all 315 simulations (3 backends × 105 scenarios) are available in `results_gray_failures/`:
-
 ---
 
-### **Sections 5.4-5.6: M4 Evaluation Experiments**
+### **Sections 5.4-5.6: m4 Evaluation Experiments**
 
 Reproduce m4's accuracy evaluation across diverse network scenarios using pre-trained models.
+
+TODO for Anton: please add instructions to run flowSim and m4.
 
 #### Quick Test (Small Scale)
 
