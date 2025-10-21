@@ -5,8 +5,8 @@ dataset:
   n_links_max: 100
   shard: 0
   lr: 10
-  n_samples_sampled: 2000
-  threadhold_sampled: 500
+  n_samples_sampled: 4000
+  threadhold_sampled: 1000
   train_frac: 0.9
   topo_type: "_topology_flows"
   sampling_method: "balanced" # weighted, uniform, balanced
@@ -32,7 +32,7 @@ model:
 
 # Training parameters
 training:
-  gpu: [2]
+  gpu: [3]
   n_epochs: 5
   batch_size: 1
   learning_rate: 0.0001

@@ -722,14 +722,19 @@ class TopoFctSldnSegment(Dataset):
 
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
-
-        sizes = np.log2(sizes / 1000.0 + 1)
+        output_data[output_data>50]=1
+        
         param_path = f"{dir_input_tmp}/param{topo_type}.npy"
         if os.path.exists(param_path):
             param_data = np.load(f"{dir_input_tmp}/param{topo_type}.npy")
+            param_data_repeat = np.repeat(param_data[:, np.newaxis], n_flows, axis=1).T
         else:
-            param_data = np.zeros(13)
-        param_data_repeat = np.repeat(param_data[:, np.newaxis], n_flows, axis=1).T
+            param_data_repeat = np.zeros((n_flows, 13), dtype=np.float32)
+            large_flow_mask = sizes >= 1000
+            param_data_repeat[large_flow_mask] = 1.0
+        
+        sizes = np.log2(sizes / 1000.0 + 1) if not self.enable_testbed else np.log2(sizes + 1)
+        
         if not self.enable_flowsim_gt:
             input_data = np.column_stack(
                 (

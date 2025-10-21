@@ -138,9 +138,8 @@ torch::jit::script::Module lstmcell_time_link, lstmcell_rate_link;
 torch::jit::script::Module gnn_layer_0, gnn_layer_1, gnn_layer_2;
 torch::jit::script::Module output_layer;
 
-// Flow and topology data
-std::vector<double> params;
-torch::Tensor params_tensor;
+// Flow and topology data - removed global params, now stored per-flow
+torch::Tensor flow_params_tensor;  // [max_flows, 13] - parameters for each flow
 
 // Only keep necessary tensors for HERD simulation
 
@@ -253,10 +252,13 @@ void setup_m4_tensors_for_herd(torch::Device device, int32_t max_flows, int32_t 
     res_fct_tensor = torch::zeros({max_flows, 2}, options_float);
     res_sldn_tensor = torch::zeros({max_flows, 2}, options_float);
     
+    // Per-flow parameters (13-dimensional parameter vectors)
+    flow_params_tensor = torch::zeros({max_flows, 13}, options_float);
+    
     // Cache for efficient operations
     ones_cache = torch::ones({n_links}, options_int32);
     
-    std::cout << "[INFO] M4 tensors initialized for max " << max_flows << " HERD flows\n";
+    std::cout << "[INFO] M4 tensors initialized for max " << max_flows << " HERD flows with per-flow parameters\n";
 }
 
 // Global flow ID counter for HERD flows
@@ -279,10 +281,20 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         n_flows_active++;
         
         // Initialize h_vec for this flow (matching reference implementation)
-        float normalized_size = std::log2f((float)flow_size / 1000.0 + 1.0f);
+        // Use testbed size transformation (matches dataset.py logic with enable_testbed=True)
+        float normalized_size = std::log2f((float)flow_size + 1.0f);
         h_vec[flow_id][0] = 1.0f;  // Constant feature
-        h_vec[flow_id][2] = normalized_size;  // Normalized flow size
+        h_vec[flow_id][2] = normalized_size;  // Normalized flow size  
         h_vec[flow_id][3] = 3.0f;  // Number of links (3 for 11-client topology)
+        
+        // Set flow-specific parameters based on size (matches dataset.py parameter conditioning)
+        if (flow_size >= 1000) {
+            // Large flows get parameter vector: [1, 1, 1, ..., 1] (13 ones)
+            flow_params_tensor[flow_id] = 1.0f;
+        } else {
+            // Small flows get parameter vector: [0, 0, 0, ..., 0] (13 zeros)  
+            flow_params_tensor[flow_id] = 0.0f;
+        }
         
         // For HERD, create simple topology mapping (client -> server path)
         // This is a simplified version - in full M4, this comes from topology files
@@ -300,9 +312,6 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         flow_to_graph_id[flow_id] = graph_id_cur;
         link_to_graph_id.index_put_({links_tensor}, graph_id_cur);
         
-        // Prepare params tensor for ML prediction
-        torch::Tensor params_input = torch::from_blob(params.data(), {(int)params.size()}, 
-            torch::TensorOptions().dtype(torch::kFloat64)).to(torch::kFloat32).to(device);
         
         // PROPER M4 ML PIPELINE: LSTM + GNN + MLP for state updates and prediction
         
@@ -365,8 +374,8 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             torch::Tensor z_links_updated = gnn_out_2.slice(0, n_active, n_active + 1); // [1, h_dim]
             
             // Step 3: LSTM rate updates with GNN output
-            torch::Tensor params_expanded = params_input.unsqueeze(0).repeat({n_active, 1}); // [n_active, 13]
-            torch::Tensor h_rate_input = torch::cat({h_flows_updated, params_expanded}, 1); // [n_active, h_dim+13]
+            torch::Tensor params_active = flow_params_tensor.index_select(0, active_flow_indices); // [n_active, 13]
+            torch::Tensor h_rate_input = torch::cat({h_flows_updated, params_active}, 1); // [n_active, h_dim+13]
             torch::Tensor h_flows_old = h_vec.index_select(0, active_flow_indices);
             
             torch::Tensor h_flows_final = lstmcell_rate.forward({h_rate_input, h_flows_old}).toTensor();
@@ -392,7 +401,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             // First flow - use ML prediction with initial state
             auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
             torch::Tensor nlinks_single = torch::full({1, 1}, 3.0f, options_float);
-            torch::Tensor params_single = params_input.unsqueeze(0); // [1, 13]
+            torch::Tensor params_single = flow_params_tensor.slice(0, flow_id, flow_id + 1); // [1, 13]
             torch::Tensor h_single = h_vec.slice(0, flow_id, flow_id + 1); // [1, h_dim]
             
             torch::Tensor mlp_input_single = torch::cat({nlinks_single, params_single, h_single}, 1);
@@ -406,10 +415,10 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             // Multiple flows active - use full ML pipeline with contention
             auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
             torch::Tensor nlinks_expanded = torch::full({n_active, 1}, 3.0f, options_float);
-            torch::Tensor params_expanded = params_input.unsqueeze(0).repeat({n_active, 1}); // [n_active, 13]
+            torch::Tensor params_active = flow_params_tensor.index_select(0, active_flow_indices); // [n_active, 13]
             torch::Tensor h_active = h_vec.index_select(0, active_flow_indices); // [n_active, h_dim]
             
-            torch::Tensor mlp_input = torch::cat({nlinks_expanded, params_expanded, h_active}, 1); // [n_active, 1+13+h_dim]
+            torch::Tensor mlp_input = torch::cat({nlinks_expanded, params_active, h_active}, 1); // [n_active, 1+13+h_dim]
             
             // Get slowdown predictions for all active flows
             torch::Tensor sldn_all = output_layer.forward(std::vector<torch::jit::IValue>{mlp_input}).toTensor().view(-1); // [n_active]
@@ -437,8 +446,11 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             throw std::runtime_error("No active flows found after adding current flow - this is a bug!");
         }
         
+        // Debug output showing parameter conditioning based on flow size
+        bool is_large_flow = (flow_size >= 1000);
         std::cout << "ML STATE: flow_id=" << flow_id << " size=" << flow_size 
                   << "B, active_flows=" << n_flows_active 
+                  << ", params=" << (is_large_flow ? "[1,1,...,1]" : "[0,0,...,0]")
                   << ", slowdown=" << sldn_pred
                   << ", ideal_fct=" << ideal_fct << "ns"
                   << ", predicted_fct=" << predicted_fct << "ns" << std::endl;
@@ -919,8 +931,7 @@ int main(int argc, char *argv[]) {
             int32_t n_links;
             n_links_node >> n_links;
 
-            // Initialize basic parameters for ML prediction
-            params.assign(13, 0.0); // Default parameters
+            // Parameters are now initialized per-flow based on flow size (no global defaults needed)
 
             // Load ML models
             setup_m4(device);

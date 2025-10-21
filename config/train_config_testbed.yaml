@@ -5,8 +5,8 @@
 dataset:
   shard: 0
   lr: 10                   # Link rate in Gbps
-  n_samples_sampled: 2000
-  threadhold_sampled: 500
+  n_samples_sampled: 4000
+  threadhold_sampled: 1000
   train_frac: 0.9          # 90% for training, 10% for validation
   topo_type: "_topology_flows"  # Matches your FCT file naming
   sampling_method: "balanced"  # balanced, uniform, weighted
@@ -32,7 +32,7 @@ model:
 
 # Training parameters
 training:
-  gpu: [3]                 # Use GPU 0 (adjust as needed)
+  gpu: [1]                 # Use GPU 0 (adjust as needed)
   n_epochs: 100             # Number of training epochs
   batch_size: 4            # Batch size (adjust based on memory)
   learning_rate: 0.0001    # Learning rate
