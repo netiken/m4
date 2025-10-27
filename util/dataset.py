@@ -164,8 +164,8 @@ class DataModulePerFlow(LightningDataModule):
             len_per_period_active_all = []
             len_per_period_stats_all = []
             for spec in os.listdir(dir_input):
-                if not self.enable_testbed:
-                    spec+=f"/ns3"
+                # if not self.enable_testbed:
+                spec+=f"/ns3"
                 file_suffix = ""
                 fid = np.load(
                     f"{dir_input}/{spec}/fid{topo_type}{file_suffix}.npy"
@@ -722,6 +722,7 @@ class TopoFctSldnSegment(Dataset):
 
         output_data = np.divide(fcts, i_fcts).reshape(-1, 1).astype(np.float32)
         assert (output_data >= 1.0).all()
+        output_data[output_data>50]=1
         
         param_path = f"{dir_input_tmp}/param{topo_type}.npy"
         if os.path.exists(param_path):
