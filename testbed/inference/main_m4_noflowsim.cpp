@@ -270,6 +270,9 @@ void setup_m4_tensors_for_herd(torch::Device device, int32_t max_flows, int32_t 
     // Prepare per-flow link storage
     g_flow_links.clear();
     g_flow_links.resize(max_flows);
+    // One-graph semantics
+    graph_id_counter = 1;
+    graph_id_cur = 0;
 }
 
 // Global flow ID counter for HERD flows
@@ -324,13 +327,11 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             link_to_nflows.index_add_(0, links_tensor, ones_cache.slice(0, 0, links_tensor.size(0)));
         }
         
-        // Graph ID assignment (simplified)
-        if (graph_id_counter == 0) {
-            graph_id_cur = graph_id_counter++;
-        }
-        flow_to_graph_id[flow_id] = graph_id_cur;
+        // One-graph semantics: assign all flows/links to graph 0
+        graph_id_cur = 0;
+        flow_to_graph_id.index_put_({flow_id}, 0);
         if (links_tensor.numel() > 0) {
-            link_to_graph_id.index_put_({links_tensor}, graph_id_cur);
+            link_to_graph_id.index_put_({links_tensor}, 0);
         }
         
         
