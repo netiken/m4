@@ -105,6 +105,7 @@ Outputs
 #include <fstream>
 #include <deque>
 #include <algorithm>
+#include <queue>
 
 // CityHash for 128-bit key generation (exactly as in HERD)
 #include "rdma_bench/mica/mica.h" // Brings in city.h and MICA_MAX_VALUE
@@ -762,36 +763,51 @@ int main(int argc, char* argv[]) {
         g_routes_c2s[0] = c2s; g_routes_s2c[0] = s2c;
         g_client_logs[0].open("client_0.log");
     } else if (twelve_node_topo) {
-        // 12-endpoint multi-client topology with dual roots R and R2 and top T
-        // Device indices:
-        // 0:T (worker/server), 1:R, 2:R2, 3:S1, 4:S2, 5:S3, 6:S4, 7:S5, 8:S6,
-        // 10:C1, 11:C2, 12:C3, 13:C4, 14:C5, 15:C6, 16:C7, 17:C8, 18:C9, 19:C10, 20:C11
+        // 12-endpoint three-tier topology (see m4/topology.md)
+        // Node indexing:
+        // - 0..11  : serv0..serv11 (end-hosts); serv1 is the server
+        // - 12..17 : tor12..tor17 (ToR)
+        // - 18..19 : agg18..agg19 (Aggregation)
+        // - 20     : core20 (Core)
         topology = std::make_shared<Topology>(21, 4);
-        // Core links
-        topology->connect(0, 1, bw_bpns, 800.0 , true); // T<->R
-        topology->connect(0, 2, bw_bpns, 800.0 , true); // T<->R2
-        // Aggregation: R side
-        topology->connect(1, 3, bw_bpns, 800.0 , true); // R<->S1
-        topology->connect(1, 4, bw_bpns, 800.0 , true); // R<->S2
-        topology->connect(1, 5, bw_bpns, 800.0 , true); // R<->S3
-        // Aggregation: R2 side
-        topology->connect(2, 6, bw_bpns, 800.0 , true); // R2<->S4
-        topology->connect(2, 7, bw_bpns, 800.0 , true); // R2<->S5
-        topology->connect(2, 8, bw_bpns, 800.0 , true); // R2<->S6
-        // Leaves to ToR switches per requested mapping
-        topology->connect(13, 3, bw_bpns, 800.0 , true); // C4<->S1
-        topology->connect(10, 4, bw_bpns, 800.0 , true); // C1<->S2
-        topology->connect(14, 4, bw_bpns, 800.0 , true); // C5<->S2
-        topology->connect(11, 5, bw_bpns, 800.0 , true); // C2<->S3
-        topology->connect(12, 5, bw_bpns, 800.0 , true); // C3<->S3
-        topology->connect(15, 6, bw_bpns, 800.0 , true); // C6<->S4
-        topology->connect(16, 6, bw_bpns, 800.0 , true); // C7<->S4
-        topology->connect(17, 7, bw_bpns, 800.0 , true); // C8<->S5
-        topology->connect(18, 7, bw_bpns, 800.0 , true); // C9<->S5
-        topology->connect(19, 8, bw_bpns, 800.0 , true); // C10<->S6
-        topology->connect(20, 8, bw_bpns, 800.0 , true); // C11<->S6
 
-        NUM_CLIENTS = 11; // C1..C11 (Server is the worker at T)
+        const int N = 21;
+        std::vector<std::vector<int>> adj(N);
+        auto connect_bidir = [&](int u, int v, double bw, float lat){
+            topology->connect(u, v, bw, lat, true);
+            adj[u].push_back(v);
+            adj[v].push_back(u);
+        };
+
+        // Access: servers to ToR
+        connect_bidir(0, 12, bw_bpns, 3000.0f);
+        connect_bidir(1, 12, bw_bpns, 3000.0f); // serv1 is the server
+        connect_bidir(2, 13, bw_bpns, 3000.0f);
+        connect_bidir(3, 13, bw_bpns, 3000.0f);
+        connect_bidir(4, 14, bw_bpns, 3000.0f);
+        connect_bidir(5, 14, bw_bpns, 3000.0f);
+        connect_bidir(6, 15, bw_bpns, 3000.0f);
+        connect_bidir(7, 15, bw_bpns, 3000.0f);
+        connect_bidir(8, 16, bw_bpns, 3000.0f);
+        connect_bidir(9, 16, bw_bpns, 3000.0f);
+        connect_bidir(10, 17, bw_bpns, 3000.0f);
+        connect_bidir(11, 17, bw_bpns, 3000.0f);
+
+        // ToR to Agg
+        connect_bidir(12, 18, bw_bpns, 3000.0f);
+        connect_bidir(13, 18, bw_bpns, 3000.0f);
+        connect_bidir(14, 18, bw_bpns, 3000.0f);
+        connect_bidir(15, 19, bw_bpns, 3000.0f);
+        connect_bidir(16, 19, bw_bpns, 3000.0f);
+        connect_bidir(17, 19, bw_bpns, 3000.0f);
+
+        // Agg to Core
+        connect_bidir(18, 20, bw_bpns, 3000.0f);
+        connect_bidir(19, 20, bw_bpns, 3000.0f);
+
+        // Logical clients exclude the server endpoint 1.
+        std::vector<int> client_nodes = {0,2,3,4,5,6,7,8,9,10,11};
+        NUM_CLIENTS = (int)client_nodes.size();
         g_clients.assign(NUM_CLIENTS, ClientState());
         g_client_logs.resize(NUM_CLIENTS);
         for (int i = 0; i < NUM_CLIENTS; i++) {
@@ -801,27 +817,29 @@ int main(int argc, char* argv[]) {
         g_routes_c2s.resize(NUM_CLIENTS);
         g_routes_s2c.resize(NUM_CLIENTS);
 
-        auto build_route = [&](std::vector<int> path){ Route r; for(int id: path) r.push_back(topology->get_device(id)); return r; };
-        // Map client indices to leaves:
-        // Clients 0..10 map to: C4, C1, C5, C2, C3, C6, C7, C8, C9, C10, C11
-        std::vector<std::vector<int>> c2s_paths = {
-            {13,3,1,0},
-            {10,4,1,0},
-            {14,4,1,0},
-            {11,5,1,0},
-            {12,5,1,0},
-            {15,6,2,0},
-            {16,6,2,0},
-            {17,7,2,0},
-            {18,7,2,0},
-            {19,8,2,0},
-            {20,8,2,0}
+        auto shortest_path = [&](int src, int dst){
+            std::vector<int> parent(N, -1);
+            std::vector<char> vis(N, 0);
+            std::queue<int> q; q.push(src); vis[src] = 1;
+            while(!q.empty()){
+                int u = q.front(); q.pop();
+                if (u == dst) break;
+                for (int v : adj[u]) if (!vis[v]) { vis[v]=1; parent[v]=u; q.push(v);}    
+            }
+            std::vector<int> path; if (!vis[dst]) return path;
+            for (int v = dst; v != -1; v = parent[v]) path.push_back(v);
+            std::reverse(path.begin(), path.end());
+            return path;
         };
+
+        auto build_route = [&](const std::vector<int>& path){ Route r; for (int id : path) r.push_back(topology->get_device(id)); return r; };
+        const int server_node = 1; // serv1 is the server/worker endpoint
         for (int cid = 0; cid < NUM_CLIENTS; cid++) {
-            g_routes_c2s[cid] = build_route(c2s_paths[cid]);
-            auto rev = c2s_paths[cid];
-            std::reverse(rev.begin(), rev.end());
-            g_routes_s2c[cid] = build_route(rev);
+            int src_node = client_nodes[cid];
+            auto p = shortest_path(src_node, server_node);
+            g_routes_c2s[cid] = build_route(p);
+            std::reverse(p.begin(), p.end());
+            g_routes_s2c[cid] = build_route(p);
         }
         for (int i = 0; i < NUM_CLIENTS; i++) {
             g_client_logs[i].open((std::string("client_") + std::to_string(i) + ".log").c_str());

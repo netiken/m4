@@ -9,7 +9,7 @@ import time
 from typing import Dict, List
 
 # Sweep dimensions shared with the FlowSim harness.
-WINDOW_SIZES: List[int] = [1, 2, 4, 8, 12, 16]
+WINDOW_SIZES: List[int] = [1, 2, 4] # 8, 12, 16
 RDMA_TITLES_BASE: Dict[int, str] = {
     102408: "100",
     204808: "200",
@@ -40,10 +40,20 @@ TOPOLOGY_TARGETS: Dict[int, Dict[str, str]] = {
 def cmake_path() -> str:
     """Return the absolute path to the cmake executable, or exit with guidance."""
     cmake = shutil.which("cmake")
-    if cmake is None:
-        print("[build] Could not find 'cmake' in PATH. Please install or load cmake before running sweeps.", file=sys.stderr)
-        sys.exit(1)
-    return cmake
+    if cmake:
+        return cmake
+
+    # Fallback: look for a portable CMake under the build directory
+    portable_candidates = sorted((ROOT_DIR / "cmake-cache").glob(".cmake/cmake-*/bin/cmake"))
+    if portable_candidates:
+        return str(portable_candidates[0].resolve())
+
+    print(
+        "[build] Could not find 'cmake' in PATH and no portable CMake found under 'cmake-cache/.cmake'.\n"
+        "        Install CMake (e.g., 'sudo apt-get install cmake') or download a portable binary into 'UNISON/cmake-cache/.cmake'.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 
 def parse_args() -> argparse.Namespace:
@@ -85,21 +95,60 @@ def ensure_built(ns3_root: pathlib.Path, topology: int) -> pathlib.Path:
     needs_configure = True
     if cache_file.exists():
         try:
-            for line in cache_file.open("r"):
+            cache_lines = cache_file.read_text().splitlines()
+            for line in cache_lines:
                 if line.startswith("CMAKE_HOME_DIRECTORY:INTERNAL="):
                     cache_root = pathlib.Path(line.split("=", 1)[1].strip()).resolve()
                     if cache_root == ns3_root.resolve():
                         needs_configure = False
+                    # don't break; we may also want to check options below
+            # Ensure required options are set
+            for line in cache_lines:
+                if line.startswith("NS3_MTP:"):
+                    if not line.strip().endswith("=ON"):
+                        needs_configure = True
+                    break
+            for line in cache_lines:
+                if line.startswith("NS3_WARNINGS_AS_ERRORS:"):
+                    if not line.strip().endswith("=OFF"):
+                        needs_configure = True
                     break
         except OSError:
             needs_configure = True
+
+    # If we need to configure because the cache points to a different tree,
+    # clean up the stale CMake state so cmake doesn't error out.
+    if needs_configure and cache_file.exists():
+        for entry in ("CMakeCache.txt", "CMakeFiles", "cmake_install.cmake", "Makefile", "compile_commands.json"):
+            path = build_dir / entry
+            try:
+                if path.is_file():
+                    path.unlink()
+                elif path.is_dir():
+                    shutil.rmtree(path)
+            except OSError:
+                pass
+
+        # Also drop any generated wrapper headers pointing to the old tree
+        include_dir = ns3_root / "build" / "include"
+        try:
+            if include_dir.exists():
+                shutil.rmtree(include_dir)
+        except OSError:
+            pass
 
     if needs_configure:
         print("[build] Configuring ns-3 via CMake...")
         cfg_stdout = build_dir / "configure_stdout.txt"
         cfg_stderr = build_dir / "configure_stderr.txt"
         rc_cfg = run_cmd(
-            [cmake, str(ns3_root.resolve())],
+            [
+                cmake,
+                "-DNS3_MTP=ON",
+                "-DNS3_WARNINGS_AS_ERRORS=OFF",
+                "-DCMAKE_BUILD_TYPE=default",
+                str(ns3_root.resolve()),
+            ],
             cwd=build_dir,
             stdout_path=cfg_stdout,
             stderr_path=cfg_stderr,

@@ -9,7 +9,7 @@ import time
 from typing import Dict, List, Optional
 
 # Sweep dimensions shared with the FlowSim harness.
-WINDOW_SIZES: List[int] = [1, 2, 4, 8, 12, 16]
+WINDOW_SIZES: List[int] = [1, 2, 4] #, 8, 12, 16
 RDMA_TITLES_BASE: Dict[int, str] = {
     102408: "100",
     204808: "200",
@@ -21,7 +21,7 @@ RDMA_TITLES_BASE: Dict[int, str] = {
     768008: "750",
     921608: "900",
     1024008: "1000",
-    1048584: "10000",
+#    1048584: "10000",
 }
 RDMA_SIZES: List[int] = list(RDMA_TITLES_BASE.keys())
 
