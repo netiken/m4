@@ -120,7 +120,9 @@ def compute_sequences(flows: Dict[int, List[dict]]) -> List[dict]:
 
         for seq in ud_sequences:
             req_send, req_recv, resp_send, resp_recv = (entry["t"] for entry in seq)
-            ud_duration = resp_recv - req_send
+            # Subtract server overhead to match FlowSim's approach (network-only time)
+            SERVER_OVERHEAD_NS = 50000000  # Must match kv-lite-common.h
+            ud_duration = (resp_recv - req_send) - SERVER_OVERHEAD_NS
             suffix = "" if dup_counter[reqid] == 0 else f"-{dup_counter[reqid]}"
             dup_counter[reqid] += 1
             outputs.append(
