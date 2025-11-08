@@ -120,7 +120,7 @@ def compute_sequences(flows: Dict[int, List[dict]]) -> List[dict]:
 
         for seq in ud_sequences:
             req_send, req_recv, resp_send, resp_recv = (entry["t"] for entry in seq)
-            ud_duration = (resp_recv - req_send) - (resp_send - req_recv)
+            ud_duration = resp_recv - req_send
             suffix = "" if dup_counter[reqid] == 0 else f"-{dup_counter[reqid]}"
             dup_counter[reqid] += 1
             outputs.append(

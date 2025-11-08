@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 
     // Hardcode network and device config for this constrained testbed
     std::string linkDataRate = "10Gbps";
-    std::string linkDelay = "0.5us"; // Datacenter-realistic low latency for better RDMA performance
+    std::string linkDelay = "0.1us"; // Ultra-low latency to match real testbed RDMA performance
     uint32_t packetPayloadSize = 9000; // B - Jumbo frames to reduce packet count
     bool enablePfc = true; // Enable PFC for DCQCN congestion control
     bool enableQcn = true; // Enable QCN for DCQCN congestion control
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
        rdmaHw->SetAttribute("L2BackToZero", BooleanValue(false));
        
        // Standardized DCQCN configuration for consistent behavior across simulations
-       rdmaHw->SetAttribute("MinRate", DataRateValue(DataRate("1Gbps"))); // Conservative minimum rate
+       rdmaHw->SetAttribute("MinRate", DataRateValue(DataRate("5Gbps"))); // Higher minimum for faster RDMA
        rdmaHw->SetAttribute("MaxRate", DataRateValue(DataRate("10Gbps"))); // Match link speed
        rdmaHw->SetAttribute("ClampTargetRate", BooleanValue(false));
        rdmaHw->SetAttribute("AlphaResumInterval", DoubleValue(55));    
@@ -296,14 +296,14 @@ int main(int argc, char *argv[])
        rdmaHw->SetAttribute("RateAI", DataRateValue(DataRate("500Mb/s")));
        rdmaHw->SetAttribute("RateHAI", DataRateValue(DataRate("1Gb/s")));
        rdmaHw->SetAttribute("L2BackToZero", BooleanValue(false));
-       rdmaHw->SetAttribute("L2ChunkSize", UintegerValue(16000)); // 16KB balanced chunk size
+       rdmaHw->SetAttribute("L2ChunkSize", UintegerValue(64000)); // 64KB large chunks for lower overhead
        rdmaHw->SetAttribute("RateDecreaseInterval", DoubleValue(1));
        rdmaHw->SetAttribute("MiThresh", UintegerValue(1));
        rdmaHw->SetAttribute("VarWin", BooleanValue(true));
        rdmaHw->SetAttribute("FastReact", BooleanValue(true)); // Important for performance
        rdmaHw->SetAttribute("MultiRate", BooleanValue(true)); // Important for performance
        rdmaHw->SetAttribute("SampleFeedback", BooleanValue(false));
-       rdmaHw->SetAttribute("TargetUtil", DoubleValue(0.98)); // High but realistic utilization target
+       rdmaHw->SetAttribute("TargetUtil", DoubleValue(0.99)); // Maximum utilization for fastest RDMA
 
         Ptr<RdmaDriver> rdma = CreateObject<RdmaDriver>();
         rdma->SetNode(allNodes.Get(i));
