@@ -101,20 +101,13 @@ def compute_sequences(flows: Dict[int, List[dict]], scenario_dir: Path) -> List[
     outputs: List[dict] = []
     dup_counter = collections.defaultdict(int)
     
-    # Extract window size from scenario name (e.g., "1000_2" -> window=2)
-    window_size = 1
-    scenario_name = str(scenario_dir.name)
-    if "_" in scenario_name:
-        try:
-            window_size = int(scenario_name.split("_")[1])
-        except:
-            pass
+    # ⚠️ CRITICAL FIX: DO NOT subtract server overhead!
+    # Real testbed logs INCLUDE server processing time in UD duration (~460ms)
+    # Simulators must report FULL UD time (network + server) for fair comparison
+    SERVER_OVERHEAD_NS = 0  # Don't subtract - report full simulated time
     
-    # Compute scaled server overhead (models server-side queuing)
-    # Must match kv-lite-common.h formula
-    SERVER_OVERHEAD_BASE_NS = 500000  # 500μs
-    SERVER_OVERHEAD_PER_WINDOW_NS = 1000000  # 1ms per window
-    SERVER_OVERHEAD_NS = SERVER_OVERHEAD_BASE_NS + (window_size * SERVER_OVERHEAD_PER_WINDOW_NS)
+    # NO RDMA scaling - report NS3's raw simulation timing
+    # (Previous 0.5x scaling was inconsistent across scenarios)
     
     sorted_items = sorted(flows.items(), key=lambda kv: min(event["t"] for event in kv[1]))
     for reqid, events in sorted_items:
@@ -151,7 +144,7 @@ def compute_sequences(flows: Dict[int, List[dict]], scenario_dir: Path) -> List[
 
         for seq in rdma_sequences:
             rdma_send, rdma_recv = (entry["t"] for entry in seq)
-            rdma_duration = rdma_recv - rdma_send
+            rdma_duration = rdma_recv - rdma_send  # No scaling - report raw NS3 timing
             suffix = "" if dup_counter[reqid] == 0 else f"-{dup_counter[reqid]}"
             dup_counter[reqid] += 1
             outputs.append(

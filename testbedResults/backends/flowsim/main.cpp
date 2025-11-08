@@ -110,7 +110,10 @@ static constexpr uint64_t HANDSHAKE_BYTES = 10;       // Client's handshake payl
 static uint64_t RESP_RDMA_BYTES = 1024008;            // Server's large data response (configurable)
 
 // Timing Parameters
-static constexpr uint64_t SERVER_OVERHEAD_NS = 100000; // 100μs server processing delay
+// Server overhead calibrated to match real testbed MEDIAN UD time of 87μs
+// Real testbed: P50=87μs, P99=197μs, P99.9=438ms (high variability!)
+// FlowSim network delay ~40ns, so overhead = 87μs - 40ns ≈ 87μs
+static constexpr uint64_t SERVER_OVERHEAD_NS = 87000; // 87μs server processing delay
 static constexpr uint64_t SEND_SPACING_NS = 2500;      // Inter-send spacing within batch  
 static constexpr uint64_t STARTUP_DELAY_NS = 0;        // Extra delay between first/second sends
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;   // Delay between UD resp and handshake
@@ -383,7 +386,9 @@ static void client_recv_ud(void* arg) {
         uint64_t now_ns = (uint64_t)event_queue->get_current_time();
         uint64_t ud_dur_ns = (ctx->start_time <= now_ns) ? (now_ns - (uint64_t)ctx->start_time) : 0;
         if (g_om_out.is_open()) {
-            g_om_out << "[ud] client=" << ctx->client_id << " id=" << ctx->op_index << " dur_ns=" << ud_dur_ns - SERVER_OVERHEAD_NS << "\n";
+            // ⚠️ CRITICAL FIX: Report FULL UD time including server overhead!
+            // Real testbed logs INCLUDE server processing (~460ms), simulators must too
+            g_om_out << "[ud] client=" << ctx->client_id << " id=" << ctx->op_index << " dur_ns=" << ud_dur_ns << "\n";
         }
     }
     // Record s2c stage for UD response

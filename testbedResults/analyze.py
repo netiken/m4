@@ -26,13 +26,24 @@ LINE_RE = re.compile(r"\[(ud|rdma)\] client=(\d+) id=\d+(?:-\d+)? dur_ns=(\d+)")
 
 # All 11-client experiment scenarios  
 ALL_SCENARIOS = [
-    "100_2", "100_4", "250_1", "250_2", "250_4", "300_1", "300_2", "300_4",
-    "400_1", "400_2", "400_4", "500_1", "500_2", "500_4", "650_1", "650_2", 
-    "650_4", "750_1", "750_2", "750_4", "900_1", "900_2", "900_4",
+    "100_2", "100_4", 
+    "250_1", "250_2", "250_4", 
+    "300_1", "300_2", "300_4",
+    "400_1", "400_2", "400_4", 
+    "500_1", "500_2", "500_4", 
+    "650_1", "650_2", "650_4", 
+    "750_1", "750_2", "750_4", 
+    "900_1", "900_2", "900_4",
     "1000_1", "1000_2", "1000_4"
 ]
 
+# Plot styling constants (define once, use everywhere)
 OURS_LABEL = "FLS"  # Label for M4 in plots (following paper convention)
+PLOT_COLORS = {"real_world": "black", "flowsim": "tab:blue", "ns3": "tab:orange", "m4": "tab:green"}
+PLOT_MARKERS = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
+PLOT_LABELS = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
+PERFLOW_COLORS = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, FLS
+PERFLOW_LABELS = ["flowSim", "ns3", OURS_LABEL]
 def load_data(file_path: Path, trim: int = 0) -> Dict[Tuple[int, str], List[int]]:
     """Load experiment data from a simulation output file."""
     results = defaultdict(list)
@@ -235,11 +246,6 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
         if window_size in results_by_window:
             results_by_window[window_size].append(result)
     
-    # Exact styling from original analyze.py
-    colors = {"real_world": "black", "flowsim": "tab:blue", "ns3": "tab:orange", "m4": "tab:green"}
-    markers = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
-    labels = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
-    
     # Create separate plot for each window size
     for window_size, scenario_results in results_by_window.items():
         if not scenario_results:
@@ -254,20 +260,20 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
             packet_size = extract_packet_size(result["scenario"])
             
             for backend in ["real_world", "flowsim", "ns3", "m4"]:
-                if backend in result and "median" in result[backend]:
-                    # Convert to milliseconds to match paper format
-                    median_time_ms = result[backend]["median"] / 1000.0  # μs -> ms
-                    backend_data[backend].append((packet_size, median_time_ms))
+                if backend in result and "app_completion_time" in result[backend]:
+                    # Use application completion time (scenario duration), not median per-flow
+                    app_time_s = result[backend]["app_completion_time"] / 1e9  # ns -> s
+                    backend_data[backend].append((packet_size, app_time_s * 1000))  # s -> ms
         
-        # Plot each backend using original style
+        # Plot each backend using global styling constants
         for backend in ["real_world", "flowsim", "ns3", "m4"]:
             data_points = backend_data[backend]
             if not data_points:
                 continue
                 
             xs, ys = zip(*data_points)
-            plt.plot(xs, ys, marker=markers[backend], label=labels[backend],
-                    linewidth=2, color=colors[backend], markersize=8, linestyle='None')
+            plt.plot(xs, ys, marker=PLOT_MARKERS[backend], label=PLOT_LABELS[backend],
+                    linewidth=2, color=PLOT_COLORS[backend], markersize=8, linestyle='None')
         
         # Apply exact original styling with window size in title
         plt.xlabel("Size of Data Packets (KB)")
@@ -294,11 +300,6 @@ def generate_overall_plot(all_scenario_results: List[Dict], results_dir: Path) -
     # Also generate combined plot for comparison
     plt.figure(figsize=(10, 6))
     
-    # Exact styling from original analyze.py
-    colors = {"real_world": "black", "flowsim": "tab:blue", "ns3": "tab:orange", "m4": "tab:green"}
-    markers = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
-    labels = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
-    
     # Collect data points by backend (all window sizes combined)
     backend_data = {"real_world": [], "flowsim": [], "ns3": [], "m4": []}
     
@@ -309,20 +310,20 @@ def generate_overall_plot(all_scenario_results: List[Dict], results_dir: Path) -
         packet_size = extract_packet_size(result["scenario"])
         
         for backend in ["real_world", "flowsim", "ns3", "m4"]:
-            if backend in result and "median" in result[backend]:
-                # Convert to milliseconds to match paper format
-                median_time_ms = result[backend]["median"] / 1000.0  # μs -> ms
-                backend_data[backend].append((packet_size, median_time_ms))
+            if backend in result and "app_completion_time" in result[backend]:
+                # Use application completion time (scenario duration), not median per-flow
+                app_time_s = result[backend]["app_completion_time"] / 1e9  # ns -> s
+                backend_data[backend].append((packet_size, app_time_s * 1000))  # s -> ms
     
-    # Plot each backend using original style
+    # Plot each backend using global styling constants
     for backend in ["real_world", "flowsim", "ns3", "m4"]:
         data_points = backend_data[backend]
         if not data_points:
             continue
             
         xs, ys = zip(*data_points)
-        plt.plot(xs, ys, marker=markers[backend], label=labels[backend],
-                linewidth=2, color=colors[backend], markersize=8, linestyle='None')
+        plt.plot(xs, ys, marker=PLOT_MARKERS[backend], label=PLOT_LABELS[backend],
+                linewidth=2, color=PLOT_COLORS[backend], markersize=8, linestyle='None')
     
     # Apply exact original styling
     plt.xlabel("Size of Data Packets (KB)")
@@ -335,6 +336,65 @@ def generate_overall_plot(all_scenario_results: List[Dict], results_dir: Path) -
     plt.close()
     
     print(f"  📁 Saved: {results_dir / 'm4-testbed-overall.png'}")
+
+
+def generate_perflow_by_window_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
+    """Generate per-flow CDFs separated by window size."""
+    
+    # Group errors by window size
+    for window_size in [1, 2, 4]:
+        plt.figure(figsize=(8, 6))
+        
+        # Collect relative errors for this window size
+        window_errors = {"m4": [], "flowsim": [], "ns3": []}
+        
+        for result in all_scenario_results:
+            if not result:
+                continue
+            result_window = extract_window_size(result["scenario"])
+            if result_window != window_size:
+                continue
+                
+            for backend in ["m4", "flowsim", "ns3"]:
+                if backend in result and "relative_errors" in result[backend]:
+                    window_errors[backend].extend(result[backend]["relative_errors"])
+        
+        # Use global styling constants
+        backends = ["flowsim", "ns3", "m4"]
+        
+        # Plot each backend as CDF
+        for i, backend in enumerate(backends):
+            if backend in window_errors and window_errors[backend]:
+                errors = np.array(window_errors[backend])
+                finite_errors = errors[np.isfinite(errors)]
+                
+                if len(finite_errors) == 0:
+                    continue
+                    
+                # Sort and create CDF
+                arr = np.sort(finite_errors)
+                y = np.linspace(0, 1, len(arr), endpoint=False)
+                
+                # Convert to percentage
+                arr_pct = arr * 100
+                y_pct = y * 100
+                
+                plt.step(arr_pct, y_pct, where="post", label=PERFLOW_LABELS[i], 
+                        linewidth=2, color=PERFLOW_COLORS[i])
+        
+        # Apply styling
+        plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=15)
+        plt.ylabel("CDF (%)", fontsize=15)
+        plt.title(f"(b) CDF of per-flow FCT slowdown errors\n(Window Size: {window_size})")
+        plt.grid(True, linestyle="--", alpha=0.6)
+        plt.legend(fontsize=18, loc=4)
+        plt.tight_layout()
+        
+        filename = f'm4-testbed-perflow-window{window_size}.png'
+        plt.savefig(results_dir / filename, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"  📁 Saved: {results_dir / filename}")
 
 
 def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
@@ -352,9 +412,7 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
             if backend in result and "relative_errors" in result[backend]:
                 all_relative_errors[backend].extend(result[backend]["relative_errors"])
     
-    # Exact colors and labels from original make_plots.py
-    colors = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, ours
-    legend_list = ["flowSim", "ns3", OURS_LABEL]
+    # Use global styling constants
     backends = ["flowsim", "ns3", "m4"]
     
     # Plot each backend as CDF using exact original style
@@ -376,8 +434,8 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
             y_pct = y * 100      # Convert to percentage
             
             # Plot with step function exactly like original
-            plt.step(arr_pct, y_pct, where="post", label=legend_list[i], 
-                    linewidth=2, color=colors[i])
+            plt.step(arr_pct, y_pct, where="post", label=PERFLOW_LABELS[i], 
+                    linewidth=2, color=PERFLOW_COLORS[i])
     
     # Apply exact original styling from make_plots.py
     plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=15)
@@ -407,6 +465,7 @@ def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> N
     # Generate overall plots (combined + separated by window size)
     generate_overall_plot(all_scenario_results, results_dir)
     generate_perflow_plot(all_scenario_results, results_dir)
+    generate_perflow_by_window_plot(all_scenario_results, results_dir)
     
     # Generate summary statistics
     with open(results_dir / 'accuracy_summary.txt', 'w') as f:

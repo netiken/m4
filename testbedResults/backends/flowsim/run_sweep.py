@@ -13,7 +13,6 @@ from typing import Dict, List
 WINDOW_SIZES: List[int] = [1, 2, 4]  # Focus on these three as requested
 RDMA_TITLES_BASE: Dict[int, str] = {
     102408: "100",
-    204808: "200",
     256008: "250",
     307208: "300",
     409608: "400",
@@ -22,7 +21,6 @@ RDMA_TITLES_BASE: Dict[int, str] = {
     768008: "750",
     921608: "900",
     1024008: "1000",
-    1048584: "10000",
 }
 RDMA_SIZES: List[int] = list(RDMA_TITLES_BASE.keys())
 
@@ -38,7 +36,7 @@ def parse_args() -> argparse.Namespace:
         "--topologies",
         type=int,
         nargs="+",
-        default=[4],
+        default=[12],
         choices=[1, 4, 12],
         help="Topology sizes to include (1=single link, 4=multi-client, 12=tree). Default: 1.",
     )

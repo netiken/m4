@@ -20,9 +20,10 @@ class KvLiteServerApp : public Application
     KvLiteServerApp();
     virtual ~KvLiteServerApp();
 
-    // Compute server overhead based on window size (models server-side queuing)
+    // Get calibrated server overhead (now using median-based timing)
     uint64_t GetServerOverhead() const {
-        return kvlite::KVL_SERVER_OVERHEAD_BASE_NS + (m_windowSize * kvlite::KVL_SERVER_OVERHEAD_PER_WINDOW_NS);
+        // All windows use same 90μs to match real testbed median UD time
+        return kvlite::KVL_OVERHEAD_WINDOW_1;  // 90μs for all windows
     }
 
     // Hook: user handles request and decides response size/behavior
