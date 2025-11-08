@@ -12,7 +12,6 @@ from typing import Dict, List
 WINDOW_SIZES: List[int] = [1, 2, 4] # 8, 12, 16
 RDMA_TITLES_BASE: Dict[int, str] = {
     102408: "100",
-    204808: "200",
     256008: "250",
     307208: "300",
     409608: "400",
@@ -21,7 +20,6 @@ RDMA_TITLES_BASE: Dict[int, str] = {
     768008: "750",
     921608: "900",
     1024008: "1000",
-    1048584: "10000",
 }
 RDMA_SIZES: List[int] = list(RDMA_TITLES_BASE.keys())
 

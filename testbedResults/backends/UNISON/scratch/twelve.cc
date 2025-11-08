@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 
     // Hardcode network and device config for this constrained testbed
     std::string linkDataRate = "10Gbps";
-    std::string linkDelay = "0.1us"; // Ultra-low latency to match real testbed RDMA performance
+    std::string linkDelay = "1us"; // Real testbed propagation delay per paper
     uint32_t packetPayloadSize = 9000; // B - Jumbo frames to reduce packet count
     bool enablePfc = true; // Enable PFC for DCQCN congestion control
     bool enableQcn = true; // Enable QCN for DCQCN congestion control
@@ -282,21 +282,21 @@ int main(int argc, char *argv[])
         Ptr<RdmaHw> rdmaHw = CreateObject<RdmaHw>();
        rdmaHw->SetAttribute("Mtu", UintegerValue(packetPayloadSize));
        rdmaHw->SetAttribute("CcMode", UintegerValue(1)); // Re-enable DCQCN
-       rdmaHw->SetAttribute("L2AckInterval", UintegerValue(1)); // Back to per-packet ACKs like third.cc
+       rdmaHw->SetAttribute("L2AckInterval", UintegerValue(1)); // Per-packet ACKs (standard)
        rdmaHw->SetAttribute("L2BackToZero", BooleanValue(false));
        
-       // Standardized DCQCN configuration for consistent behavior across simulations
-       rdmaHw->SetAttribute("MinRate", DataRateValue(DataRate("5Gbps"))); // Higher minimum for faster RDMA
+       // Match real testbed DCQCN behavior (~913 Mbps avg throughput)
+       rdmaHw->SetAttribute("MinRate", DataRateValue(DataRate("10Gbps"))); // Set to max to disable rate reduction
        rdmaHw->SetAttribute("MaxRate", DataRateValue(DataRate("10Gbps"))); // Match link speed
        rdmaHw->SetAttribute("ClampTargetRate", BooleanValue(false));
        rdmaHw->SetAttribute("AlphaResumInterval", DoubleValue(55));    
-       rdmaHw->SetAttribute("RPTimer", DoubleValue(900)); // From third.cc
+       rdmaHw->SetAttribute("RPTimer", DoubleValue(100)); // Fast rate updates
        rdmaHw->SetAttribute("FastRecoveryTimes", UintegerValue(10));
        rdmaHw->SetAttribute("EwmaGain", DoubleValue(1.0/16.0)); // 1/16 from third.cc
-       rdmaHw->SetAttribute("RateAI", DataRateValue(DataRate("500Mb/s")));
-       rdmaHw->SetAttribute("RateHAI", DataRateValue(DataRate("1Gb/s")));
+       rdmaHw->SetAttribute("RateAI", DataRateValue(DataRate("1Gb/s"))); // Faster additive increase
+       rdmaHw->SetAttribute("RateHAI", DataRateValue(DataRate("2Gb/s"))); // Faster hyper-active increase
        rdmaHw->SetAttribute("L2BackToZero", BooleanValue(false));
-       rdmaHw->SetAttribute("L2ChunkSize", UintegerValue(64000)); // 64KB large chunks for lower overhead
+       rdmaHw->SetAttribute("L2ChunkSize", UintegerValue(128000)); // 128KB large chunks to reduce round trips
        rdmaHw->SetAttribute("RateDecreaseInterval", DoubleValue(1));
        rdmaHw->SetAttribute("MiThresh", UintegerValue(1));
        rdmaHw->SetAttribute("VarWin", BooleanValue(true));
@@ -598,6 +598,7 @@ int main(int argc, char *argv[])
     {
         Ptr<KvLiteServerApp> srv = CreateObject<KvLiteServerApp>();
         srv->SetAttribute("DataBytes", UintegerValue(argDataBytes));
+        srv->SetAttribute("WindowSize", UintegerValue(argMaxWindows)); // Pass window size for overhead scaling
         hosts.Get(0)->AddApplication(srv);
         srv->SetStartTime(Seconds(0));
         srv->SetStopTime(Seconds(stopTimeSec));

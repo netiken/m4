@@ -96,11 +96,26 @@ def extract_sequences(events: Sequence[dict], pattern: Sequence[str]) -> List[Li
     return sequences
 
 
-def compute_sequences(flows: Dict[int, List[dict]]) -> List[dict]:
+def compute_sequences(flows: Dict[int, List[dict]], scenario_dir: Path) -> List[dict]:
     """Compute UD/RDMA durations for each grouped request."""
     outputs: List[dict] = []
     dup_counter = collections.defaultdict(int)
-
+    
+    # Extract window size from scenario name (e.g., "1000_2" -> window=2)
+    window_size = 1
+    scenario_name = str(scenario_dir.name)
+    if "_" in scenario_name:
+        try:
+            window_size = int(scenario_name.split("_")[1])
+        except:
+            pass
+    
+    # Compute scaled server overhead (models server-side queuing)
+    # Must match kv-lite-common.h formula
+    SERVER_OVERHEAD_BASE_NS = 500000  # 500μs
+    SERVER_OVERHEAD_PER_WINDOW_NS = 1000000  # 1ms per window
+    SERVER_OVERHEAD_NS = SERVER_OVERHEAD_BASE_NS + (window_size * SERVER_OVERHEAD_PER_WINDOW_NS)
+    
     sorted_items = sorted(flows.items(), key=lambda kv: min(event["t"] for event in kv[1]))
     for reqid, events in sorted_items:
         events_sorted = sorted(events, key=lambda event: event["t"])
@@ -117,11 +132,10 @@ def compute_sequences(flows: Dict[int, List[dict]]) -> List[dict]:
 
         ud_sequences = extract_sequences(events_sorted, ["req_send", "req_recv", "resp_send", "resp_recv"])
         rdma_sequences = extract_sequences(events_sorted, ["rdma_send", "rdma_recv"])
-
+        
         for seq in ud_sequences:
             req_send, req_recv, resp_send, resp_recv = (entry["t"] for entry in seq)
-            # Subtract server overhead to match FlowSim's approach (network-only time)
-            SERVER_OVERHEAD_NS = 50000000  # Must match kv-lite-common.h
+            # Subtract scaled server overhead to get network-only time
             ud_duration = (resp_recv - req_send) - SERVER_OVERHEAD_NS
             suffix = "" if dup_counter[reqid] == 0 else f"-{dup_counter[reqid]}"
             dup_counter[reqid] += 1
@@ -164,7 +178,7 @@ def write_ns3_output(outputs: List[dict], out_path: pathlib.Path) -> None:
 
 
 def detect_default_sweeps_dir(base_dir: pathlib.Path) -> pathlib.Path:
-    candidates = [base_dir / "sweeps_4", base_dir / "sweeps"]
+    candidates = [base_dir / "sweeps_12", base_dir / "sweeps"]
     for candidate in candidates:
         if candidate.is_dir():
             return candidate
@@ -201,7 +215,7 @@ def process_directory(sweeps_dir: pathlib.Path) -> None:
 
         try:
             flows = parse_grouped(grouped_path)
-            outputs = compute_sequences(flows)
+            outputs = compute_sequences(flows, subdir)
             write_ns3_output(outputs, subdir / "ns3_output.txt")
             ns3_written += 1
         except Exception as exc:

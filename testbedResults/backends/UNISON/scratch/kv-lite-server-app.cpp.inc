@@ -22,7 +22,9 @@ TypeId KvLiteServerApp::GetTypeId(void)
         .SetGroupName("Applications")
         .AddConstructor<KvLiteServerApp>()
         .AddAttribute("DataBytes", "Server data response size in bytes (for post-handshake)",
-                      UintegerValue(10240), MakeUintegerAccessor(&KvLiteServerApp::m_defaultResponseBytes), MakeUintegerChecker<uint32_t>());
+                      UintegerValue(10240), MakeUintegerAccessor(&KvLiteServerApp::m_defaultResponseBytes), MakeUintegerChecker<uint32_t>())
+        .AddAttribute("WindowSize", "Client window size (for overhead scaling)",
+                      UintegerValue(1), MakeUintegerAccessor(&KvLiteServerApp::m_windowSize), MakeUintegerChecker<uint32_t>());
     return tid;
 }
 
@@ -67,7 +69,7 @@ void KvLiteServerApp::ProcessReceive(const KvLiteRequest &req)
             rsp.clientNodeId = req.clientNodeId;
             rsp.serverNodeId = req.serverNodeId;
             rsp.responseBytes = kvlite::KVL_SERVER_SMALL_RESP_BYTES;
-            Simulator::Schedule(NanoSeconds(SERVER_OVERHEAD), &KvLiteServerApp::IssueResponse, this, rsp);
+            Simulator::Schedule(NanoSeconds(GetServerOverhead()), &KvLiteServerApp::IssueResponse, this, rsp);
             break;
         }
         case KvLiteMsgType::HANDSHAKE: {

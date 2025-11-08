@@ -126,20 +126,25 @@ void KvLiteClientApp::ProcessReceive(const KvLiteResponse &rsp)
                       << " size=" << rsp.responseBytes << "B"
                       << " client_node_id=" << GetNode()->GetId()
                       << std::endl;
-            // Complete one pipeline; possibly start another
+            // Complete one pipeline; maintain window of m_maxWindows concurrent requests
             m_completedRequests++;
-            if (m_completedRequests < m_maxRequests && m_totalSentRequests < m_maxRequests) {
-            // Fix: Generate truly unique reqIds using global counter
-            uint64_t nextReqId = m_baseReqId + m_reqCounter;
-            m_reqCounter++;
+            
+            // Calculate how many requests are currently in-flight
+            uint32_t inflightCount = m_totalSentRequests - m_completedRequests;
+            
+            // Send new requests to maintain m_maxWindows concurrent requests
+            while (inflightCount < m_maxWindows && m_totalSentRequests < m_maxRequests) {
+                uint64_t nextReqId = m_baseReqId + m_reqCounter;
+                m_reqCounter++;
                 KvLiteRequest next;
-            next.reqId = nextReqId;
+                next.reqId = nextReqId;
                 next.clientNodeId = rsp.clientNodeId;
                 next.serverNodeId = rsp.serverNodeId;
                 next.requestBytes = m_requestBytes;
                 next.responseBytes = 0;
-            next.sendNs = Simulator::Now().GetNanoSeconds() + m_iterDelayNs + kvlite::KVL_CLIENT_SEND_DELAY_NS;
-            Simulator::Schedule(NanoSeconds(m_iterDelayNs + kvlite::KVL_CLIENT_SEND_DELAY_NS), &KvLiteClientApp::IssueRequest, this, next);
+                next.sendNs = Simulator::Now().GetNanoSeconds() + m_iterDelayNs + kvlite::KVL_CLIENT_SEND_DELAY_NS;
+                Simulator::Schedule(NanoSeconds(m_iterDelayNs + kvlite::KVL_CLIENT_SEND_DELAY_NS), &KvLiteClientApp::IssueRequest, this, next);
+                inflightCount++;
             }
             break;
         }

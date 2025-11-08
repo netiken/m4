@@ -20,7 +20,10 @@ class KvLiteServerApp : public Application
     KvLiteServerApp();
     virtual ~KvLiteServerApp();
 
-    static const uint64_t SERVER_OVERHEAD = kvlite::KVL_SERVER_OVERHEAD_NS; // ns
+    // Compute server overhead based on window size (models server-side queuing)
+    uint64_t GetServerOverhead() const {
+        return kvlite::KVL_SERVER_OVERHEAD_BASE_NS + (m_windowSize * kvlite::KVL_SERVER_OVERHEAD_PER_WINDOW_NS);
+    }
 
     // Hook: user handles request and decides response size/behavior
     virtual void ProcessReceive(const KvLiteRequest &req);
@@ -44,6 +47,7 @@ class KvLiteServerApp : public Application
 
   private:
     uint32_t m_defaultResponseBytes = 10240; // the only knob we vary via attribute
+    uint32_t m_windowSize = 1; // client window size (for overhead scaling)
     uint32_t m_defaultDport = 4000; // fixed
     uint32_t m_priorityGroup = 3; // fixed
 
