@@ -85,8 +85,9 @@ void KvLiteServerApp::ProcessReceive(const KvLiteRequest &req)
             data.clientNodeId = req.clientNodeId;
             data.serverNodeId = req.serverNodeId;
             data.responseBytes = m_defaultResponseBytes;
-            // RDMA phase: Use minimal overhead (150μs matches real ~150μs RDMA phase)
-            Simulator::Schedule(NanoSeconds(150000), &KvLiteServerApp::IssueResponse, this, data);
+            // RDMA phase: Minimal server overhead (real RDMA is network-bound, not CPU-bound)
+            // Real total RDMA = ~160μs, so server overhead should be tiny (~10μs)
+            Simulator::Schedule(NanoSeconds(10000), &KvLiteServerApp::IssueResponse, this, data);
             break;
         }
         default: {

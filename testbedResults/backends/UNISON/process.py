@@ -42,6 +42,10 @@ def process_stream_into_groups(stream: Iterable[str], groups: "OrderedDict[str, 
 
 def write_groups(groups: "OrderedDict[str, List[str]]", out_path: pathlib.Path) -> None:
     """Write grouped flow traces to grouped_flows.txt."""
+    # NOTE: We do NOT scale timestamps here because application completion time
+    # depends on concurrency/parallelism, not just sum of individual flows.
+    # Only per-flow RDMA durations are scaled in ns3_output.txt.
+    
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as handle:
         for reqid, lines in groups.items():
@@ -144,7 +148,7 @@ def compute_sequences(flows: Dict[int, List[dict]], scenario_dir: Path) -> List[
 
         for seq in rdma_sequences:
             rdma_send, rdma_recv = (entry["t"] for entry in seq)
-            rdma_duration = rdma_recv - rdma_send  # No scaling - report raw NS3 timing
+            rdma_duration = rdma_recv - rdma_send  # Raw NS3 timing
             suffix = "" if dup_counter[reqid] == 0 else f"-{dup_counter[reqid]}"
             dup_counter[reqid] += 1
             outputs.append(
