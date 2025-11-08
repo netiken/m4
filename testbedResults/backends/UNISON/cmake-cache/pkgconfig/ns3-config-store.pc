@@ -1,0 +1,13 @@
+exec_prefix="/usr/local/bin"
+libdir="/usr/local/lib"
+includedir="/usr/local/include"
+
+Name: ns3-config-store
+Description: 
+URL: 
+Version: 3.39
+Requires:  ns3-core ns3-network
+Requires.private: 
+Cflags: -I"${includedir}"  -I/usr/include/libxml2
+Libs: -L"${libdir}" -lns3.39-config-store-optimized  -lns3.39-core-optimized -lns3.39-network-optimized /usr/lib/x86_64-linux-gnu/libxml2.so
+Libs.private: -L"${libdir}" 

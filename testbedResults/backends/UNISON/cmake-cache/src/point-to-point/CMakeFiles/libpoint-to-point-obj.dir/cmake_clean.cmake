@@ -1,0 +1,41 @@
+file(REMOVE_RECURSE
+  "CMakeFiles/libpoint-to-point-obj.dir/helper/point-to-point-helper.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/helper/point-to-point-helper.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/helper/qbb-helper.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/helper/qbb-helper.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/cn-header.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/cn-header.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/pause-header.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/pause-header.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/pint.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/pint.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/point-to-point-channel.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/point-to-point-channel.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/point-to-point-net-device.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/point-to-point-net-device.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/ppp-header.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/ppp-header.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-channel.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-channel.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-header.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-header.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-net-device.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-net-device.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-remote-channel.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/qbb-remote-channel.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/rdma-driver.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/rdma-driver.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/rdma-hw.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/rdma-hw.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/rdma-queue-pair.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/rdma-queue-pair.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/switch-mmu.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/switch-mmu.cc.o.d"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/switch-node.cc.o"
+  "CMakeFiles/libpoint-to-point-obj.dir/model/switch-node.cc.o.d"
+)
+
+# Per-language clean rules from dependency scanning.
+foreach(lang CXX)
+  include(CMakeFiles/libpoint-to-point-obj.dir/cmake_clean_${lang}.cmake OPTIONAL)
+endforeach()

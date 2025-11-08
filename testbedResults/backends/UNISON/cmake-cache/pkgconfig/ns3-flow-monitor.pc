@@ -1,0 +1,13 @@
+exec_prefix="/usr/local/bin"
+libdir="/usr/local/lib"
+includedir="/usr/local/include"
+
+Name: ns3-flow-monitor
+Description: 
+URL: 
+Version: 3.39
+Requires:  ns3-internet ns3-stats
+Requires.private: 
+Cflags: -I"${includedir}"  -I/usr/include/libxml2
+Libs: -L"${libdir}" -lns3.39-flow-monitor-optimized  -lns3.39-internet-optimized -lns3.39-stats-optimized
+Libs.private: -L"${libdir}" 

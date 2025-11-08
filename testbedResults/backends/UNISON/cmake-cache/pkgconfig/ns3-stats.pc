@@ -1,0 +1,13 @@
+exec_prefix="/usr/local/bin"
+libdir="/usr/local/lib"
+includedir="/usr/local/include"
+
+Name: ns3-stats
+Description: 
+URL: 
+Version: 3.39
+Requires:  ns3-core
+Requires.private: 
+Cflags: -I"${includedir}"  -I/usr/include/libxml2
+Libs: -L"${libdir}" -lns3.39-stats-optimized  -lns3.39-core-optimized
+Libs.private: -L"${libdir}" 

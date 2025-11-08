@@ -1,0 +1,13 @@
+exec_prefix="/usr/local/bin"
+libdir="/usr/local/lib"
+includedir="/usr/local/include"
+
+Name: ns3-point-to-point
+Description: 
+URL: 
+Version: 3.39
+Requires:  ns3-network
+Requires.private: 
+Cflags: -I"${includedir}"  -I/usr/include/libxml2
+Libs: -L"${libdir}" -lns3.39-point-to-point-optimized  -lns3.39-network-optimized
+Libs.private: -L"${libdir}" 
