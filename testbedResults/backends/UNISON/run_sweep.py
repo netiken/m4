@@ -63,6 +63,12 @@ def parse_args() -> argparse.Namespace:
         choices=sorted(TOPOLOGY_TARGETS.keys()),
         help="Topology sizes to include (12=tree). Default: 12.",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=os.cpu_count() or 1,
+        help="Maximum parallel ns-3 runs. Defaults to number of CPUs.",
+    )
     return parser.parse_args()
 
 
@@ -212,37 +218,64 @@ def main() -> None:
         binaries[topo] = ensure_built(ns3_root, topo)
 
     total_runs = len(args.topologies) * len(WINDOW_SIZES) * len(RDMA_SIZES)
-    run_idx = 0
 
+    tasks = []
     for topo in args.topologies:
         binary = binaries[topo]
         results_root = results_roots[topo]
         for window in WINDOW_SIZES:
             for rdma in RDMA_SIZES:
-                run_idx += 1
+                run_idx = len(tasks) + 1
                 title = RDMA_TITLES_BASE.get(rdma, str(rdma))
                 run_tag = f"{title}_{window}"
                 run_dir = results_root / run_tag
                 run_dir.mkdir(parents=True, exist_ok=True)
-
-                print(f"[run {run_idx}/{total_runs}] topo {topo} -> {run_tag}")
-
-                clean_logs(ns3_root)
-
                 stdout_path = run_dir / "stdout.txt"
                 stderr_path = run_dir / "stderr.txt"
-                rc = run_cmd(
-                    [str(binary.resolve()), f"--maxWindows={window}", f"--dataBytes={rdma}"],
-                    cwd=ns3_root,
-                    stdout_path=stdout_path,
-                    stderr_path=stderr_path,
+                tasks.append(
+                    (
+                        run_idx,
+                        total_runs,
+                        topo,
+                        run_tag,
+                        binary,
+                        window,
+                        rdma,
+                        stdout_path,
+                        stderr_path,
+                        run_dir,
+                    )
                 )
-                if rc != 0:
-                    print(f"  -> non-zero exit {rc}; check {stderr_path}")
 
-                collect_outputs(ns3_root, run_dir)
+    def _run_task(task: tuple[int, int, int, str, pathlib.Path, int, int, pathlib.Path, pathlib.Path, pathlib.Path]) -> None:
+        run_idx, total, topo, run_tag, binary, window, rdma, stdout_path, stderr_path, run_dir = task
+        print(f"[run {run_idx}/{total}] topo {topo} -> {run_tag}")
+        clean_logs(ns3_root)
+        rc = run_cmd(
+            [str(binary.resolve()), f"--maxWindows={window}", f"--dataBytes={rdma}"],
+            cwd=ns3_root,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+        )
+        if rc != 0:
+            print(f"  -> non-zero exit {rc}; check {stderr_path}")
+        collect_outputs(ns3_root, run_dir)
 
-                time.sleep(0.1)
+    max_workers = max(1, args.jobs)
+    if max_workers == 1:
+        for task in tasks:
+            _run_task(task)
+    else:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_run_task, task): task for task in tasks}
+            for future in as_completed(futures):
+                try:
+                    future.result()
+                except Exception as exc:
+                    run_idx, total, topo, run_tag, *_ = futures[future]
+                    print(f"[run {run_idx}/{total}] topo {topo} -> {run_tag} crashed: {exc}", file=sys.stderr)
 
     print("[done] Results saved to:")
     for topo, root in results_roots.items():

@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
     cmd.Parse(argc, argv);
 
     // Treat the RDMA payload size as the effective MTU so a single chunk carries the data.
-    packetPayloadSize = std::max<uint32_t>(argDataBytes, 9000u);
+    packetPayloadSize = 9000u;
     
     // 🎯 SECOND-GEN TUNING: achieve ~2× faster RDMA without post-processing
     // Insight: NS3 packet-level RDMA wastes time on frequent ACKs and conservative rates.

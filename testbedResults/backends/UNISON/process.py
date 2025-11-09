@@ -128,7 +128,10 @@ def compute_sequences(flows: Dict[int, List[dict]], scenario_dir: Path) -> List[
             client = 0
 
         ud_sequences = extract_sequences(events_sorted, ["req_send", "req_recv", "resp_send", "resp_recv"])
-        rdma_sequences = extract_sequences(events_sorted, ["rdma_send", "rdma_recv"])
+        # ⚠️ CRITICAL FIX: RDMA duration must match FlowSim's calculation!
+        # FlowSim: rdma_dur = rdma_recv - handshake_send (includes handshake transit)
+        # NS3 must do the same for fair comparison
+        rdma_sequences = extract_sequences(events_sorted, ["hand_send", "rdma_recv"])
         
         for seq in ud_sequences:
             req_send, req_recv, resp_send, resp_recv = (entry["t"] for entry in seq)
@@ -147,8 +150,9 @@ def compute_sequences(flows: Dict[int, List[dict]], scenario_dir: Path) -> List[
             )
 
         for seq in rdma_sequences:
-            rdma_send, rdma_recv = (entry["t"] for entry in seq)
-            rdma_duration = rdma_recv - rdma_send  # Raw NS3 timing
+            hand_send, rdma_recv = (entry["t"] for entry in seq)
+            # ⚠️ Match FlowSim: RDMA duration = rdma_recv - handshake_send
+            rdma_duration = rdma_recv - hand_send
             suffix = "" if dup_counter[reqid] == 0 else f"-{dup_counter[reqid]}"
             dup_counter[reqid] += 1
             outputs.append(

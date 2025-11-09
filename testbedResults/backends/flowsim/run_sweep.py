@@ -85,10 +85,6 @@ def collect_outputs(src_dir: pathlib.Path, dest_dir: pathlib.Path) -> None:
 
 def results_dir_for_topology(base: pathlib.Path, topo: int) -> pathlib.Path:
     """Return the sweep directory name that matches downstream tooling."""
-    if topo == 1:
-        return base / "sweeps"
-    if topo == 4:
-        return base / "sweeps_4"
     if topo == 12:
         return base / "sweeps_12"
     raise ValueError(f"Unsupported topology {topo}")
