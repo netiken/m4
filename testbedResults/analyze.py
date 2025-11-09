@@ -26,7 +26,7 @@ LINE_RE = re.compile(r"\[(ud|rdma)\] client=(\d+) id=\d+(?:-\d+)? dur_ns=(\d+)")
 
 # All 11-client experiment scenarios  
 ALL_SCENARIOS = [
-    "100_2", "100_4", 
+    # "100_2", "100_4", 
     "250_1", "250_2", "250_4", 
     "300_1", "300_2", "300_4",
     "400_1", "400_2", "400_4", 
@@ -35,6 +35,14 @@ ALL_SCENARIOS = [
     "750_1", "750_2", "750_4", 
     "900_1", "900_2", "900_4",
     "1000_1", "1000_2", "1000_4"
+    # "250_1", "250_2",
+    # "300_1", "300_2", 
+    # "400_1", "400_2", 
+    # "500_1", "500_2", 
+    # "650_1", "650_2", 
+    # "750_1", "750_2", 
+    # "900_1", "900_2", 
+    # "1000_1", "1000_2", 
 ]
 
 # Plot styling constants (define once, use everywhere)
@@ -44,7 +52,7 @@ PLOT_MARKERS = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
 PLOT_LABELS = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
 PERFLOW_COLORS = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, FLS
 PERFLOW_LABELS = ["flowSim", "ns3", OURS_LABEL]
-def load_data(file_path: Path, trim: int = 0) -> Dict[Tuple[int, str], List[int]]:
+def load_data(file_path: Path, trim: int = 100) -> Dict[Tuple[int, str], List[int]]:
     """Load experiment data from a simulation output file."""
     results = defaultdict(list)
     

@@ -634,12 +634,19 @@ int main(int argc, char *argv[])
     }
 
     // Install client apps on client nodes (C1-C11) targeting Server's IP
+    // 🎯 Add client startup jitter to break perfect synchronization
+    Ptr<UniformRandomVariable> startJitter = CreateObject<UniformRandomVariable>();
+    startJitter->SetAttribute("Min", DoubleValue(0.0));
+    startJitter->SetAttribute("Max", DoubleValue(500e-6));  // 0-500μs jitter
+    
     auto installClient = [&](Ptr<Node> node){
         Ptr<KvLiteClientApp> cli = CreateObject<KvLiteClientApp>();
         // Only tunable client knob is MaxWindows (WINDOW_SIZE)
         cli->SetAttribute("MaxWindows", UintegerValue(argMaxWindows));
         node->AddApplication(cli);
-        cli->SetStartTime(Seconds(0));
+        // Add jitter to client start times (models real-world timing variations)
+        double startTime = startJitter->GetValue();
+        cli->SetStartTime(Seconds(startTime));
         cli->SetStopTime(Seconds(stopTimeSec));
     };
     
