@@ -93,7 +93,6 @@ void KvLiteServerApp::ProcessReceive(const KvLiteRequest &req)
                 case 4: efficiencyFactor = 0.5; break;   // Stronger correction
                 default: efficiencyFactor = 0.5; break;
             }
-            double efficiencyFactor = 1.0 / static_cast<double>(m_windowSize);
             data.responseBytes = static_cast<uint32_t>(m_defaultResponseBytes * efficiencyFactor);
             
             // RDMA phase: Minimal server overhead (real RDMA is network-bound, not CPU-bound)

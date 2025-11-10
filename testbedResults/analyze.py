@@ -164,20 +164,18 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
     if base_dir is None:
         base_dir = Path(__file__).parent
     
-    # File paths for each backend
+    # File paths for each backend in eval_test structure
     files = {
-        "real_world": base_dir / "experiments" / "11_clients" / scenario / "real_world.txt",
-        "m4": base_dir / "backends" / "m4" / "sweeps_12" / scenario / "m4_outputv2.txt", 
-        "flowsim": base_dir / "backends" / "flowsim" / "sweeps_12" / scenario / "flowsim_output.txt",
-        "ns3": base_dir / "backends" / "UNISON" / "sweeps_12" / scenario / "ns3_output.txt"
+        "real_world": base_dir / "eval_test" / "testbed" / scenario / "real_world.txt",
+        "flowsim": base_dir / "eval_test" / "flowsim" / scenario / "flowsim_output.txt",
+        "ns3": base_dir / "eval_test" / "ns3" / scenario / "ns3_output.txt"
     }
     
     # Directory paths for timestamp computation
     dirs = {
-        "real_world": base_dir / "experiments" / "11_clients" / scenario,
-        "m4": base_dir / "backends" / "m4" / "sweeps_12" / scenario,
-        "flowsim": base_dir / "backends" / "flowsim" / "sweeps_12" / scenario,
-        "ns3": base_dir / "backends" / "UNISON" / "sweeps_12" / scenario
+        "real_world": base_dir / "eval_test" / "testbed" / scenario,
+        "flowsim": base_dir / "eval_test" / "flowsim" / scenario,
+        "ns3": base_dir / "eval_test" / "ns3" / scenario
     }
     
     # Load data from all backends
