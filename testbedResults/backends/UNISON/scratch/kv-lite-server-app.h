@@ -20,14 +20,8 @@ class KvLiteServerApp : public Application
     KvLiteServerApp();
     virtual ~KvLiteServerApp();
 
-    // 🎯 Get window-scaled server overhead (empirically measured)
     uint64_t GetServerOverhead() const {
-        switch (m_windowSize) {
-            case 1: return kvlite::KVL_OVERHEAD_WINDOW_1;  // 87μs
-            case 2: return kvlite::KVL_OVERHEAD_WINDOW_2;  // 2.89ms
-            case 4: return kvlite::KVL_OVERHEAD_WINDOW_4;  // 4.31ms
-            default: return kvlite::KVL_OVERHEAD_WINDOW_1;
-        }
+        return kvlite::KVL_OVERHEAD_NS;  // 87μs
     }
 
     // Hook: user handles request and decides response size/behavior

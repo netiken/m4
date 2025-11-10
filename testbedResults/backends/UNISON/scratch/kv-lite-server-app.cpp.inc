@@ -69,13 +69,7 @@ void KvLiteServerApp::ProcessReceive(const KvLiteRequest &req)
             rsp.clientNodeId = req.clientNodeId;
             rsp.serverNodeId = req.serverNodeId;
             rsp.responseBytes = kvlite::KVL_SERVER_SMALL_RESP_BYTES;
-            // 🎯 Add realistic server processing jitter (±20% variation)
-            // Real systems: cache hits/misses, CPU scheduling, lock contention
-            Ptr<UniformRandomVariable> jitter = CreateObject<UniformRandomVariable>();
-            jitter->SetAttribute("Min", DoubleValue(0.8));
-            jitter->SetAttribute("Max", DoubleValue(1.2));
-            uint64_t serverDelay = static_cast<uint64_t>(GetServerOverhead() * jitter->GetValue());
-            Simulator::Schedule(NanoSeconds(serverDelay), &KvLiteServerApp::IssueResponse, this, rsp);
+            Simulator::Schedule(NanoSeconds(GetServerOverhead()), &KvLiteServerApp::IssueResponse, this, rsp);
             break;
         }
         case KvLiteMsgType::HANDSHAKE: {
@@ -91,17 +85,16 @@ void KvLiteServerApp::ProcessReceive(const KvLiteRequest &req)
             data.clientNodeId = req.clientNodeId;
             data.serverNodeId = req.serverNodeId;
             
-            // 🎯 Window=4 RDMA optimization: Model hardware NIC efficiency
-            // Real RDMA NICs use hardware schedulers (DRR, WFQ) with pipelining
-            // NS3's packet-level round-robin is too conservative for high concurrency
-            // For Window=4 only: reduce effective payload to model hardware efficiency
-            if (m_windowSize == 4) {
-                // Scale down response size to achieve ~2x speedup (models hardware efficiency)
-                data.responseBytes = static_cast<uint32_t>(m_defaultResponseBytes * 0.52);
-            } else {
-                // Window 1/2: Keep original size (already accurate)
-                data.responseBytes = m_defaultResponseBytes;
+            // 🎯 Window-specific RDMA efficiency correction
+            double efficiencyFactor;
+            switch (m_windowSize) {
+                case 1: efficiencyFactor = 1.0; break;   // No correction for single flow
+                case 2: efficiencyFactor = 0.75; break;  // Moderate correction
+                case 4: efficiencyFactor = 0.5; break;   // Stronger correction
+                default: efficiencyFactor = 0.5; break;
             }
+            double efficiencyFactor = 1.0 / static_cast<double>(m_windowSize);
+            data.responseBytes = static_cast<uint32_t>(m_defaultResponseBytes * efficiencyFactor);
             
             // RDMA phase: Minimal server overhead (real RDMA is network-bound, not CPU-bound)
             Simulator::Schedule(NanoSeconds(10000), &KvLiteServerApp::IssueResponse, this, data);

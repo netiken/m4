@@ -21,16 +21,7 @@ namespace kvlite {
     static const uint32_t KVL_DEFAULT_MAX_WINDOWS = 1;
     static const uint32_t KVL_HANDSHAKE_REQ_BYTES = 10;
     static const uint32_t KVL_SERVER_SMALL_RESP_BYTES = 41;
-    // 🎯 Window-scaled server overhead (empirically measured from real testbed)
-    // Real testbed shows server overhead INCREASES with window size due to:
-    //   - Queueing delays
-    //   - Cache contention
-    //   - Lock contention
-    //   - CPU scheduler overhead
-    // These values are P50 from real testbed measurements:
-    static const uint64_t KVL_OVERHEAD_WINDOW_1 = 87000;    // 87μs (baseline)
-    static const uint64_t KVL_OVERHEAD_WINDOW_2 = 2890000;  // 2.89ms (30x increase!)
-    static const uint64_t KVL_OVERHEAD_WINDOW_4 = 4310000;  // 4.31ms (50x increase!)
+    static const uint64_t KVL_OVERHEAD_NS = 87000;  // 87μs server processing overhead
     static const uint32_t KVL_CLIENT_BASE_SPORT = 10000;
     static const uint32_t KVL_SERVER_BASE_SPORT = 10001;
     static const uint32_t KVL_SERVER_BASE_IP = 0x0b000001; // 11.0.0.1 (matches node_id_to_ip host octet)

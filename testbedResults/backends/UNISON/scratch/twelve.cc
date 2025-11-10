@@ -72,34 +72,8 @@ int main(int argc, char *argv[])
     cmd.AddValue("dataBytes", "Server data response size in bytes (for post-handshake)", argDataBytes);
     cmd.Parse(argc, argv);
 
-    // Treat the RDMA payload size as the effective MTU so a single chunk carries the data.
+    // Use standard packet payload size (9KB jumbo frames)
     packetPayloadSize = 9000u;
-    
-    // 🎯 SECOND-GEN TUNING: achieve ~2× faster RDMA without post-processing
-    // Insight: NS3 packet-level RDMA wastes time on frequent ACKs and conservative rates.
-    // Tactics:
-    //   • Huge Layer-2 chunks so the whole RDMA payload ships in one chunk
-    //   • Practically disable L2 ACKs (ack only every multi-MB of progress)
-    //   • Give DCQCN a generous starting rate headroom
-    //   • Slightly shrink propagation delays to mimic NIC pipelining
-    uint64_t l2ChunkSize = 10000000;   // 10 MB
-    uint32_t l2AckInterval = 2000000;  // 2 MB ( >> payload, keeps ACKs rare)
-    double targetUtil = 0.9999;        // Near-ideal utilisation
-    std::string minRate = "25Gbps";    // Start aggressive to offset simulator overhead
-    double linkDelayMultiplier = 0.02; // 1µs → 20ns per hop
-    
-    // Scale for higher windows (even more aggressive)
-    if (argMaxWindows >= 4) {
-        l2ChunkSize = 20000000;        // 20 MB for window 4+
-        l2AckInterval = 4000000;       // 4 MB
-        minRate = "35Gbps";            // Even faster convergence for heavy windows
-        linkDelayMultiplier = 0.01;    // 10ns per-hop latency
-    }
-    
-    // Apply link delay scaling to model faster real-world hardware
-    std::ostringstream delayStream;
-    delayStream << (1.0 * linkDelayMultiplier) << "us";
-    linkDelay = delayStream.str();
 
     // Enable DCQCN congestion control: PFC + QCN required
     Config::SetDefault("ns3::QbbNetDevice::PauseTime", UintegerValue(0)); // Disable pause frame timer (but PFC still enabled)  
@@ -309,30 +283,15 @@ int main(int argc, char *argv[])
     allNodes.Add(switches);
     for (uint32_t i = 0; i < allNodes.GetN(); i++){
         Ptr<RdmaHw> rdmaHw = CreateObject<RdmaHw>();
-       rdmaHw->SetAttribute("Mtu", UintegerValue(packetPayloadSize));
-       rdmaHw->SetAttribute("CcMode", UintegerValue(1)); // DCQCN enabled
-       rdmaHw->SetAttribute("L2AckInterval", UintegerValue(l2AckInterval)); // 🎯 KEY FIX: Reduce ACK frequency
-       rdmaHw->SetAttribute("L2BackToZero", BooleanValue(false));
-       
-       // Window-specific DCQCN tuning for best per-flow accuracy
-       rdmaHw->SetAttribute("MinRate", DataRateValue(DataRate(minRate))); // Aggressive ramp-up
-       rdmaHw->SetAttribute("MaxRate", DataRateValue(DataRate("40Gbps"))); // Allow transient overshoot for calibration
-       rdmaHw->SetAttribute("ClampTargetRate", BooleanValue(false));
-       rdmaHw->SetAttribute("AlphaResumInterval", DoubleValue(55));    
-       rdmaHw->SetAttribute("RPTimer", DoubleValue(50)); // Very fast rate updates
-       rdmaHw->SetAttribute("FastRecoveryTimes", UintegerValue(5)); // Faster recovery
-       rdmaHw->SetAttribute("EwmaGain", DoubleValue(1.0/8.0)); // More aggressive EWMA
-       rdmaHw->SetAttribute("RateAI", DataRateValue(DataRate("2Gb/s"))); // Much faster additive increase
-       rdmaHw->SetAttribute("RateHAI", DataRateValue(DataRate("5Gb/s"))); // Much faster hyper-active increase
-       rdmaHw->SetAttribute("L2BackToZero", BooleanValue(false));
-       rdmaHw->SetAttribute("L2ChunkSize", UintegerValue(l2ChunkSize)); // Window-specific chunk size
-       rdmaHw->SetAttribute("RateDecreaseInterval", DoubleValue(1));
-       rdmaHw->SetAttribute("MiThresh", UintegerValue(1));
-       rdmaHw->SetAttribute("VarWin", BooleanValue(true));
-       rdmaHw->SetAttribute("FastReact", BooleanValue(true)); // Important for performance
-       rdmaHw->SetAttribute("MultiRate", BooleanValue(true)); // Important for performance
-       rdmaHw->SetAttribute("SampleFeedback", BooleanValue(false));
-       rdmaHw->SetAttribute("TargetUtil", DoubleValue(targetUtil)); // Window-specific target utilization
+        rdmaHw->SetAttribute("Mtu", UintegerValue(packetPayloadSize));
+        rdmaHw->SetAttribute("CcMode", UintegerValue(1)); // DCQCN enabled
+        rdmaHw->SetAttribute("L2BackToZero", BooleanValue(false));
+        
+        // Standard DCQCN parameters (no aggressive tuning)
+        rdmaHw->SetAttribute("VarWin", BooleanValue(true));
+        rdmaHw->SetAttribute("FastReact", BooleanValue(true));
+        rdmaHw->SetAttribute("MultiRate", BooleanValue(true));
+        rdmaHw->SetAttribute("SampleFeedback", BooleanValue(false));
 
         Ptr<RdmaDriver> rdma = CreateObject<RdmaDriver>();
         rdma->SetNode(allNodes.Get(i));
@@ -634,25 +593,12 @@ int main(int argc, char *argv[])
     }
 
     // Install client apps on client nodes (C1-C11) targeting Server's IP
-    // 🎯 Add client startup jitter to break perfect synchronization
-    Ptr<UniformRandomVariable> startJitter = CreateObject<UniformRandomVariable>();
-    startJitter->SetAttribute("Min", DoubleValue(0.0));
-    startJitter->SetAttribute("Max", DoubleValue(500e-6));  // 0-500μs jitter
-    
-    auto installClient = [&](Ptr<Node> node){
-        Ptr<KvLiteClientApp> cli = CreateObject<KvLiteClientApp>();
-        // Only tunable client knob is MaxWindows (WINDOW_SIZE)
-        cli->SetAttribute("MaxWindows", UintegerValue(argMaxWindows));
-        node->AddApplication(cli);
-        // Add jitter to client start times (models real-world timing variations)
-        double startTime = startJitter->GetValue();
-        cli->SetStartTime(Seconds(startTime));
-        cli->SetStopTime(Seconds(stopTimeSec));
-    };
-    
-    // Install on client nodes (C1-C11 only, not T)
     for (uint32_t i = 1; i < 12; i++){
-        installClient(hosts.Get(i));
+        Ptr<KvLiteClientApp> cli = CreateObject<KvLiteClientApp>();
+        cli->SetAttribute("MaxWindows", UintegerValue(argMaxWindows));
+        hosts.Get(i)->AddApplication(cli);
+        cli->SetStartTime(Seconds(0));
+        cli->SetStopTime(Seconds(stopTimeSec));
     }
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();

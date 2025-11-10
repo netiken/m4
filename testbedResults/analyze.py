@@ -52,7 +52,7 @@ PLOT_MARKERS = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
 PLOT_LABELS = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
 PERFLOW_COLORS = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, FLS
 PERFLOW_LABELS = ["flowSim", "ns3", OURS_LABEL]
-def load_data(file_path: Path, trim: int = 100) -> Dict[Tuple[int, str], List[int]]:
+def load_data(file_path: Path, trim: int = 0) -> Dict[Tuple[int, str], List[int]]:
     """Load experiment data from a simulation output file."""
     results = defaultdict(list)
     
@@ -452,7 +452,7 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
     plt.grid(True, linestyle="--", alpha=0.6)  # Exact original grid style
     plt.legend(fontsize=18, loc=4)  # loc=4 is lower right, exact original style
     plt.tight_layout()
-    
+    plt.xlim(0, 1000)
     plt.savefig(results_dir / 'm4-testbed-perflow.png', dpi=300, bbox_inches='tight')
     plt.close()
     
