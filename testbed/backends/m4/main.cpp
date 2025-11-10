@@ -130,7 +130,8 @@ static std::shared_ptr<Topology> g_topology;
 
 // ======================== ML Pipeline State Variables ========================
 // All ML state tensors for LSTM+GNN network simulation (from inference_old)
-torch::Device device(torch::kCUDA, 0);
+// GPU ID will be set from command-line argument (default: 0)
+torch::Device device(torch::kCUDA, 0);  // Will be updated in main() if gpu_id argument provided
 
 // Model components
 torch::jit::script::Module lstmcell_time, lstmcell_rate;
@@ -182,9 +183,15 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
 
 void setup_m4(torch::Device device) {
     if (!torch::cuda::is_available()) {
-        std::cerr << "[ERROR] CUDA is not available!" << std::endl;
-        return;
+        std::cerr << "[ERROR] CUDA is not available! M4 requires GPU for ML inference." << std::endl;
+        std::cerr << "Please ensure:" << std::endl;
+        std::cerr << "  1. PyTorch was installed with CUDA support: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118" << std::endl;
+        std::cerr << "  2. CUDA toolkit is installed: nvidia-smi should work" << std::endl;
+        std::cerr << "  3. CMake built with CUDA enabled (Torch_USE_CUDA=ON)" << std::endl;
+        std::exit(1);  // Exit instead of silent failure
     }
+    
+    std::cout << "[INFO] CUDA available! Using " << torch::cuda::device_count() << " GPU(s)" << std::endl;
 
     // Disable gradient calculations
     torch::NoGradGuard no_grad;
@@ -877,6 +884,20 @@ int main(int argc, char *argv[]) {
         } else {
             std::cerr << "[warn] Unsupported topology argument " << topo_arg
                       << "; defaulting to 12-node topology.\n";
+        }
+    }
+    
+    // GPU ID argument (argv[4]) - for multi-GPU systems
+    if (argc >= 5) {
+        int gpu_id = std::atoi(argv[4]);
+        if (gpu_id >= 0 && gpu_id < torch::cuda::device_count()) {
+            device = torch::Device(torch::kCUDA, gpu_id);
+            std::cout << "[INFO] Using GPU " << gpu_id << std::endl;
+        } else {
+            std::cerr << "[WARN] Invalid GPU ID " << gpu_id 
+                      << " (available: 0-" << torch::cuda::device_count() - 1 
+                      << "). Using GPU 0." << std::endl;
+            device = torch::Device(torch::kCUDA, 0);
         }
     }
     // Mirror flowsim: run HERD-only mode when not enough args; else run ML+HERD

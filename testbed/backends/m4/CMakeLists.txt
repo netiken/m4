@@ -45,14 +45,9 @@ set(CMAKE_PREFIX_PATH "${TORCH_CMAKE_DIR}")
 set(Torch_DIR "${TORCH_CMAKE_DIR}")
 message(STATUS "Found LibTorch at: ${TORCH_CMAKE_DIR}")
 
-# Ensure we do not attempt to use CUDA when building with LibTorch.
-set(Torch_USE_CUDA OFF CACHE BOOL "Disable CUDA for Torch" FORCE)
-set(CAFFE2_USE_CUDA OFF CACHE BOOL "Disable CUDA for Caffe2" FORCE)
-set(USE_CUDA OFF CACHE BOOL "Disable CUDA globally" FORCE)
-set(TORCH_CUDA_ARCH_LIST "" CACHE STRING "Disable CUDA architecture list" FORCE)
-set(CMAKE_CUDA_ARCHITECTURES 80 CACHE STRING "Default CUDA architectures to avoid auto-detection" FORCE)
-
-# Find the Torch package
+# Find the Torch package (will auto-detect CUDA support from PyTorch installation)
+# M4 uses GPU for PyTorch model inference - see main.cpp line 133: torch::Device device(torch::kCUDA, 0)
+# Ensure PyTorch was installed with CUDA: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 find_package(Torch REQUIRED)
 
 # Add shared library target

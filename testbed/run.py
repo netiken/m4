@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List
@@ -251,11 +252,15 @@ class NS3Backend:
 class M4Backend:
     """M4 (ML-enhanced) backend"""
     
-    def __init__(self):
+    def __init__(self, gpu_ids: list = None):
         self.name = "m4"
         self.backend_dir = BACKENDS_DIR / "m4"
         self.results_dir = ROOT_DIR / "eval_test" / "m4"
         self.binary_path = self.backend_dir / "build" / "no_flowsim"
+        self._file_lock = threading.Lock()  # Lock to prevent concurrent file access
+        # Support multiple GPUs - assign tasks round-robin to available GPUs
+        self.gpu_ids = gpu_ids if gpu_ids else [0]  # Default to GPU 0
+        self._gpu_counter = 0  # Counter for round-robin GPU assignment
             
     def run_sweep(self, jobs: int) -> bool:
         """Run M4 sweep - from backends/m4/run_sweep.py"""
@@ -269,7 +274,13 @@ class M4Backend:
             shutil.rmtree(self.results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
-        print(f"[m4] Running sweep with {jobs} parallel jobs...")
+        # Limit jobs to number of available GPUs (each job needs 1 GPU)
+        max_jobs = len(self.gpu_ids)
+        actual_jobs = min(jobs, max_jobs)
+        if jobs > max_jobs:
+            print(f"[m4] WARNING: Requested {jobs} jobs but only {max_jobs} GPU(s) available. Using {actual_jobs} jobs.")
+        
+        print(f"[m4] Running sweep with {actual_jobs} parallel jobs on GPU(s): {self.gpu_ids}...")
         
         # Generate all sweep tasks
         tasks = []
@@ -284,44 +295,53 @@ class M4Backend:
         def _run_task(task):
             run_tag, window, rdma, run_dir = task
             
-            stdout_path = run_dir / "stdout.txt"
-            stderr_path = run_dir / "stderr.txt"
+            # Assign GPU in round-robin fashion
+            with self._file_lock:
+                gpu_id = self.gpu_ids[self._gpu_counter % len(self.gpu_ids)]
+                self._gpu_counter += 1
             
-            cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12"]
+            # Each GPU can run independently - use temp directory to avoid file conflicts
+            with tempfile.TemporaryDirectory(prefix=f"m4_gpu{gpu_id}_") as tmp_str:
+                tmp_dir = pathlib.Path(tmp_str)
+                
+                stdout_path = run_dir / "stdout.txt"
+                stderr_path = run_dir / "stderr.txt"
+                
+                # Command: binary window rdma topology gpu_id
+                cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12", str(gpu_id)]
+                
+                with stdout_path.open("w") as out, stderr_path.open("w") as err:
+                    # Run in temp directory to avoid file conflicts between parallel jobs
+                    proc = subprocess.run(cmd, cwd=str(tmp_dir), stdout=out, stderr=err, text=True)
+                
+                if proc.returncode != 0:
+                    print(f"  -> [GPU {gpu_id}] non-zero exit {proc.returncode}; check {stderr_path}")
+                
+                # Collect outputs from temp directory
+                for name in ["flows.txt", "server.log", "flowsim_output.txt"]:
+                    src = tmp_dir / name
+                    if src.exists():
+                        shutil.copy2(src, run_dir / name)
+                for log in tmp_dir.glob("client_*.log"):
+                    shutil.copy2(log, run_dir / log.name)
             
-            with stdout_path.open("w") as out, stderr_path.open("w") as err:
-                proc = subprocess.run(cmd, cwd=str(self.backend_dir), stdout=out, stderr=err, text=True)
-            
-            if proc.returncode != 0:
-                print(f"  -> non-zero exit {proc.returncode}; check {stderr_path}")
-            
-            # Collect outputs from backend directory
-            for name in ["flows.txt", "server.log", "flowsim_output.txt"]:
-                src = self.backend_dir / name
-                if src.exists():
-                    shutil.copy2(src, run_dir / name)
-                    src.unlink()  # Clean up after copying
-            for log in self.backend_dir.glob("client_*.log"):
-                shutil.copy2(log, run_dir / log.name)
-                log.unlink()  # Clean up after copying
-            
-            return run_tag
+            return (run_tag, gpu_id)
         
-        # Run tasks in parallel
-        if jobs > 1:
-            with ThreadPoolExecutor(max_workers=jobs) as executor:
+        # Run tasks in parallel (limited to number of GPUs)
+        if actual_jobs > 1:
+            with ThreadPoolExecutor(max_workers=actual_jobs) as executor:
                 futures = {executor.submit(_run_task, task): task for task in tasks}
                 for future in as_completed(futures):
                     try:
-                        run_tag = future.result()
-                        print(f"✓ Completed {run_tag}")
+                        run_tag, gpu_id = future.result()
+                        print(f"✓ Completed {run_tag} on GPU {gpu_id}")
                     except Exception as e:
                         print(f"✗ Failed: {e}", file=sys.stderr)
                         return False
         else:
             for task in tasks:
-                run_tag = _run_task(task)
-                print(f"✓ Completed {run_tag}")
+                run_tag, gpu_id = _run_task(task)
+                print(f"✓ Completed {run_tag} on GPU {gpu_id}")
         
         return True
     
@@ -651,18 +671,31 @@ def main():
         default=32,
         help="Number of parallel jobs (default: 32)"
     )
+    parser.add_argument(
+        "--gpu", "-g",
+        type=str,
+        default="0,1,2,3",
+        help="GPU ID(s) for M4 backend. Single GPU: '0', Multiple GPUs: '0,1,2,3' (default: '0,1,2,3')"
+    )
     
     args = parser.parse_args()
     
+    # Parse GPU IDs
+    try:
+        gpu_ids = [int(x.strip()) for x in args.gpu.split(',')]
+    except ValueError:
+        print(f"❌ Invalid GPU ID format: {args.gpu}. Use format like '0' or '0,1,2'", file=sys.stderr)
+        return 1
+    
     # Select backends
     if args.backend == "all":
-        backends = [NS3Backend(), FlowSimBackend(), M4Backend()]
+        backends = [NS3Backend(), FlowSimBackend(), M4Backend(gpu_ids=gpu_ids)]
     elif args.backend == "ns3":
         backends = [NS3Backend()]
     elif args.backend == "flowsim":
         backends = [FlowSimBackend()]
     else:
-        backends = [M4Backend()]
+        backends = [M4Backend(gpu_ids=gpu_ids)]
     
     # Run each backend
     all_success = True
