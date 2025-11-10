@@ -16,7 +16,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import threading
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -37,6 +36,10 @@ RDMA_TITLES_BASE: Dict[int, str] = {
 }
 RDMA_SIZES: List[int] = list(RDMA_TITLES_BASE.keys())
 
+# Quick test configuration (4 scenarios: small/large RDMA × single/multi window)
+QUICK_WINDOW_SIZES: List[int] = [1, 4]
+QUICK_RDMA_SIZES: List[int] = [102408, 1024008]  # 100KB and 1000KB
+
 # Paths
 ROOT_DIR = pathlib.Path(__file__).resolve().parent
 BACKENDS_DIR = ROOT_DIR / "backends"
@@ -51,7 +54,7 @@ class NS3Backend:
         self.results_dir = ROOT_DIR / "eval_test" / "ns3"
         self.binary_path = self.backend_dir / "build" / "scratch" / "ns3.39-twelve-optimized"
             
-    def run_sweep(self, jobs: int) -> bool:
+    def run_sweep(self, jobs: int, quick: bool = False) -> bool:
         """Run NS3 sweep - from backends/UNISON/run_sweep.py"""
         if not self.binary_path.exists():
             print(f"❌ NS3 binary not found: {self.binary_path}", file=sys.stderr)
@@ -63,12 +66,17 @@ class NS3Backend:
             shutil.rmtree(self.results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
-        print(f"[ns3] Running sweep with {jobs} parallel jobs...")
+        # Select sweep parameters based on quick mode
+        window_sizes = QUICK_WINDOW_SIZES if quick else WINDOW_SIZES
+        rdma_sizes = QUICK_RDMA_SIZES if quick else RDMA_SIZES
+        mode_str = "quick test (4 scenarios)" if quick else f"full sweep ({len(window_sizes) * len(rdma_sizes)} scenarios)"
+        
+        print(f"[ns3] Running {mode_str} with {jobs} parallel jobs...")
         
         # Generate all sweep tasks
         tasks = []
-        for window in WINDOW_SIZES:
-            for rdma in RDMA_SIZES:
+        for window in window_sizes:
+            for rdma in rdma_sizes:
                 title = RDMA_TITLES_BASE[rdma]
                 run_tag = f"{title}_{window}"
                 run_dir = self.results_dir / run_tag
@@ -252,7 +260,7 @@ class NS3Backend:
 class M4Backend:
     """M4 (ML-enhanced) backend"""
     
-    def __init__(self, gpu_ids: list = None):
+    def __init__(self, gpu_ids: list = None, model_dir: str = "models_v6"):
         self.name = "m4"
         self.backend_dir = BACKENDS_DIR / "m4"
         self.results_dir = ROOT_DIR / "eval_test" / "m4"
@@ -261,8 +269,9 @@ class M4Backend:
         # Support multiple GPUs - assign tasks round-robin to available GPUs
         self.gpu_ids = gpu_ids if gpu_ids else [0]  # Default to GPU 0
         self._gpu_counter = 0  # Counter for round-robin GPU assignment
+        self.model_dir = model_dir  # Model directory for ML inference
             
-    def run_sweep(self, jobs: int) -> bool:
+    def run_sweep(self, jobs: int, quick: bool = False) -> bool:
         """Run M4 sweep - from backends/m4/run_sweep.py"""
         if not self.binary_path.exists():
             print(f"❌ M4 binary not found: {self.binary_path}", file=sys.stderr)
@@ -280,12 +289,17 @@ class M4Backend:
         if jobs > max_jobs:
             print(f"[m4] WARNING: Requested {jobs} jobs but only {max_jobs} GPU(s) available. Using {actual_jobs} jobs.")
         
-        print(f"[m4] Running sweep with {actual_jobs} parallel jobs on GPU(s): {self.gpu_ids}...")
+        # Select sweep parameters based on quick mode
+        window_sizes = QUICK_WINDOW_SIZES if quick else WINDOW_SIZES
+        rdma_sizes = QUICK_RDMA_SIZES if quick else RDMA_SIZES
+        mode_str = "quick test (4 scenarios)" if quick else f"full sweep ({len(window_sizes) * len(rdma_sizes)} scenarios)"
+        
+        print(f"[m4] Running {mode_str} with {actual_jobs} parallel jobs on GPU(s): {self.gpu_ids}...")
         
         # Generate all sweep tasks
         tasks = []
-        for window in WINDOW_SIZES:
-            for rdma in RDMA_SIZES:
+        for window in window_sizes:
+            for rdma in rdma_sizes:
                 title = RDMA_TITLES_BASE[rdma]
                 run_tag = f"{title}_{window}"
                 run_dir = self.results_dir / run_tag
@@ -300,30 +314,25 @@ class M4Backend:
                 gpu_id = self.gpu_ids[self._gpu_counter % len(self.gpu_ids)]
                 self._gpu_counter += 1
             
-            # Each GPU can run independently - use temp directory to avoid file conflicts
-            with tempfile.TemporaryDirectory(prefix=f"m4_gpu{gpu_id}_") as tmp_str:
-                tmp_dir = pathlib.Path(tmp_str)
-                
-                stdout_path = run_dir / "stdout.txt"
-                stderr_path = run_dir / "stderr.txt"
-                
-                # Command: binary window rdma topology gpu_id
-                cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12", str(gpu_id)]
-                
-                with stdout_path.open("w") as out, stderr_path.open("w") as err:
-                    # Run in temp directory to avoid file conflicts between parallel jobs
-                    proc = subprocess.run(cmd, cwd=str(tmp_dir), stdout=out, stderr=err, text=True)
-                
-                if proc.returncode != 0:
-                    print(f"  -> [GPU {gpu_id}] non-zero exit {proc.returncode}; check {stderr_path}")
-                
-                # Collect outputs from temp directory
-                for name in ["flows.txt", "server.log", "flowsim_output.txt"]:
-                    src = tmp_dir / name
-                    if src.exists():
-                        shutil.copy2(src, run_dir / name)
-                for log in tmp_dir.glob("client_*.log"):
-                    shutil.copy2(log, run_dir / log.name)
+            # Run M4 directly in the output directory - files written directly to final destination!
+            # No symlinks needed - model_dir and config paths are passed as arguments or resolved by M4
+            
+            stdout_path = run_dir / "stdout.txt"
+            stderr_path = run_dir / "stderr.txt"
+            
+            # Command: binary window rdma topology gpu_id model_dir
+            # Use absolute path for model_dir so M4 can find models regardless of cwd
+            model_path = str((self.backend_dir / self.model_dir).resolve())
+            cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12", str(gpu_id), model_path]
+            
+            with stdout_path.open("w") as out, stderr_path.open("w") as err:
+                # Run directly in output directory - files written directly to final location!
+                proc = subprocess.run(cmd, cwd=str(run_dir), stdout=out, stderr=err, text=True)
+            
+            if proc.returncode != 0:
+                print(f"  -> [GPU {gpu_id}] non-zero exit {proc.returncode}; check {stderr_path}")
+            
+            # No copying needed - files are already in the right place!
             
             return (run_tag, gpu_id)
         
@@ -509,7 +518,7 @@ class FlowSimBackend:
         self.results_dir = ROOT_DIR / "eval_test" / "flowsim"
         self.binary_path = self.backend_dir / "main"
             
-    def run_sweep(self, jobs: int) -> bool:
+    def run_sweep(self, jobs: int, quick: bool = False) -> bool:
         """Run FlowSim sweep - from backends/flowsim/run_sweep.py"""
         if not self.binary_path.exists():
             print(f"❌ FlowSim binary not found: {self.binary_path}", file=sys.stderr)
@@ -521,12 +530,17 @@ class FlowSimBackend:
             shutil.rmtree(self.results_dir)
         self.results_dir.mkdir(parents=True, exist_ok=True)
         
-        print(f"[flowsim] Running sweep with {jobs} parallel jobs...")
+        # Select sweep parameters based on quick mode
+        window_sizes = QUICK_WINDOW_SIZES if quick else WINDOW_SIZES
+        rdma_sizes = QUICK_RDMA_SIZES if quick else RDMA_SIZES
+        mode_str = "quick test (4 scenarios)" if quick else f"full sweep ({len(window_sizes) * len(rdma_sizes)} scenarios)"
+        
+        print(f"[flowsim] Running {mode_str} with {jobs} parallel jobs...")
         
         # Generate all sweep tasks
         tasks = []
-        for window in WINDOW_SIZES:
-            for rdma in RDMA_SIZES:
+        for window in window_sizes:
+            for rdma in rdma_sizes:
                 title = RDMA_TITLES_BASE[rdma]
                 run_tag = f"{title}_{window}"
                 run_dir = self.results_dir / run_tag
@@ -536,28 +550,17 @@ class FlowSimBackend:
         def _run_task(task):
             run_tag, window, rdma, run_dir = task
             
-            # Run inside a temp directory (like original run_sweep.py)
-            with tempfile.TemporaryDirectory(prefix="flowsim_run_") as tmp_str:
-                tmp_dir = pathlib.Path(tmp_str)
-                
-                stdout_path = run_dir / "stdout.txt"
-                stderr_path = run_dir / "stderr.txt"
-                
-                cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12"]
-                
-                with stdout_path.open("w") as out, stderr_path.open("w") as err:
-                    proc = subprocess.run(cmd, cwd=str(tmp_dir), stdout=out, stderr=err, text=True)
-                
-                if proc.returncode != 0:
-                    print(f"  -> non-zero exit {proc.returncode}; check {stderr_path}")
-                
-                # Collect outputs from temp directory
-                for name in ["flows.txt", "server.log", "flowsim_output.txt"]:
-                    src = tmp_dir / name
-                    if src.exists():
-                        shutil.copy2(src, run_dir / name)
-                for log in tmp_dir.glob("client_*.log"):
-                    shutil.copy2(log, run_dir / log.name)
+            stdout_path = run_dir / "stdout.txt"
+            stderr_path = run_dir / "stderr.txt"
+            
+            cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12"]
+            
+            with stdout_path.open("w") as out, stderr_path.open("w") as err:
+                # Run directly in output directory - no copying needed!
+                proc = subprocess.run(cmd, cwd=str(run_dir), stdout=out, stderr=err, text=True)
+            
+            if proc.returncode != 0:
+                print(f"  -> non-zero exit {proc.returncode}; check {stderr_path}")
             
             return run_tag
         
@@ -677,6 +680,17 @@ def main():
         default="0,1,2,3",
         help="GPU ID(s) for M4 backend. Single GPU: '0', Multiple GPUs: '0,1,2,3' (default: '0,1,2,3')"
     )
+    parser.add_argument(
+        "--model-dir", "-m",
+        type=str,
+        default="models_v5",
+        help="Model directory for M4 ML inference (default: 'models_v6')"
+    )
+    parser.add_argument(
+        "--quick", "-q",
+        action="store_true",
+        help="Run quick test with only 4 scenarios (100KB/1000KB × window 1/4) instead of full 27 scenarios"
+    )
     
     args = parser.parse_args()
     
@@ -689,13 +703,13 @@ def main():
     
     # Select backends
     if args.backend == "all":
-        backends = [NS3Backend(), FlowSimBackend(), M4Backend(gpu_ids=gpu_ids)]
+        backends = [NS3Backend(), FlowSimBackend(), M4Backend(gpu_ids=gpu_ids, model_dir=args.model_dir)]
     elif args.backend == "ns3":
         backends = [NS3Backend()]
     elif args.backend == "flowsim":
         backends = [FlowSimBackend()]
     else:
-        backends = [M4Backend(gpu_ids=gpu_ids)]
+        backends = [M4Backend(gpu_ids=gpu_ids, model_dir=args.model_dir)]
     
     # Run each backend
     all_success = True
@@ -704,7 +718,7 @@ def main():
         print(f"[{backend.name}] Running sweep...")
         print(f"{'='*80}\n")
         
-        if not backend.run_sweep(args.jobs):
+        if not backend.run_sweep(args.jobs, quick=args.quick):
             print(f"\n❌ [{backend.name}] Sweep FAILED\n", file=sys.stderr)
             all_success = False
             continue

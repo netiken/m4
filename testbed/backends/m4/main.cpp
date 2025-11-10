@@ -181,7 +181,37 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
 
 // ======================== ML Helper Functions ========================
 
-void setup_m4(torch::Device device) {
+/**
+ * Compute ideal (baseline) flow completion time with no contention.
+ * Includes: propagation delay + transmission time with headers + server overhead.
+ * 
+ * @param flow_size Flow size in bytes
+ * @param n_links Number of links in the path
+ * @return Ideal FCT in nanoseconds
+ */
+static inline float compute_ideal_fct(uint64_t flow_size, int n_links) {
+    constexpr float MTU = 1000.0f;           // Maximum Transmission Unit (bytes)
+    constexpr float HEADER_SIZE = 48.0f;      // Header size per packet (bytes)
+    constexpr float BYTES_TO_NS = 0.8f;       // Transmission rate: 8 bits/byte / 10 Gbps = 0.8 ns/byte
+    constexpr float PROPAGATION_PER_LINK = 1000.0f;  // Propagation delay per link (ns)
+    
+    // Calculate number of packets (ceil division)
+    float num_packets = std::ceil((float)flow_size / MTU);
+    
+    // Total bytes including headers
+    float total_bytes = (float)flow_size + num_packets * HEADER_SIZE;
+    
+    // Transmission time (data + headers)
+    float transmission_ns = total_bytes * BYTES_TO_NS;
+    
+    // Propagation delay across all links
+    float propagation_ns = PROPAGATION_PER_LINK * (float)n_links;
+    
+    // Total ideal FCT: propagation + transmission + server processing
+    return propagation_ns + transmission_ns + SERVER_OVERHEAD_NS;
+}
+
+void setup_m4(torch::Device device, const std::string& model_dir = "models_v6") {
     if (!torch::cuda::is_available()) {
         std::cerr << "[ERROR] CUDA is not available! M4 requires GPU for ML inference." << std::endl;
         std::cerr << "Please ensure:" << std::endl;
@@ -196,10 +226,9 @@ void setup_m4(torch::Device device) {
     // Disable gradient calculations
     torch::NoGradGuard no_grad;
 
-    // Load models
+    // Load models (model_dir passed as parameter)
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "models_v6";  // Use models_v6 (relative path)
         std::cout << "[INFO] Loading models from " << model_dir << std::endl;
         try {
             lstmcell_time = torch::jit::load(model_dir + "/lstmcell_time.pt", device);
@@ -480,7 +509,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             
             sldn_pred = sldn_single[0].item<float>();
             int nlinks_val_int = (int)g_flow_links[flow_id].size();
-            ideal_fct = 3000.0f * (float)nlinks_val_int + (float)flow_size / 1.25f;
+            ideal_fct = compute_ideal_fct(flow_size, nlinks_val_int);
             predicted_fct = sldn_pred * ideal_fct;
         } else if (n_active > 1) {
             // Multiple flows active - use full ML pipeline with contention
@@ -514,7 +543,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             if (current_flow_idx >= 0) {
                 sldn_pred = sldn_all[current_flow_idx].item<float>();
                 int nlinks_cur = (int)g_flow_links[flow_id].size();
-                ideal_fct = 3000.0f * (float)nlinks_cur + (float)flow_size / 1.25f;
+                ideal_fct = compute_ideal_fct(flow_size, nlinks_cur);
                 predicted_fct = sldn_pred * ideal_fct;
             } else {
                 // This should never happen - flow must be in active list
@@ -900,8 +929,16 @@ int main(int argc, char *argv[]) {
             device = torch::Device(torch::kCUDA, 0);
         }
     }
-    // Mirror flowsim: run HERD-only mode when not enough args; else run ML+HERD
-    if (argc < 6) {
+    
+    // Model directory argument (argv[5]) - for testing different models
+    std::string model_dir = "models_v6";  // Default
+    if (argc >= 6) {
+        model_dir = argv[5];
+        std::cout << "[INFO] Using model directory: " << model_dir << std::endl;
+    }
+    // Run ML+HERD simulation (original condition was argc >= 2)
+    // Now we accept up to 6 arguments: window, rdma, topology, gpu_id, model_dir
+    if (argc >= 2) {
         g_event_queue = std::make_shared<EventQueue>();
         Topology::set_event_queue(g_event_queue);
 
@@ -1149,7 +1186,7 @@ int main(int argc, char *argv[]) {
             // Parameters are now initialized per-flow based on flow size (no global defaults needed)
 
             // Load ML models
-            setup_m4(device);
+            setup_m4(device, model_dir);
             
             // Initialize ML state tensors for HERD flows
             int max_herd_flows = 4 * 650 * NUM_CLIENTS; // 4 * 650 operations (request, UD, handshake, RDMA per op)

@@ -45,6 +45,12 @@ ALL_SCENARIOS = [
     # "1000_1", "1000_2", 
 ]
 
+# Quick test scenarios (matches run.py --quick)
+QUICK_SCENARIOS = [
+    "100_1", "100_4",    # 100KB RDMA, window 1 & 4
+    "1000_1", "1000_4"   # 1000KB RDMA, window 1 & 4
+]
+
 # Plot styling constants (define once, use everywhere)
 OURS_LABEL = "FLS"  # Label for M4 in plots (following paper convention)
 PLOT_COLORS = {"real_world": "black", "flowsim": "tab:blue", "ns3": "tab:orange", "m4": "tab:green"}
@@ -396,6 +402,8 @@ def generate_perflow_by_window_plot(all_scenario_results: List[Dict], results_di
         plt.title(f"(b) CDF of per-flow FCT slowdown errors\n(Window Size: {window_size})")
         plt.grid(True, linestyle="--", alpha=0.6)
         plt.legend(fontsize=18, loc=4)
+        plt.xlim(0.5, 1000)
+        plt.xscale('log')
         plt.tight_layout()
         
         filename = f'm4-testbed-perflow-window{window_size}.png'
@@ -452,7 +460,8 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
     plt.grid(True, linestyle="--", alpha=0.6)  # Exact original grid style
     plt.legend(fontsize=18, loc=4)  # loc=4 is lower right, exact original style
     plt.tight_layout()
-    plt.xlim(0, 1000)
+    plt.xlim(0.5, 1000)
+    plt.xscale('log')
     plt.savefig(results_dir / 'm4-testbed-perflow.png', dpi=300, bbox_inches='tight')
     plt.close()
     
@@ -534,17 +543,22 @@ def main():
     parser = argparse.ArgumentParser(description="Analyze M4 network simulation results")
     parser.add_argument("--scenario", help="Analyze specific scenario (e.g., '100_2')")
     parser.add_argument("--no-plots", action="store_true", help="Skip plot generation")
+    parser.add_argument("--quick", "-q", action="store_true", 
+                       help="Analyze only quick test scenarios (100_1, 100_4, 1000_1, 1000_4)")
     args = parser.parse_args()
     
     print("🚀 M4 Network Simulation Results Analyzer")
     print("=" * 50)
     
     if args.scenario:
-        if args.scenario not in ALL_SCENARIOS:
+        if args.scenario not in ALL_SCENARIOS and args.scenario not in QUICK_SCENARIOS:
             print(f"❌ Unknown scenario: {args.scenario}")
-            print(f"Available: {ALL_SCENARIOS}")
+            print(f"Available: {ALL_SCENARIOS + QUICK_SCENARIOS}")
             return
         scenarios = [args.scenario]
+    elif args.quick:
+        scenarios = QUICK_SCENARIOS
+        print("⚡ Quick test mode: analyzing 4 scenarios")
     else:
         scenarios = ALL_SCENARIOS
     
