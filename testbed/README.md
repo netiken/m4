@@ -10,7 +10,7 @@ uv pip install -e .
 
 Build all backends or specific ones:
 ```bash
-# Build both NS3 and FlowSim
+# Build all backends (NS3, FlowSim, M4)
 ./build.sh all
 
 # Build only NS3
@@ -18,6 +18,9 @@ Build all backends or specific ones:
 
 # Build only FlowSim
 ./build.sh flowsim
+
+# Build only M4 (uses .venv for LibTorch)
+./build.sh m4
 ```
 
 ## Run Simulations

@@ -248,6 +248,238 @@ class NS3Backend:
         return True
 
 
+class M4Backend:
+    """M4 (ML-enhanced) backend"""
+    
+    def __init__(self):
+        self.name = "m4"
+        self.backend_dir = BACKENDS_DIR / "m4"
+        self.results_dir = ROOT_DIR / "eval_test" / "m4"
+        self.binary_path = self.backend_dir / "build" / "no_flowsim"
+            
+    def run_sweep(self, jobs: int) -> bool:
+        """Run M4 sweep - from backends/m4/run_sweep.py"""
+        if not self.binary_path.exists():
+            print(f"❌ M4 binary not found: {self.binary_path}", file=sys.stderr)
+            print("Build M4 first: ./build.sh m4", file=sys.stderr)
+            return False
+        
+        # Clean and create output directory
+        if self.results_dir.exists():
+            shutil.rmtree(self.results_dir)
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        
+        print(f"[m4] Running sweep with {jobs} parallel jobs...")
+        
+        # Generate all sweep tasks
+        tasks = []
+        for window in WINDOW_SIZES:
+            for rdma in RDMA_SIZES:
+                title = RDMA_TITLES_BASE[rdma]
+                run_tag = f"{title}_{window}"
+                run_dir = self.results_dir / run_tag
+                run_dir.mkdir(parents=True, exist_ok=True)
+                tasks.append((run_tag, window, rdma, run_dir))
+        
+        def _run_task(task):
+            run_tag, window, rdma, run_dir = task
+            
+            stdout_path = run_dir / "stdout.txt"
+            stderr_path = run_dir / "stderr.txt"
+            
+            cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12"]
+            
+            with stdout_path.open("w") as out, stderr_path.open("w") as err:
+                proc = subprocess.run(cmd, cwd=str(self.backend_dir), stdout=out, stderr=err, text=True)
+            
+            if proc.returncode != 0:
+                print(f"  -> non-zero exit {proc.returncode}; check {stderr_path}")
+            
+            # Collect outputs from backend directory
+            for name in ["flows.txt", "server.log", "flowsim_output.txt"]:
+                src = self.backend_dir / name
+                if src.exists():
+                    shutil.copy2(src, run_dir / name)
+                    src.unlink()  # Clean up after copying
+            for log in self.backend_dir.glob("client_*.log"):
+                shutil.copy2(log, run_dir / log.name)
+                log.unlink()  # Clean up after copying
+            
+            return run_tag
+        
+        # Run tasks in parallel
+        if jobs > 1:
+            with ThreadPoolExecutor(max_workers=jobs) as executor:
+                futures = {executor.submit(_run_task, task): task for task in tasks}
+                for future in as_completed(futures):
+                    try:
+                        run_tag = future.result()
+                        print(f"✓ Completed {run_tag}")
+                    except Exception as e:
+                        print(f"✗ Failed: {e}", file=sys.stderr)
+                        return False
+        else:
+            for task in tasks:
+                run_tag = _run_task(task)
+                print(f"✓ Completed {run_tag}")
+        
+        return True
+    
+    def process_results(self) -> bool:
+        """Process M4 results - from backends/m4/process.py"""
+        if not self.results_dir.exists():
+            print(f"❌ Results directory not found: {self.results_dir}", file=sys.stderr)
+            return False
+        
+        print(f"[m4] Processing results...")
+        
+        CLIENT_LOG_PATTERN = "client_*.log"
+        NUMERIC_FIELDS = {"ts_ns", "id", "clt", "wrkr", "slot", "size", "start_ns", "dur_ns", "wire_bytes"}
+        
+        def parse_line(line):
+            """Parse a line into a dict"""
+            parts = line.strip().split()
+            data = {}
+            if not parts:
+                return data
+            
+            event_token = parts[0]
+            if "=" in event_token:
+                _, event_value = event_token.split("=", 1)
+                data["event"] = event_value
+            
+            for token in parts[1:]:
+                if "=" not in token:
+                    continue
+                key, value = token.split("=", 1)
+                if key in NUMERIC_FIELDS:
+                    try:
+                        data[key] = int(value)
+                    except ValueError:
+                        continue
+                else:
+                    data[key] = value
+            return data
+        
+        def format_event_ns3(event):
+            """Format an event in ns3-style log line"""
+            role_map = {
+                "req_send": "client req_send",
+                "req_recv": "server req_recv",
+                "resp_send": "server resp_send",
+                "resp_recv_ud": "client resp_recv",
+                "hand_send": "client hand_send",
+                "hand_recv": "server hand_recv",
+                "resp_rdma_read": "client rdma_recv",
+                "resp_rdma_send": "server rdma_send",
+                "rdma_send": "server rdma_send",
+                "rdma_recv": "client rdma_recv",
+            }
+            role_event = role_map.get(event.get("event", ""), event.get("event", "event"))
+            size = event.get("size", event.get("wire_bytes", 0))
+            return (
+                f"[{role_event}] t={event.get('ts_ns', 0)} ns reqId={event.get('id', 0)} "
+                f"size={size}B client_node_id={event.get('clt', 0)}"
+            )
+        
+        EVENT_RE = re.compile(r"\[(\w+)\s+([\w_]+)\]\s+t=(\d+)\s+ns\s+reqId=(\d+).*client_node_id=(\d+)")
+        
+        for subdir in sorted(self.results_dir.iterdir()):
+            if not subdir.is_dir():
+                continue
+            
+            # Step 1: Collect events from client logs
+            flows = collections.defaultdict(list)
+            for log_path in sorted(subdir.glob(CLIENT_LOG_PATTERN)):
+                with log_path.open("r") as f:
+                    for raw in f:
+                        if not raw.strip():
+                            continue
+                        event = parse_line(raw)
+                        if not event or "clt" not in event or "id" not in event:
+                            continue
+                        key = (event["clt"], event["id"])
+                        flows[key].append(event)
+            
+            if not flows:
+                continue
+            
+            # Step 2: Write grouped_flows.txt
+            grouped_file = subdir / "grouped_flows.txt"
+            with grouped_file.open("w") as out:
+                for (_, req_id), events in sorted(flows.items(), key=lambda entry: min(event.get("ts_ns", 0) for event in entry[1])):
+                    out.write(f"### reqId={req_id} ###\n")
+                    for event in sorted(events, key=lambda e: e["ts_ns"]):
+                        out.write(format_event_ns3(event) + "\n")
+                    out.write("\n")
+            
+            # Step 3: Parse grouped flows and compute durations
+            parsed_flows = collections.defaultdict(list)
+            with grouped_file.open("r") as f:
+                current_req = None
+                for raw in f:
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    if line.startswith("### reqId="):
+                        try:
+                            current_req = int(line.split("=", 1)[1].split()[0])
+                        except ValueError:
+                            current_req = None
+                        continue
+                    if current_req is None:
+                        continue
+                    match = EVENT_RE.match(line)
+                    if not match:
+                        continue
+                    side, event_name, ts, req_id, client = match.groups()
+                    parsed_flows[current_req].append({
+                        "side": side,
+                        "event": event_name,
+                        "t": int(ts),
+                        "client": int(client),
+                    })
+            
+            # Step 4: Compute UD and RDMA durations
+            outputs = []
+            sorted_items = sorted(parsed_flows.items(), key=lambda kv: min(event["t"] for event in kv[1]))
+            
+            for req_id, events in sorted_items:
+                events_sorted = sorted(events, key=lambda event: event["t"])
+                client = events_sorted[0]["client"] if events_sorted else 0
+                
+                req_send = next((e["t"] for e in events_sorted if e["event"] == "req_send"), None)
+                hand_send = next((e["t"] for e in events_sorted if e["event"] == "hand_send"), None)
+                rdma_recv = next((e["t"] for e in events_sorted if e["event"] == "rdma_recv"), None)
+                
+                if req_send is not None and hand_send is not None:
+                    outputs.append({
+                        "type": "ud",
+                        "client": client,
+                        "id": req_id,
+                        "dur": hand_send - req_send,
+                        "ts": req_send,
+                    })
+                
+                if hand_send is not None and rdma_recv is not None:
+                    outputs.append({
+                        "type": "rdma",
+                        "client": client,
+                        "id": req_id,
+                        "dur": rdma_recv - hand_send,
+                        "ts": hand_send,
+                    })
+            
+            # Sort by timestamp and write m4_output.txt (compatible with analyze.py)
+            outputs.sort(key=lambda entry: entry["ts"])
+            output_file = subdir / "m4_output.txt"
+            with output_file.open("w") as f:
+                for entry in outputs:
+                    f.write(f"[{entry['type']}] client={entry['client']} id={entry['id']} dur_ns={entry['dur']}\n")
+        
+        return True
+
+
 class FlowSimBackend:
     """FlowSim backend"""
     
@@ -410,25 +642,27 @@ def main():
     )
     parser.add_argument(
         "backend",
-        choices=["ns3", "flowsim", "all"],
+        choices=["ns3", "flowsim", "m4", "all"],
         help="Backend to run"
     )
     parser.add_argument(
         "--jobs", "-j",
         type=int,
         default=32,
-        help="Number of parallel jobs for NS3 (default: 32)"
+        help="Number of parallel jobs (default: 32)"
     )
     
     args = parser.parse_args()
     
     # Select backends
     if args.backend == "all":
-        backends = [NS3Backend(), FlowSimBackend()]
+        backends = [NS3Backend(), FlowSimBackend(), M4Backend()]
     elif args.backend == "ns3":
         backends = [NS3Backend()]
-    else:
+    elif args.backend == "flowsim":
         backends = [FlowSimBackend()]
+    else:
+        backends = [M4Backend()]
     
     # Run each backend
     all_success = True

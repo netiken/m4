@@ -12,23 +12,38 @@ set(CMAKE_CXX_FLAGS_RELEASE "-g -O3")
 set(CMAKE_BUILD_TYPE Debug)
 
 
-# Use CONDA_PREFIX to dynamically locate the LibTorch path
+# Locate LibTorch from virtual environment or conda
+# Priority: 1) CONDA_PREFIX env var, 2) Auto-detect .venv in project root
 if(DEFINED ENV{CONDA_PREFIX})
-    set(CONDA_PREFIX $ENV{CONDA_PREFIX})
+    set(PYTHON_ENV_PREFIX $ENV{CONDA_PREFIX})
+    message(STATUS "Using Python environment from CONDA_PREFIX: ${PYTHON_ENV_PREFIX}")
 else()
-    message(FATAL_ERROR "CONDA_PREFIX is not set. Please activate your conda environment.")
+    # Auto-detect .venv in project root (for uv-managed venvs)
+    set(VENV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../.venv")
+    if(EXISTS "${VENV_PATH}")
+        set(PYTHON_ENV_PREFIX "${VENV_PATH}")
+        message(STATUS "Auto-detected virtual environment: ${PYTHON_ENV_PREFIX}")
+    else()
+        get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+        message(FATAL_ERROR "Python environment not found. Please either:\n"
+                            "  1) Activate conda environment, OR\n"
+                            "  2) Install PyTorch in .venv: cd ${PROJECT_ROOT} && uv pip install torch torchvision")
+    endif()
 endif()
 
-# Locate the Torch CMake package relative to the active conda environment.
-file(GLOB TORCH_CMAKE_DIRS "${CONDA_PREFIX}/lib/python*/site-packages/torch/share/cmake/Torch")
+# Locate the Torch CMake package in the Python environment
+file(GLOB TORCH_CMAKE_DIRS "${PYTHON_ENV_PREFIX}/lib/python*/site-packages/torch/share/cmake/Torch")
 if(NOT TORCH_CMAKE_DIRS)
-    message(FATAL_ERROR "Unable to locate the Torch CMake package under ${CONDA_PREFIX}.")
+    get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
+    message(FATAL_ERROR "Unable to locate LibTorch under ${PYTHON_ENV_PREFIX}.\n"
+                        "Install PyTorch: cd ${PROJECT_ROOT} && uv pip install torch torchvision")
 endif()
 list(SORT TORCH_CMAKE_DIRS)
 list(REVERSE TORCH_CMAKE_DIRS)
 list(GET TORCH_CMAKE_DIRS 0 TORCH_CMAKE_DIR)
 set(CMAKE_PREFIX_PATH "${TORCH_CMAKE_DIR}")
 set(Torch_DIR "${TORCH_CMAKE_DIR}")
+message(STATUS "Found LibTorch at: ${TORCH_CMAKE_DIR}")
 
 # Ensure we do not attempt to use CUDA when building with LibTorch.
 set(Torch_USE_CUDA OFF CACHE BOOL "Disable CUDA for Torch" FORCE)
@@ -40,11 +55,6 @@ set(CMAKE_CUDA_ARCHITECTURES 80 CACHE STRING "Default CUDA architectures to avoi
 # Find the Torch package
 find_package(Torch REQUIRED)
 
-# Include directories
-include_directories("${CONDA_PREFIX}/include")
-include_directories(${TORCH_INCLUDE_DIRS})
-#include_directories("/data1/lichenni/projects/per-flow-sim/flowsim/yaml-cpp/build")
-
 # Add shared library target
 #add_library(inference_shared SHARED src/inference.cpp)
 #add_library(flowsim SHARED main.cpp)
@@ -52,7 +62,7 @@ include_directories(${TORCH_INCLUDE_DIRS})
 # Only keep the integrated no_flowsim target - no separate flowsim needed
 
 SET(NOFLOWSIM_SOURCES
-    main_m4_noflowsim.cpp
+    main.cpp
     Device.h
     Device.cpp
     Chunk.h
@@ -86,6 +96,9 @@ target_link_libraries(no_flowsim "${TORCH_LIBRARIES}")
 #add_subdirectory(rapidyaml/ext/c4core)
 add_subdirectory(rapidyaml)
 
+# Include directories AFTER adding subdirectories to avoid polluting subprojects
+target_include_directories(no_flowsim PRIVATE "${PYTHON_ENV_PREFIX}/include")
+target_include_directories(no_flowsim PRIVATE ${TORCH_INCLUDE_DIRS})
 target_include_directories(no_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
 target_include_directories(no_flowsim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rdma_bench)
 target_link_libraries(no_flowsim ryml)

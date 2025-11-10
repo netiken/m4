@@ -85,6 +85,32 @@ function build_flowsim() {
     fi
 }
 
+function build_m4() {
+    print_header "Building M4"
+    
+    cd "$BACKENDS_DIR/m4"
+    
+    print_info "Cleaning previous build..."
+    rm -rf build
+    
+    print_info "Configuring M4 with CMake..."
+    mkdir -p build
+    cd build
+    cmake ..
+    
+    print_info "Building M4..."
+    cmake --build . --target no_flowsim -j$(nproc)
+    
+    # Check if binary exists
+    if [ -f "no_flowsim" ]; then
+        print_success "M4 built successfully!"
+        print_info "Binary: build/no_flowsim"
+    else
+        print_error "M4 build failed - binary not found"
+        return 1
+    fi
+}
+
 # Main script
 case "${1:-all}" in
     ns3)
@@ -93,21 +119,26 @@ case "${1:-all}" in
     flowsim)
         build_flowsim
         ;;
+    m4)
+        build_m4
+        ;;
     all|"")
         build_ns3
         build_flowsim
+        build_m4
         ;;
     *)
-        echo "Usage: $0 [ns3|flowsim|all]"
+        echo "Usage: $0 [ns3|flowsim|m4|all]"
         echo ""
         echo "Examples:"
-        echo "  $0           # Build both"
+        echo "  $0           # Build all backends"
         echo "  $0 ns3       # Build NS3 only"
         echo "  $0 flowsim   # Build FlowSim only"
+        echo "  $0 m4        # Build M4 only"
         exit 1
         ;;
 esac
 
 print_header "Build Complete!"
-print_info "Run sweeps with: python run.py [ns3|flowsim|all] --jobs 32"
+print_info "Run sweeps with: python run.py [ns3|flowsim|m4|all] --jobs 32"
 

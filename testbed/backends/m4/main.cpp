@@ -31,7 +31,7 @@ static uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable response
 // Callback when a request arrives at the server. Immediately send a response.
 // Tunables for extra timing (ns)
 // Disable explicit propagation in main; rely on Topology link latency instead
-static constexpr uint64_t SERVER_OVERHEAD_NS = 10000; // flowsim control-path server delay
+static constexpr uint64_t SERVER_OVERHEAD_NS = 87000; // 87μs server overhead (matches FlowSim & NS3)
 static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
 static constexpr uint64_t STARTUP_DELAY_NS = 0;       // Extra delay between first and second initial sends
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // flowsim control-path client delay
@@ -138,22 +138,18 @@ torch::jit::script::Module lstmcell_time_link, lstmcell_rate_link;
 torch::jit::script::Module gnn_layer_0, gnn_layer_1, gnn_layer_2;
 torch::jit::script::Module output_layer;
 
-// Flow and topology data
-std::vector<int> host_ids;
-std::vector<double> fsize;
-std::vector<double> fct_i;
-std::vector<double> params;
-torch::Tensor fat_tensor;
-torch::Tensor size_tensor;
-torch::Tensor params_tensor;
+// Flow and topology data - removed global params, now stored per-flow
+torch::Tensor flow_params_tensor;  // [max_flows, 13] - parameters for each flow
+// Flow -> path link indices and link index mapping for multi-link topologies
+#include <unordered_map>
+#include <unordered_set>
+static std::unordered_map<long long, int> g_link_index_map; // undirected (min,max) -> idx
+static std::vector<std::vector<int>> g_c2s_link_indices; // per-client link indices (client -> server path)
+static std::vector<std::vector<int>> g_s2c_link_indices; // per-client link indices (server -> client path)
+static std::vector<std::vector<int>> g_flow_links;        // per-flow-id link indices used by that flow
+static int g_n_links_override = -1;                       // computed link count when routes are known
 
-// Link mapping tensors
-torch::Tensor flowid_to_linkid_flat_tensor;
-torch::Tensor flowid_to_linkid_offsets_tensor;
-torch::Tensor flowid_to_nlinks_tensor;
-torch::Tensor edges_flow_ids_tensor;
-torch::Tensor edges_link_ids_tensor;
-torch::Tensor edge_index;
+// Only keep necessary tensors for HERD simulation
 
 // ML state vectors (CRITICAL for LSTM+GNN)
 torch::Tensor h_vec;        // Hidden states for flows
@@ -171,39 +167,23 @@ torch::Tensor res_fct_tensor;
 torch::Tensor res_sldn_tensor;
 torch::Tensor sldn_est;
 
-// Cache and counters
+// Cache and counters for HERD simulation
 static torch::Tensor ones_cache;
 int graph_id_counter = 0;
 int graph_id_cur = 0;
-int flow_id_in_prop = 0;
-int current_flow = 0;
 int n_flows_active = 0;
-int n_flows_arrived = 0;
 int n_flows_completed = 0;
-float time_clock = 0.0f;
-int completed_flow_id = 0;
-int min_idx = 0;
-float flow_arrival_time = 0.0f;
-float flow_completion_time = 0.0f;
-
-// Topology parameters
-int num_per_tor = 0;
-std::vector<std::vector<int>> flowid_to_linkid_offsets;
-std::vector<int> flowid_to_linkid_flat;
 
 // ML prediction service for HERD network simulation
 // Forward declaration for ML-based FCT prediction
 static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(void*), void* ctx);
 
 // ======================== ML Helper Functions ========================
-int get_tor(int flow_id) {
-    return host_ids.at(flow_id) / num_per_tor;
-}
 
 void setup_m4(torch::Device device) {
     if (!torch::cuda::is_available()) {
-        std::cerr << "[WARNING] CUDA is not available, using CPU." << std::endl;
-        device = torch::kCPU;
+        std::cerr << "[ERROR] CUDA is not available!" << std::endl;
+        return;
     }
 
     // Disable gradient calculations
@@ -212,7 +192,8 @@ void setup_m4(torch::Device device) {
     // Load models
     static bool models_loaded = false;
     if (!models_loaded) {
-        const std::string model_dir = "models";
+        const std::string model_dir = "models_v6";  // Use models_v6 (relative path)
+        std::cout << "[INFO] Loading models from " << model_dir << std::endl;
         try {
             lstmcell_time = torch::jit::load(model_dir + "/lstmcell_time.pt", device);
             lstmcell_rate = torch::jit::load(model_dir + "/lstmcell_rate.pt", device);
@@ -254,42 +235,51 @@ void setup_m4(torch::Device device) {
 }
 
 void setup_m4_tensors_for_herd(torch::Device device, int32_t max_flows, int32_t n_links, int32_t h_vec_dim) {
-    auto options_float = torch::TensorOptions().dtype(torch::kFloat32);
-    auto options_int32 = torch::TensorOptions().dtype(torch::kInt32);
-    auto options_bool = torch::TensorOptions().dtype(torch::kBool);
+    auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+    auto options_int32 = torch::TensorOptions().dtype(torch::kInt32).device(device);
+    auto options_bool = torch::TensorOptions().dtype(torch::kBool).device(device);
 
     // Initialize state tensors for HERD flows
-    h_vec = torch::zeros({max_flows, h_vec_dim}, options_float).to(device);
-    z_t_link = torch::zeros({n_links, h_vec_dim}, options_float).to(device);
+    h_vec = torch::zeros({max_flows, h_vec_dim}, options_float);
+    z_t_link = torch::zeros({n_links, h_vec_dim}, options_float);
     
     // Initialize z_t_link as in reference implementation
     auto ar_links = torch::arange(n_links, torch::TensorOptions().dtype(torch::kLong).device(device));
-    z_t_link.index_put_({ar_links, 1}, 1.0f);
-    z_t_link.index_put_({ar_links, 2}, 1.0f);
+    z_t_link.index_put_({ar_links, torch::tensor(1)}, 1.0f);
+    z_t_link.index_put_({ar_links, torch::tensor(2)}, 1.0f);
     
     // Flow tracking
-    flowid_active_mask = torch::zeros({max_flows}, options_bool).to(device);
-    time_last = torch::zeros({max_flows}, options_float).to(device);
-    flow_to_graph_id = torch::full({max_flows}, -1, options_int32).to(device);
+    flowid_active_mask = torch::zeros({max_flows}, options_bool);
+    time_last = torch::zeros({max_flows}, options_float);
+    flow_to_graph_id = torch::full({max_flows}, -1, options_int32);
     
     // Link tracking  
-    link_to_graph_id = torch::full({n_links}, -1, options_int32).to(device);
-    link_to_nflows = torch::zeros({n_links}, options_int32).to(device);
+    link_to_graph_id = torch::full({n_links}, -1, options_int32);
+    link_to_nflows = torch::zeros({n_links}, options_int32);
     
     // Results
-    res_fct_tensor = torch::zeros({max_flows, 2}, options_float).to(device);
-    res_sldn_tensor = torch::zeros({max_flows, 2}, options_float).to(device);
+    res_fct_tensor = torch::zeros({max_flows, 2}, options_float);
+    res_sldn_tensor = torch::zeros({max_flows, 2}, options_float);
+    
+    // Per-flow parameters (13-dimensional parameter vectors)
+    flow_params_tensor = torch::zeros({max_flows, 13}, options_float);
     
     // Cache for efficient operations
-    ones_cache = torch::ones({n_links}, options_int32).to(device);
+    ones_cache = torch::ones({n_links}, options_int32);
     
-    std::cout << "[INFO] M4 tensors initialized for max " << max_flows << " HERD flows\n";
+    std::cout << "[INFO] M4 tensors initialized for max " << max_flows << " HERD flows with per-flow parameters\n";
+    // Prepare per-flow link storage
+    g_flow_links.clear();
+    g_flow_links.resize(max_flows);
 }
 
 // Global flow ID counter for HERD flows
 static int g_herd_flow_id = 0;
 
 // ML prediction service for HERD flows with full LSTM+GNN+state maintenance
+// Forward declare callbacks used for direction detection
+static void on_request_arrival(void* arg);
+static void on_response_arrival(void* arg);
 static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(void*), void* ctx) {
     torch::NoGradGuard no_grad;
     
@@ -305,59 +295,81 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         time_last[flow_id] = current_time;
         n_flows_active++;
         
+        // Determine link path for this flow (direction-dependent)
+        auto* flow_ctx = static_cast<FlowCtx*>(ctx);
+        int cid = flow_ctx->client_id;
+        bool to_server = (callback == (void (*)(void*)) &on_request_arrival);
+        const std::vector<int>& flow_links_vec = to_server ? g_c2s_link_indices[cid] : g_s2c_link_indices[cid];
+        g_flow_links[flow_id] = flow_links_vec;
+        
         // Initialize h_vec for this flow (matching reference implementation)
+        // Use testbed size transformation (matches dataset.py logic with enable_testbed=True)
         float normalized_size = std::log2f((float)flow_size + 1.0f);
         h_vec[flow_id][0] = 1.0f;  // Constant feature
-        h_vec[flow_id][2] = normalized_size;  // Normalized flow size
-        h_vec[flow_id][3] = 6.0f; //1.0f;  // Number of links (1 for HERD)
+        h_vec[flow_id][2] = normalized_size;  // Normalized flow size  
+        h_vec[flow_id][3] = static_cast<float>(g_flow_links[flow_id].size());  // Number of links along path
         
-        // For HERD, create simple topology mapping (client -> server path)
-        // This is a simplified version - in full M4, this comes from topology files
-        std::vector<int> flow_links = {0}; // Single link for simple HERD topology
+        // Set flow-specific parameters based on size (matches dataset.py parameter conditioning)
+        if (flow_size >= 1000) {
+            // Large flows get parameter vector: [1, 1, 1, ..., 1] (13 ones)
+            flow_params_tensor[flow_id] = 1.0f;
+        } else {
+            // Small flows get parameter vector: [0, 0, 0, ..., 0] (13 zeros)  
+            flow_params_tensor[flow_id] = 0.0f;
+        }
         
         // Update link states for this flow
-        auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
-        auto options_int32 = torch::TensorOptions().dtype(torch::kInt32).device(device);
-        
-        // Simulate link assignment (simplified for HERD)
-        torch::Tensor links_tensor = torch::tensor(flow_links, options_int32);
+        auto cpu_int32 = torch::TensorOptions().dtype(torch::kInt32);
+        torch::Tensor links_tensor = torch::from_blob(g_flow_links[flow_id].data(), {(long)g_flow_links[flow_id].size()}, cpu_int32).clone().to(device);
+        if (links_tensor.numel() > 0) {
         link_to_nflows.index_add_(0, links_tensor, ones_cache.slice(0, 0, links_tensor.size(0)));
+        }
         
         // Graph ID assignment (simplified)
         if (graph_id_counter == 0) {
             graph_id_cur = graph_id_counter++;
         }
         flow_to_graph_id[flow_id] = graph_id_cur;
+        if (links_tensor.numel() > 0) {
         link_to_graph_id.index_put_({links_tensor}, graph_id_cur);
+        }
         
-        // Prepare input tensors for ML prediction (using already calculated normalized_size)
-        torch::Tensor size_input = torch::tensor({normalized_size}, options_float);
-        torch::Tensor nlinks_input = torch::tensor({1.0f}, options_float); // Single link
-        torch::Tensor params_input = torch::from_blob(params.data(), {(int)params.size()}, torch::TensorOptions().dtype(torch::kFloat64)).to(torch::kFloat32).to(device);
         
         // PROPER M4 ML PIPELINE: LSTM + GNN + MLP for state updates and prediction
         
-        // Step 1: Update LSTM time states for ALL active flows (parity with inference_old)
-        auto options_int64 = torch::TensorOptions().dtype(torch::kInt64).device(device);
+        // Step 1: Update LSTM time states for ALL active flows
         auto active_flow_indices_time = torch::nonzero(flowid_active_mask).flatten();
         int n_active_time = active_flow_indices_time.size(0);
         if (n_active_time > 0) {
             // Compute elapsed time since last update (ns), then use max delta in μs
+            auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
             auto last_times = time_last.index_select(0, active_flow_indices_time);
             auto dt_ns = (torch::tensor(current_time, options_float) - last_times).view({-1, 1});
             float max_dt_ns = torch::max(dt_ns).item<float>();
             if (max_dt_ns > 0.0f) {
                 auto dt_us = torch::full({n_active_time, 1}, max_dt_ns / 1000.0f, options_float);
                 auto h_vec_time = h_vec.index_select(0, active_flow_indices_time);
-                h_vec_time = lstmcell_time.forward({dt_us, h_vec_time}).toTensor();
+                h_vec_time = lstmcell_time.forward(std::vector<torch::jit::IValue>{dt_us, h_vec_time}).toTensor();
                 h_vec.index_copy_(0, active_flow_indices_time, h_vec_time);
 
-                // Update link time state (single active link: 0)
-                auto link_idx = torch::tensor({(int64_t)0}, options_int64);
+                // Update link time state for all links used by any active flow
+                std::vector<int64_t> union_links;
+                {
+                    std::unordered_set<int64_t> seen;
+                    for (int i = 0; i < n_active_time; i++) {
+                        int fid = active_flow_indices_time[i].item<int>();
+                        for (int l : g_flow_links[fid]) {
+                            if (seen.insert(l).second) union_links.push_back(l);
+                        }
+                    }
+                }
+                if (!union_links.empty()) {
+                    auto link_idx = torch::from_blob(union_links.data(), {(int)union_links.size()}, torch::TensorOptions().dtype(torch::kInt64)).clone().to(device);
                 auto z_link_time = z_t_link.index_select(0, link_idx);
-                auto dt_us_link = torch::full({1, 1}, max_dt_ns / 1000.0f, options_float);
-                z_link_time = lstmcell_time_link.forward({dt_us_link, z_link_time}).toTensor();
+                    auto dt_us_link = torch::full({(int)union_links.size(), 1}, max_dt_ns / 1000.0f, options_float);
+                z_link_time = lstmcell_time_link.forward(std::vector<torch::jit::IValue>{dt_us_link, z_link_time}).toTensor();
                 z_t_link.index_copy_(0, link_idx, z_link_time);
+                }
 
                 // Update time_last for all active flows
                 time_last.index_put_({active_flow_indices_time}, current_time);
@@ -368,46 +380,74 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         if (n_flows_active > 1) { // Only run GNN if multiple active flows
             // Get all active flows
             auto active_flow_indices = torch::nonzero(flowid_active_mask).flatten();
-            auto h_flows_active = h_vec.index_select(0, active_flow_indices); // [n_active, h_dim]
-            auto z_links_active = z_t_link.slice(0, 0, 1); // [1, h_dim] for our single link
-            
-            // Create edge index for GNN (flows connected to link 0)
             int n_active = active_flow_indices.size(0);
-            auto options_int64 = torch::TensorOptions().dtype(torch::kInt64).device(device);
-            torch::Tensor flow_indices = torch::arange(n_active, options_int64);
-            torch::Tensor link_indices = torch::full({n_active}, (int64_t)n_active, options_int64); // Link at position n_active
-            
-            // Bidirectional edges: flow->link and link->flow
-            torch::Tensor edges = torch::cat({
-                torch::stack({flow_indices, link_indices}, 0),
-                torch::stack({link_indices, flow_indices}, 0)
-            }, 1).to(torch::kLong); // [2, 2*n_active], int64 for torch_geometric
+            auto h_flows_active = h_vec.index_select(0, active_flow_indices); // [n_active, h_dim]
+
+            // Build union of active links and map to local indices
+            std::vector<int64_t> union_links;
+            {
+                std::unordered_set<int64_t> seen;
+                for (int i = 0; i < n_active; i++) {
+                    int fid = active_flow_indices[i].item<int>();
+                    for (int l : g_flow_links[fid]) {
+                        if (seen.insert(l).second) union_links.push_back(l);
+                    }
+                }
+            }
+            if (!union_links.empty()) {
+                auto cpu_int64 = torch::TensorOptions().dtype(torch::kInt64);
+                torch::Tensor link_idx_global = torch::from_blob(union_links.data(), {(int)union_links.size()}, cpu_int64).clone().to(device);
+                torch::Tensor z_links_active = z_t_link.index_select(0, link_idx_global);
+
+                // Build bipartite edges: flows [0..n_active-1], links [n_active..n_active+m-1]
+                std::unordered_map<int64_t, int64_t> local_link_pos;
+                for (size_t i = 0; i < union_links.size(); i++) local_link_pos[union_links[i]] = (int64_t)i;
+                std::vector<int64_t> src, dst;
+                for (int i = 0; i < n_active; i++) {
+                    int fid = active_flow_indices[i].item<int>();
+                    for (int l : g_flow_links[fid]) {
+                        auto it = local_link_pos.find(l);
+                        if (it == local_link_pos.end()) continue;
+                        int64_t link_local = (int64_t)n_active + it->second;
+                        src.push_back(i); dst.push_back(link_local); // flow -> link
+                        src.push_back(link_local); dst.push_back(i); // link -> flow
+                    }
+                }
+                torch::Tensor edges = torch::stack({torch::from_blob(src.data(), {(int)src.size()}, cpu_int64).clone().to(device), torch::from_blob(dst.data(), {(int)dst.size()}, cpu_int64).clone().to(device)}, 0);
             
             // Combined node features: [flows, links]
-            torch::Tensor x_combined = torch::cat({h_flows_active, z_links_active}, 0); // [n_active+1, h_dim]
+                torch::Tensor x_combined = torch::cat({h_flows_active, z_links_active}, 0);
             
             // Forward through GNN layers
-            torch::Tensor gnn_out_0 = gnn_layer_0.forward({x_combined, edges}).toTensor();
-            torch::Tensor gnn_out_1 = gnn_layer_1.forward({gnn_out_0, edges}).toTensor();
-            torch::Tensor gnn_out_2 = gnn_layer_2.forward({gnn_out_1, edges}).toTensor();
+            torch::Tensor gnn_out_0 = gnn_layer_0.forward(std::vector<torch::jit::IValue>{x_combined, edges}).toTensor();
+            torch::Tensor gnn_out_1 = gnn_layer_1.forward(std::vector<torch::jit::IValue>{gnn_out_0, edges}).toTensor();
+            torch::Tensor gnn_out_2 = gnn_layer_2.forward(std::vector<torch::jit::IValue>{gnn_out_1, edges}).toTensor();
             
             // Split back into flow and link features
             torch::Tensor h_flows_updated = gnn_out_2.slice(0, 0, n_active); // [n_active, h_dim]
-            torch::Tensor z_links_updated = gnn_out_2.slice(0, n_active, n_active + 1); // [1, h_dim]
+                torch::Tensor z_links_updated = gnn_out_2.slice(0, n_active, n_active + (long)union_links.size());
             
             // Step 3: LSTM rate updates with GNN output
-            torch::Tensor params_expanded = params_input.unsqueeze(0).repeat({n_active, 1}); // [n_active, 13]
-            torch::Tensor h_rate_input = torch::cat({h_flows_updated, params_expanded}, 1); // [n_active, h_dim+13]
+            torch::Tensor params_active = flow_params_tensor.index_select(0, active_flow_indices); // [n_active, 13]
+            torch::Tensor h_rate_input = torch::cat({h_flows_updated, params_active}, 1); // [n_active, h_dim+13]
             torch::Tensor h_flows_old = h_vec.index_select(0, active_flow_indices);
             
             torch::Tensor h_flows_final = lstmcell_rate.forward({h_rate_input, h_flows_old}).toTensor();
             // Use the current time-updated link hidden state as second input
-            auto z_link_time_cur = z_t_link.slice(0, 0, 1);
+                auto z_link_time_cur = z_links_active;
             torch::Tensor z_links_final = lstmcell_rate_link.forward({z_links_updated, z_link_time_cur}).toTensor();
             
             // Update global state tensors
             h_vec.index_copy_(0, active_flow_indices, h_flows_final);
-            z_t_link.slice(0, 0, 1).copy_(z_links_final);
+                z_t_link.index_copy_(0, link_idx_global, z_links_final);
+            } else {
+                // No links to update; propagate only flow states without GNN
+                torch::Tensor params_active = flow_params_tensor.index_select(0, active_flow_indices);
+                torch::Tensor h_rate_input = torch::cat({h_flows_active, params_active}, 1);
+                torch::Tensor h_flows_old = h_vec.index_select(0, active_flow_indices);
+                torch::Tensor h_flows_final = lstmcell_rate.forward({h_rate_input, h_flows_old}).toTensor();
+                h_vec.index_copy_(0, active_flow_indices, h_flows_final);
+            }
         }
         
         // Step 4: MLP prediction for ALL active flows
@@ -421,27 +461,38 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         // Check if this is the first/only flow (n_active == 1 means only current flow is active)
         if (n_active == 1) {
             // First flow - use ML prediction with initial state
-            torch::Tensor nlinks_single = torch::full({1, 1}, 6.0f, options_float);
-            torch::Tensor params_single = params_input.unsqueeze(0); // [1, 13]
+            auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+            int nlinks_val = (int)g_flow_links[flow_id].size();
+            torch::Tensor nlinks_single = torch::full({1, 1}, (float)nlinks_val, options_float);
+            torch::Tensor params_single = flow_params_tensor.slice(0, flow_id, flow_id + 1); // [1, 13]
             torch::Tensor h_single = h_vec.slice(0, flow_id, flow_id + 1); // [1, h_dim]
             
             torch::Tensor mlp_input_single = torch::cat({nlinks_single, params_single, h_single}, 1);
-            torch::Tensor sldn_single = output_layer.forward({mlp_input_single}).toTensor().view(-1);
+            torch::Tensor sldn_single = output_layer.forward(std::vector<torch::jit::IValue>{mlp_input_single}).toTensor().view(-1);
             sldn_single = torch::clamp(sldn_single, 1.0f, std::numeric_limits<float>::infinity());
             
             sldn_pred = sldn_single[0].item<float>();
-            ideal_fct = 3000.0f + (float)flow_size / 1.25f;
+            int nlinks_val_int = (int)g_flow_links[flow_id].size();
+            ideal_fct = 3000.0f * (float)nlinks_val_int + (float)flow_size / 1.25f;
             predicted_fct = sldn_pred * ideal_fct;
         } else if (n_active > 1) {
             // Multiple flows active - use full ML pipeline with contention
-            torch::Tensor nlinks_expanded = torch::full({n_active, 1}, 6.0f, options_float);
-            torch::Tensor params_expanded = params_input.unsqueeze(0).repeat({n_active, 1}); // [n_active, 13]
+            auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+            // Build per-flow n_links counts
+            std::vector<float> nlinks_vals(n_active);
+            for (int i = 0; i < n_active; i++) {
+                int fid = active_flow_indices[i].item<int>();
+                nlinks_vals[i] = (float)g_flow_links[fid].size();
+            }
+            auto cpu_float = torch::TensorOptions().dtype(torch::kFloat32);
+            torch::Tensor nlinks_expanded = torch::from_blob(nlinks_vals.data(), {n_active, 1}, cpu_float).clone().to(device);
+            torch::Tensor params_active = flow_params_tensor.index_select(0, active_flow_indices); // [n_active, 13]
             torch::Tensor h_active = h_vec.index_select(0, active_flow_indices); // [n_active, h_dim]
             
-            torch::Tensor mlp_input = torch::cat({nlinks_expanded, params_expanded, h_active}, 1); // [n_active, 1+13+h_dim]
+            torch::Tensor mlp_input = torch::cat({nlinks_expanded, params_active, h_active}, 1); // [n_active, 1+13+h_dim]
             
             // Get slowdown predictions for all active flows
-            torch::Tensor sldn_all = output_layer.forward({mlp_input}).toTensor().view(-1); // [n_active]
+            torch::Tensor sldn_all = output_layer.forward(std::vector<torch::jit::IValue>{mlp_input}).toTensor().view(-1); // [n_active]
             sldn_all = torch::clamp(sldn_all, 1.0f, std::numeric_limits<float>::infinity());
             
             // Find the completion time for the current flow
@@ -455,7 +506,8 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             
             if (current_flow_idx >= 0) {
                 sldn_pred = sldn_all[current_flow_idx].item<float>();
-                ideal_fct = 3000.0f + (float)flow_size / 1.25f;
+                int nlinks_cur = (int)g_flow_links[flow_id].size();
+                ideal_fct = 3000.0f * (float)nlinks_cur + (float)flow_size / 1.25f;
                 predicted_fct = sldn_pred * ideal_fct;
             } else {
                 // This should never happen - flow must be in active list
@@ -466,8 +518,11 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             throw std::runtime_error("No active flows found after adding current flow - this is a bug!");
         }
         
+        // Debug output showing parameter conditioning based on flow size
+        bool is_large_flow = (flow_size >= 1000);
         std::cout << "ML STATE: flow_id=" << flow_id << " size=" << flow_size 
                   << "B, active_flows=" << n_flows_active 
+                  << ", params=" << (is_large_flow ? "[1,1,...,1]" : "[0,0,...,0]")
                   << ", slowdown=" << sldn_pred
                   << ", ideal_fct=" << ideal_fct << "ns"
                   << ", predicted_fct=" << predicted_fct << "ns" << std::endl;
@@ -498,13 +553,29 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         n_flows_completed++;
             
             // Update link states (decrement flow count)
-            std::vector<int> flow_links = {0}; // Same link as used in arrival
-            auto options_int32 = torch::TensorOptions().dtype(torch::kInt32).device(device);
-            torch::Tensor links_tensor = torch::tensor(flow_links, options_int32);
+            {
+                auto cpu_int32 = torch::TensorOptions().dtype(torch::kInt32);
+                const auto& links_v = g_flow_links[comp_ctx->flow_id];
+                if (!links_v.empty()) {
+                    torch::Tensor links_tensor = torch::from_blob((void*)links_v.data(), {(long)links_v.size()}, cpu_int32).clone().to(device);
         link_to_nflows.index_add_(0, links_tensor, -ones_cache.slice(0, 0, links_tensor.size(0)));
+                    // Reset link state if no active flows remain on those links
+                    auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
+                    auto no_flow_mask = (link_to_nflows.index({links_tensor}) == 0);
+                    auto no_flow_links_tensor = links_tensor.masked_select(no_flow_mask);
+                    if (no_flow_links_tensor.numel() > 0) {
+                        link_to_graph_id.index_put_({no_flow_links_tensor}, -1);
+                        auto reset_values = torch::zeros({no_flow_links_tensor.size(0), z_t_link.size(1)}, options_float);
+                        auto ones_vals = torch::ones({no_flow_links_tensor.size(0)}, options_float);
+                        z_t_link.index_put_({no_flow_links_tensor, torch::indexing::Slice()}, reset_values);
+                        z_t_link.index_put_({no_flow_links_tensor, 1}, ones_vals);
+                        z_t_link.index_put_({no_flow_links_tensor, 2}, ones_vals);
+                    }
+                }
+            }
             
-            std::cout << "ML COMPLETE: flow_id=" << comp_ctx->flow_id 
-                      << ", active_flows=" << n_flows_active << std::endl;
+            // std::cout << "ML COMPLETE: flow_id=" << comp_ctx->flow_id 
+            //           << ", active_flows=" << n_flows_active << std::endl;
             
             // Call original callback
             comp_ctx->original_callback(comp_ctx->original_ctx);
@@ -520,71 +591,24 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
     }
 }
 
-// Emit flowsim-style staged records based on ML-predicted FCT
-static void generate_herd_messages_m4(int flow_id, uint64_t flow_start_ns, uint64_t ml_fct_ns, uint64_t large_size_bytes, int client_id = 0, int worker_id = 0) {
-    // All timing should come from ML predictions, not hardcoded delays
-    // The ml_fct_ns is the ML-predicted FCT for this specific flow
-    // We need to break it down into stages, but let ML drive the timing
-    uint64_t req_send_time = flow_start_ns;                    // client sends 17B GET
-    uint64_t req_recv_time = req_send_time + (ml_fct_ns * 15 / 100);  // c2s stage (~15% of total ML FCT)
-    uint64_t resp_send_time = req_recv_time + SERVER_OVERHEAD_NS; // server compute (fixed processing)
-    uint64_t resp_recv_time = resp_send_time + (ml_fct_ns * 10 / 100); // s2c UD stage (~10% of total ML FCT)
-    uint64_t handshake_send_time = resp_recv_time + HANDSHAKE_DELAY_NS; // client handshake emit (fixed processing)
-    uint64_t handshake_recv_time = handshake_send_time + (ml_fct_ns * 5 / 100); // handshake c2s (~5% of total ML FCT)
-    uint64_t large_completion_time = handshake_recv_time + (ml_fct_ns * 70 / 100); // s2c RDMA stage (~70% of total ML FCT)
+// ======================== Helper Functions ========================
 
-    // Client/server logs (single client 0, worker 0)
-    if (g_client_logs.empty()) g_client_logs.resize(1);
-    if (!g_client_logs[0].is_open()) g_client_logs[0].open("client_0.log");
-    if (!g_server_log.is_open()) g_server_log.open("server.log");
-
-    g_client_logs[0] << "event=req_send ts_ns=" << req_send_time << " id=" << flow_id
-                     << " clt=0 wrkr=0 slot=0 size=17 src=client:0 dst=worker:0\n";
-    g_server_log     << "event=reqq_recv ts_ns=" << req_recv_time << " id=" << flow_id
-                     << " clt=0 wrkr=0 slot=0 size=17 src=client:0 dst=worker:0\n";
-    g_server_log     << "event=resp_send ts_ns=" << resp_send_time << " id=" << flow_id
-                     << " clt=0 wrkr=0 slot=0 size=" << RESP_UD_BYTES << " src=worker:0 dst=client:0\n";
-    g_client_logs[0] << "event=resp_recv_ud ts_ns=" << resp_recv_time << " id=" << flow_id
-                     << " clt=0 wrkr=0 slot=0 size=" << RESP_UD_BYTES << " src=worker:0 dst=client:0\n";
-    g_client_logs[0] << "event=hand_send ts_ns=" << handshake_send_time << " id=" << flow_id
-                     << " clt=0 wrkr=0 slot=0 size=10 src=client:0 dst=worker:0\n";
-    g_server_log     << "event=hand_recv ts_ns=" << handshake_send_time + 3508 << " id=" << flow_id
-                     << " clt=0 wrkr=0 slot=0 size=10 src=client:0 dst=worker:0\n";
-    g_server_log     << "event=hand_conf ts_ns=" << handshake_send_time + 3508 << " id=" << flow_id
-                     << " clt=0 wrkr=0 slot=0 size=" << large_size_bytes << " src=worker:0 dst=client:0\n";
-    g_client_logs[0] << "event=resp_rdma_read ts_ns=" << large_completion_time << " id=" << flow_id
-                     << " start_ns=" << handshake_send_time
-                     << " dur_ns=" << (large_completion_time - handshake_send_time)
-                     << " clt=0 wrkr=0 slot=0 size=" << large_size_bytes << " src=worker:0 dst=client:0\n";
-
-    // Add proper FlowRecord entries (matching flowsim format exactly)
-    FlowRecord rec1; // c2s_get
-    rec1.op_index = flow_id; rec1.client_id = client_id; rec1.worker_id = worker_id; rec1.slot = 0;
-    rec1.req_bytes = 17; rec1.resp_bytes = 0; 
-    rec1.start_ns = req_send_time; rec1.end_ns = req_recv_time; 
-    rec1.fct_ns = req_recv_time - req_send_time; rec1.stage = "c2s_get";
-    g_flow_records.push_back(rec1);
-    
-    FlowRecord rec2; // s2c_ud  
-    rec2.op_index = flow_id; rec2.client_id = client_id; rec2.worker_id = worker_id; rec2.slot = 0;
-    rec2.req_bytes = 0; rec2.resp_bytes = RESP_UD_BYTES;
-    rec2.start_ns = resp_send_time; rec2.end_ns = resp_recv_time;
-    rec2.fct_ns = resp_recv_time - resp_send_time; rec2.stage = "s2c_ud";
-    g_flow_records.push_back(rec2);
-    
-    FlowRecord rec3; // c2s_handshake
-    rec3.op_index = flow_id; rec3.client_id = client_id; rec3.worker_id = worker_id; rec3.slot = 0;
-    rec3.req_bytes = 10; rec3.resp_bytes = 0;
-    rec3.start_ns = handshake_send_time; rec3.end_ns = handshake_recv_time;
-    rec3.fct_ns = handshake_recv_time - handshake_send_time; rec3.stage = "c2s_handshake";
-    g_flow_records.push_back(rec3);
-    
-    FlowRecord rec4; // s2c_rdma
-    rec4.op_index = flow_id; rec4.client_id = client_id; rec4.worker_id = worker_id; rec4.slot = 0;
-    rec4.req_bytes = 0; rec4.resp_bytes = large_size_bytes;
-    rec4.start_ns = handshake_recv_time; rec4.end_ns = large_completion_time;
-    rec4.fct_ns = large_completion_time - handshake_recv_time; rec4.stage = "s2c_rdma";
-    g_flow_records.push_back(rec4);
+// Create and add FlowRecord efficiently
+void add_flow_record(int op_index, int client_id, int worker_id, int slot,
+                    uint64_t req_bytes, uint64_t resp_bytes,
+                    EventTime start_ns, EventTime end_ns, const std::string& stage) {
+    FlowRecord rec;
+    rec.op_index = op_index;
+    rec.client_id = client_id;
+    rec.worker_id = worker_id;
+    rec.slot = slot;
+    rec.req_bytes = req_bytes;
+    rec.resp_bytes = resp_bytes;
+    rec.start_ns = start_ns;
+    rec.end_ns = end_ns;
+    rec.fct_ns = (uint64_t)(end_ns - start_ns);
+    rec.stage = stage;
+    g_flow_records.push_back(rec);
 }
 
 // Forward decls
@@ -614,20 +638,9 @@ static void on_request_arrival(void* arg) {
         ctx->resp_bytes = RESP_UD_BYTES;
     }
     // Record client->server FCT (c2s stage)
-    {
-        FlowRecord rec;
-        rec.op_index = ctx->op_index;
-        rec.client_id = ctx->client_id;
-        rec.worker_id = ctx->worker_id;
-        rec.slot = ctx->slot;
-        rec.req_bytes = ctx->req_bytes;
-        rec.resp_bytes = 0;
-        rec.start_ns = ctx->start_time;
-        rec.end_ns = g_event_queue->get_current_time();
-        rec.fct_ns = (uint64_t)(rec.end_ns - rec.start_ns);
-        rec.stage = ctx->is_handshake ? "c2s_handshake" : "c2s_get";
-        g_flow_records.push_back(rec);
-    }
+    add_flow_record(ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot,
+                   ctx->req_bytes, 0, ctx->start_time, g_event_queue->get_current_time(),
+                   ctx->is_handshake ? "c2s_handshake" : "c2s_get");
     // No extra propagation here; Topology models per-hop latency
     EventTime when = g_event_queue->get_current_time();
     g_event_queue->schedule_event(when, (void (*)(void*)) &worker_recv, ctx);
@@ -718,20 +731,9 @@ static void client_recv_ud(void* arg) {
                  << "\n";
     }
     // Record s2c stage for UD response
-    {
-        FlowRecord rec;
-        rec.op_index = ctx->op_index;
-        rec.client_id = ctx->client_id;
-        rec.worker_id = ctx->worker_id;
-        rec.slot = ctx->slot;
-        rec.req_bytes = 0;
-        rec.resp_bytes = ctx->resp_bytes;
-        rec.start_ns = ctx->server_send_time;
-        rec.end_ns = g_event_queue->get_current_time();
-        rec.fct_ns = (uint64_t)(rec.end_ns - rec.start_ns);
-        rec.stage = "s2c_ud";
-        g_flow_records.push_back(rec);
-    }
+    add_flow_record(ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot,
+                   0, ctx->resp_bytes, ctx->server_send_time, g_event_queue->get_current_time(),
+                   "s2c_ud");
     // Schedule handshake after HANDSHAKE_DELAY_NS
     ctx->is_handshake = true;
     ctx->req_bytes = HANDSHAKE_BYTES;
@@ -779,20 +781,9 @@ static void client_recv_rdma_finalize(void* arg) {
                  << "\n";
     }
     // Record s2c stage for RDMA-sized response and finalize FCT
-    {
-        FlowRecord rec;
-        rec.op_index = ctx->op_index;
-        rec.client_id = ctx->client_id;
-        rec.worker_id = ctx->worker_id;
-        rec.slot = ctx->slot;
-        rec.req_bytes = 0;
-        rec.resp_bytes = ctx->resp_bytes;
-        rec.start_ns = ctx->server_send_time;
-        rec.end_ns = g_event_queue->get_current_time();
-        rec.fct_ns = (uint64_t)(rec.end_ns - rec.start_ns);
-        rec.stage = "s2c_rdma";
-        g_flow_records.push_back(rec);
-    }
+    add_flow_record(ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot,
+                   0, ctx->resp_bytes, ctx->server_send_time, g_event_queue->get_current_time(),
+                   "s2c_rdma");
     int client_id = ctx->client_id;
     // Completion reduces inflight window by one
     if (g_inflight_per_client[client_id] > 0) g_inflight_per_client[client_id]--;
@@ -878,14 +869,24 @@ int main(int argc, char *argv[]) {
         uint64_t rdma = std::strtoull(argv[2], nullptr, 10);
         if (rdma > 0) RESP_RDMA_BYTES = rdma;
     }
+    int topology_mode = 12;
+    if (argc >= 4) {
+        int topo_arg = std::atoi(argv[3]);
+        if (topo_arg == 1 || topo_arg == 4 || topo_arg == 12) {
+            topology_mode = topo_arg;
+        } else {
+            std::cerr << "[warn] Unsupported topology argument " << topo_arg
+                      << "; defaulting to 12-node topology.\n";
+        }
+    }
     // Mirror flowsim: run HERD-only mode when not enough args; else run ML+HERD
     if (argc < 6) {
         g_event_queue = std::make_shared<EventQueue>();
         Topology::set_event_queue(g_event_queue);
 
         // Topology switch: single client/server or multi-client tree (matching flowsim)
-        bool multi_client_topo = false; // use multi-client topologies
-        bool twelve_node_topo = true; // true: 12-endpoint tree, false: original 4-endpoint (server + 3 clients)
+        bool multi_client_topo = (topology_mode != 1); // use multi-client topologies when >1 endpoint
+        bool twelve_node_topo = (topology_mode == 12); // true: 12-endpoint tree, false: original 4-endpoint
         double bw_bpns = 10.0;
         
         if (!multi_client_topo) {
@@ -907,36 +908,55 @@ int main(int argc, char *argv[]) {
             g_routes_c2s[0] = c2s; g_routes_s2c[0] = s2c;
             g_client_logs[0].open("client_0.log");
         } else if (twelve_node_topo) {
-            // 12-endpoint multi-client topology with dual roots R and R2 and top T
-            // Device indices:
-            // 0:T (worker/server), 1:R, 2:R2, 3:S1, 4:S2, 5:S3, 6:S4, 7:S5, 8:S6,
-            // 10:C1, 11:C2, 12:C3, 13:C4, 14:C5, 15:C6, 16:C7, 17:C8, 18:C9, 19:C10, 20:C11
+            // 12-endpoint three-tier topology from topology.md
+            // Node indexing:
+            // - 0..11  : serv0..serv11 (end-hosts; serv1 will act as the server)
+            // - 12..17 : tor12..tor17 (ToR switches)
+            // - 18..19 : agg18..agg19 (Aggregation switches)
+            // - 20     : core20       (Core switch)
+            // All links are 10 Gbps with ~800 ns latency.
             g_topology = std::make_shared<Topology>(21, 4);
-            // Core links
-            g_topology->connect(0, 1, bw_bpns, 800.0, true); // T<->R
-            g_topology->connect(0, 2, bw_bpns, 800.0, true); // T<->R2
-            // Aggregation: R side
-            g_topology->connect(1, 3, bw_bpns, 800.0, true); // R<->S1
-            g_topology->connect(1, 4, bw_bpns, 800.0, true); // R<->S2
-            g_topology->connect(1, 5, bw_bpns, 800.0, true); // R<->S3
-            // Aggregation: R2 side
-            g_topology->connect(2, 6, bw_bpns, 800.0, true); // R2<->S4
-            g_topology->connect(2, 7, bw_bpns, 800.0, true); // R2<->S5
-            g_topology->connect(2, 8, bw_bpns, 800.0, true); // R2<->S6
-            // Leaves to ToR switches per mapping
-            g_topology->connect(13, 3, bw_bpns, 800.0, true); // C4<->S1
-            g_topology->connect(10, 4, bw_bpns, 800.0, true); // C1<->S2
-            g_topology->connect(14, 4, bw_bpns, 800.0, true); // C5<->S2
-            g_topology->connect(11, 5, bw_bpns, 800.0, true); // C2<->S3
-            g_topology->connect(12, 5, bw_bpns, 800.0, true); // C3<->S3
-            g_topology->connect(15, 6, bw_bpns, 800.0, true); // C6<->S4
-            g_topology->connect(16, 6, bw_bpns, 800.0, true); // C7<->S4
-            g_topology->connect(17, 7, bw_bpns, 800.0, true); // C8<->S5
-            g_topology->connect(18, 7, bw_bpns, 800.0, true); // C9<->S5
-            g_topology->connect(19, 8, bw_bpns, 800.0, true); // C10<->S6
-            g_topology->connect(20, 8, bw_bpns, 800.0, true); // C11<->S6
 
-            NUM_CLIENTS = 11; // C1..C11 (Server is the worker at T)
+            // Build physical links and an adjacency list for shortest-path routing.
+            const int N = 21;
+            std::vector<std::vector<int>> adj(N);
+            auto connect_bidir = [&](int u, int v, double bw, float lat){
+                g_topology->connect(u, v, bw, lat, true);
+                adj[u].push_back(v);
+                adj[v].push_back(u);
+            };
+
+            // Access layer: servX <-> torY (per topology.md table)
+            // All links use 1000ns (1μs) delay to match FlowSim and NS3
+            connect_bidir(0, 12, bw_bpns, 1000.0f);  // serv0  <-> tor12
+            connect_bidir(1, 12, bw_bpns, 1000.0f);  // serv1  <-> tor12 (SERVER)
+            connect_bidir(2, 13, bw_bpns, 1000.0f);  // serv2  <-> tor13
+            connect_bidir(3, 13, bw_bpns, 1000.0f);  // serv3  <-> tor13
+            connect_bidir(4, 14, bw_bpns, 1000.0f);  // serv4  <-> tor14
+            connect_bidir(5, 14, bw_bpns, 1000.0f);  // serv5  <-> tor14
+            connect_bidir(6, 15, bw_bpns, 1000.0f);  // serv6  <-> tor15
+            connect_bidir(7, 15, bw_bpns, 1000.0f);  // serv7  <-> tor15
+            connect_bidir(8, 16, bw_bpns, 1000.0f);  // serv8  <-> tor16
+            connect_bidir(9, 16, bw_bpns, 1000.0f);  // serv9  <-> tor16
+            connect_bidir(10, 17, bw_bpns, 1000.0f); // serv10 <-> tor17
+            connect_bidir(11, 17, bw_bpns, 1000.0f); // serv11 <-> tor17
+
+            // ToR -> Aggregation layer
+            connect_bidir(12, 18, bw_bpns, 1000.0f); // tor12 <-> agg18
+            connect_bidir(13, 18, bw_bpns, 1000.0f); // tor13 <-> agg18
+            connect_bidir(14, 18, bw_bpns, 1000.0f); // tor14 <-> agg18
+            connect_bidir(15, 19, bw_bpns, 1000.0f); // tor15 <-> agg19
+            connect_bidir(16, 19, bw_bpns, 1000.0f); // tor16 <-> agg19
+            connect_bidir(17, 19, bw_bpns, 1000.0f); // tor17 <-> agg19
+
+            // Aggregation -> Core layer
+            connect_bidir(18, 20, bw_bpns, 1000.0f); // agg18 <-> core20
+            connect_bidir(19, 20, bw_bpns, 1000.0f); // agg19 <-> core20
+
+            // Client set excludes the server node (serv1). Map client indices 0..10
+            // to physical endpoints [0,2,3,4,5,6,7,8,9,10,11].
+            std::vector<int> client_nodes = {0,2,3,4,5,6,7,8,9,10,11};
+            NUM_CLIENTS = (int)client_nodes.size();
             g_clients.assign(NUM_CLIENTS, ClientState());
             g_client_logs.resize(NUM_CLIENTS);
             for (int i = 0; i < NUM_CLIENTS; i++) {
@@ -946,29 +966,101 @@ int main(int argc, char *argv[]) {
             g_routes_c2s.resize(NUM_CLIENTS);
             g_routes_s2c.resize(NUM_CLIENTS);
 
-            auto build_route = [&](std::vector<int> path){ Route r; for(int id: path) r.push_back(g_topology->get_device(id)); return r; };
-            // Clients 0..10 map to: C4, C1, C5, C2, C3, C6, C7, C8, C9, C10, C11
-            std::vector<std::vector<int>> c2s_paths = {
-                {13,3,1,0},
-                {10,4,1,0},
-                {14,4,1,0},
-                {11,5,1,0},
-                {12,5,1,0},
-                {15,6,2,0},
-                {16,6,2,0},
-                {17,7,2,0},
-                {18,7,2,0},
-                {19,8,2,0},
-                {20,8,2,0}
+            // Pre-allocate container for per-client forward paths (client -> server)
+            std::vector<std::vector<int>> c2s_paths(NUM_CLIENTS);
+
+            // Shortest path (BFS) between each client endpoint and the server endpoint (serv1).
+            auto shortest_path = [&](int src, int dst){
+                std::vector<int> parent(N, -1);
+                std::vector<char> vis(N, 0);
+                std::queue<int> q; q.push(src); vis[src] = 1;
+                while(!q.empty()){
+                    int u = q.front(); q.pop();
+                    if (u == dst) break;
+                    for (int v : adj[u]) if (!vis[v]) { vis[v]=1; parent[v]=u; q.push(v);}        
+                }
+                std::vector<int> path; if (!vis[dst]) return path; // disconnected (shouldn't happen)
+                for (int v = dst; v != -1; v = parent[v]) path.push_back(v);
+                std::reverse(path.begin(), path.end());
+                return path;
             };
+
+            auto build_route = [&](const std::vector<int>& path){ Route r; for(int id: path) r.push_back(g_topology->get_device(id)); return r; };
+            const int server_node = 1; // serv1 is the server
             for (int cid = 0; cid < NUM_CLIENTS; cid++) {
-                g_routes_c2s[cid] = build_route(c2s_paths[cid]);
-                auto rev = c2s_paths[cid];
-                std::reverse(rev.begin(), rev.end());
-                g_routes_s2c[cid] = build_route(rev);
+                int src_node = client_nodes[cid];
+                auto p = shortest_path(src_node, server_node);
+                c2s_paths[cid] = p;
+                g_routes_c2s[cid] = build_route(p);  // client -> server
+                std::reverse(p.begin(), p.end());
+                g_routes_s2c[cid] = build_route(p);  // server -> client
             }
             for (int i = 0; i < NUM_CLIENTS; i++) {
                 g_client_logs[i].open((std::string("client_") + std::to_string(i) + ".log").c_str());
+            }
+
+            // Build link index mapping from all unique undirected edges in routes
+            g_link_index_map.clear();
+            auto key_of = [](int a, int b) -> long long {
+                int u = std::min(a, b);
+                int v = std::max(a, b);
+                return (static_cast<long long>(u) << 32) | static_cast<unsigned long long>(v);
+            };
+            int next_link_idx = 0;
+            auto add_path_edges = [&](const std::vector<int>& path) {
+                for (size_t i = 1; i < path.size(); i++) {
+                    long long key = key_of(path[i - 1], path[i]);
+                    if (g_link_index_map.find(key) == g_link_index_map.end()) {
+                        g_link_index_map[key] = next_link_idx++;
+                    }
+                }
+            };
+            for (const auto& p : c2s_paths) {
+                add_path_edges(p);
+                auto rev = p; std::reverse(rev.begin(), rev.end()); add_path_edges(rev);
+            }
+
+            // Precompute per-client link index sequences for both directions
+            g_c2s_link_indices.assign(NUM_CLIENTS, {});
+            g_s2c_link_indices.assign(NUM_CLIENTS, {});
+            for (int cid = 0; cid < NUM_CLIENTS; cid++) {
+                const auto& path_fwd = c2s_paths[cid];
+                std::vector<int> links_fwd; links_fwd.reserve(path_fwd.size());
+                for (size_t i = 1; i < path_fwd.size(); i++) {
+                    links_fwd.push_back(g_link_index_map[key_of(path_fwd[i - 1], path_fwd[i])]);
+                }
+                g_c2s_link_indices[cid] = std::move(links_fwd);
+                auto rev = path_fwd; std::reverse(rev.begin(), rev.end());
+                std::vector<int> links_rev; links_rev.reserve(rev.size());
+                for (size_t i = 1; i < rev.size(); i++) {
+                    links_rev.push_back(g_link_index_map[key_of(rev[i - 1], rev[i])]);
+                }
+                g_s2c_link_indices[cid] = std::move(links_rev);
+            }
+            g_n_links_override = (int)g_link_index_map.size();
+
+            // Debug print: precalculated path map and per-client link indices
+            std::cout << "[INFO] Precalculated link index map (total " << g_n_links_override << ")\n";
+            for (const auto &kv : g_link_index_map) {
+                long long key = kv.first;
+                int idx = kv.second;
+                int u = (int)(key >> 32);
+                int v = (int)(key & 0xffffffff);
+                std::cout << "  link_idx=" << idx << " maps to (" << u << "," << v << ")\n";
+            }
+            std::cout << "[INFO] Per-client link index sequences (client -> server and server -> client)\n";
+            for (int cid = 0; cid < NUM_CLIENTS; cid++) {
+                std::cout << "  client " << cid << " c2s: [";
+                for (size_t i = 0; i < g_c2s_link_indices[cid].size(); i++) {
+                    if (i) std::cout << ",";
+                    std::cout << g_c2s_link_indices[cid][i];
+                }
+                std::cout << "]  s2c: [";
+                for (size_t i = 0; i < g_s2c_link_indices[cid].size(); i++) {
+                    if (i) std::cout << ",";
+                    std::cout << g_s2c_link_indices[cid][i];
+                }
+                std::cout << "]\n";
             }
         } else {
             // Original 4-endpoint topology: 1 server + 3 clients (8 devices total with switches)
@@ -977,14 +1069,14 @@ int main(int argc, char *argv[]) {
             // Client C (4) -> S2 (5) -> R (2)
             // Client D (6) -> S2 (5) -> R (2)
             g_topology = std::make_shared<Topology>(8, 4); // 8 devices total
-            // Links with 800ns latency and 10B/ns bandwidth (matching flowsim exactly)
-            g_topology->connect(0, 1, bw_bpns, 800.0, true); // A<->S
-            g_topology->connect(1, 2, bw_bpns, 800.0, true); // S<->R
-            g_topology->connect(3, 7, bw_bpns, 800.0, true); // B<->S1
-            g_topology->connect(4, 5, bw_bpns, 800.0, true); // C<->S2
-            g_topology->connect(5, 2, bw_bpns, 800.0, true); // S2<->R
-            g_topology->connect(6, 5, bw_bpns, 800.0, true); // D<->S2
-            g_topology->connect(7, 2, bw_bpns, 800.0, true); // S1<->R
+            // Links with 1000ns (1μs) latency and 10B/ns bandwidth (matching FlowSim & NS3)
+            g_topology->connect(0, 1, bw_bpns, 1000.0, true); // A<->S
+            g_topology->connect(1, 2, bw_bpns, 1000.0, true); // S<->R
+            g_topology->connect(3, 7, bw_bpns, 1000.0, true); // B<->S1
+            g_topology->connect(4, 5, bw_bpns, 1000.0, true); // C<->S2
+            g_topology->connect(5, 2, bw_bpns, 1000.0, true); // S2<->R
+            g_topology->connect(6, 5, bw_bpns, 1000.0, true); // D<->S2
+            g_topology->connect(7, 2, bw_bpns, 1000.0, true); // S1<->R
             NUM_CLIENTS = 3;
             g_clients.assign(NUM_CLIENTS, ClientState());
             g_client_logs.resize(NUM_CLIENTS);
@@ -1015,29 +1107,32 @@ int main(int argc, char *argv[]) {
         
         try {
             // Read config file to get ML model parameters
-            std::string config_path = "config/test_config_testbed.yaml";
+            std::string config_path = "../../../config/test_config_testbed.yaml";  // Relative to m4/testbed/backends/m4/
             std::ifstream infile_cfg(config_path);
-    std::ostringstream contents;
-            contents << infile_cfg.rdbuf();
-    std::string config_contents = contents.str();
-    ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
-    ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
-    int32_t hidden_size;
-    hidden_size_node >> hidden_size;
-    ryml::NodeRef n_links_node = config["dataset"]["n_links_max"];
-    int32_t n_links;
-    n_links_node >> n_links;
 
-            // Initialize basic parameters for ML prediction
-            params.assign(13, 0.0); // Default parameters
+            std::ostringstream contents;
+                    contents << infile_cfg.rdbuf();
+            std::string config_contents = contents.str();
+            ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
+            ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
+            int32_t hidden_size;
+            hidden_size_node >> hidden_size;
+            ryml::NodeRef n_links_node = config["dataset"]["n_links_max"];
+            int32_t n_links;
+            n_links_node >> n_links;
+            if (g_n_links_override > 0) {
+                n_links = g_n_links_override;
+                std::cout << "[INFO] Overriding n_links with computed value from routes: " << n_links << "\n";
+            }
+
+            // Parameters are now initialized per-flow based on flow size (no global defaults needed)
 
             // Load ML models
             setup_m4(device);
             
             // Initialize ML state tensors for HERD flows
-            int max_herd_flows = 4 * 650; 2600*11; // 4 * 650 operations (request, UD, handshake, RDMA per op)
+            int max_herd_flows = 4 * 650 * NUM_CLIENTS; // 4 * 650 operations (request, UD, handshake, RDMA per op)
             setup_m4_tensors_for_herd(device, max_herd_flows, n_links, hidden_size);
-            
             std::cout << "M4 ML models and tensors loaded successfully for HERD prediction service\n";
             
         } catch (const std::exception& e) {
@@ -1046,7 +1141,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Initialize per-client limits and state - copied exactly from flowsim
-        const int default_ops = 650;//*11;
+        const int default_ops = 650 * NUM_CLIENTS;
         g_pending_completions.assign(NUM_CLIENTS, std::deque<FlowCtx*>());
         g_poll_scheduled.assign(NUM_CLIENTS, false);
         g_total_sent_per_client.assign(NUM_CLIENTS, 0);

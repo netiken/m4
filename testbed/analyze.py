@@ -168,14 +168,16 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
     files = {
         "real_world": base_dir / "eval_test" / "testbed" / scenario / "real_world.txt",
         "flowsim": base_dir / "eval_test" / "flowsim" / scenario / "flowsim_output.txt",
-        "ns3": base_dir / "eval_test" / "ns3" / scenario / "ns3_output.txt"
+        "ns3": base_dir / "eval_test" / "ns3" / scenario / "ns3_output.txt",
+        "m4": base_dir / "eval_test" / "m4" / scenario / "m4_output.txt"
     }
     
     # Directory paths for timestamp computation
     dirs = {
         "real_world": base_dir / "eval_test" / "testbed" / scenario,
         "flowsim": base_dir / "eval_test" / "flowsim" / scenario,
-        "ns3": base_dir / "eval_test" / "ns3" / scenario
+        "ns3": base_dir / "eval_test" / "ns3" / scenario,
+        "m4": base_dir / "eval_test" / "m4" / scenario
     }
     
     # Load data from all backends
