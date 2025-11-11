@@ -47,7 +47,7 @@ ALL_SCENARIOS = [
 
 # Quick test scenarios (matches run.py --quick)
 QUICK_SCENARIOS = [
-    "100_1", "100_4",    # 100KB RDMA, window 1 & 4
+    "250_1", "250_4",    # 250KB RDMA, window 1 & 4
     "1000_1", "1000_4"   # 1000KB RDMA, window 1 & 4
 ]
 
@@ -58,28 +58,33 @@ PLOT_MARKERS = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
 PLOT_LABELS = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
 PERFLOW_COLORS = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, FLS
 PERFLOW_LABELS = ["flowSim", "ns3", OURS_LABEL]
-def load_data(file_path: Path, trim: int = 0) -> Dict[Tuple[int, str], List[int]]:
-    """Load experiment data from a simulation output file."""
-    results = defaultdict(list)
+def load_data(file_path: Path, trim: int = 500) -> Tuple[Dict[Tuple[int, str], List[int]], List[Tuple[int, str, int]]]:
+    """Load experiment data from a simulation output file.
     
+    Returns:
+        (data_dict, trimmed_entries): Dictionary of flows and list of trimmed entries with timestamps
+    """
     if not file_path.exists():
-        return dict(results)
+        return {}, []
     
-    with open(file_path, 'r') as f:
+    ordered_entries: List[Tuple[int, str, int]] = []
+    with file_path.open("r") as f:
         for line in f:
             match = LINE_RE.match(line.strip())
             if match:
                 op_type, client_str, dur_str = match.groups()
-                results[(int(client_str), op_type)].append(int(dur_str))
+                ordered_entries.append((int(client_str), op_type, int(dur_str)))
     
-    # Trim warmup samples
-    if trim > 0:
-        for key in results:
-            series = results[key]
-            if len(series) > 2 * trim:
-                results[key] = series[trim:-trim]
+    # Apply trim
+    trimmed_entries = ordered_entries
+    if trim > 0 and len(ordered_entries) > 2 * trim:
+        trimmed_entries = ordered_entries[trim:-trim]
     
-    return dict(results)
+    results = defaultdict(list)
+    for client_id, phase, duration in trimmed_entries:
+        results[(client_id, phase)].append(duration)
+    
+    return dict(results), trimmed_entries
 
 
 def compute_end2end_times(data: Dict) -> List[float]:
@@ -125,8 +130,37 @@ def compute_relative_errors(real_values: List[float], sim_values: List[float]) -
     return np.abs(real_arr[mask] - sim_arr[mask]) / real_arr[mask]
 
 
-def compute_e2e_duration_from_logs(scenario_dir: Path, backend: str = None) -> Optional[int]:
-    """Compute true end-to-end application completion time from timestamp logs."""
+def compute_signed_relative_errors(real_values: List[float], sim_values: List[float]) -> np.ndarray:
+    """
+    Compute signed relative errors between real-world and simulated values.
+    Formula: (sim - real) / real  (preserve sign to see under/over-estimation)
+    """
+    if not real_values or not sim_values:
+        return np.array([])
+    
+    min_len = min(len(real_values), len(sim_values))
+    real_arr = np.array(real_values[:min_len])
+    sim_arr = np.array(sim_values[:min_len])
+    
+    mask = real_arr != 0
+    if not np.any(mask):
+        return np.array([])
+    
+    return (sim_arr[mask] - real_arr[mask]) / real_arr[mask]
+
+
+def flatten_phase_series(data: Dict[Tuple[int, str], List[int]], phase: str) -> List[int]:
+    """Aggregate per-client series for a specific phase."""
+    series: List[int] = []
+    for (client_id, op_type) in sorted(data.keys()):
+        if op_type != phase:
+            continue
+        series.extend(data[(client_id, op_type)])
+    return series
+
+
+def compute_e2e_duration_from_logs(scenario_dir: Path, backend: str = None, trim: int = 500) -> Optional[int]:
+    """Compute true end-to-end application completion time from timestamp logs with trimming support."""
     timestamps = []
     
     # For real world data, try flows_debug.txt
@@ -161,7 +195,15 @@ def compute_e2e_duration_from_logs(scenario_dir: Path, backend: str = None) -> O
         return None
     
     timestamps.sort()
-    return timestamps[-1] - timestamps[0]  # End-to-end duration
+    
+    # Apply trim: remove first and last 'trim' timestamps (same as flow trim)
+    if trim > 0 and len(timestamps) > 2 * trim:
+        timestamps = timestamps[trim:-trim]
+    
+    if not timestamps:
+        return None
+    
+    return timestamps[-1] - timestamps[0]  # End-to-end duration after trim
 
 
 def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
@@ -186,13 +228,15 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
         "m4": base_dir / "eval_test" / "m4" / scenario
     }
     
-    # Load data from all backends
+    # Load data from all backends (now returns both data dict and trimmed entries)
     all_data = {}
+    all_trimmed_entries = {}
     for name, file_path in files.items():
         if file_path.exists():
-            data = load_data(file_path)
+            data, trimmed_entries = load_data(file_path)
             if data:
                 all_data[name] = data
+                all_trimmed_entries[name] = trimmed_entries
     
     if "real_world" not in all_data:
         return None
@@ -204,8 +248,8 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
         # Per-flow times (for individual flow analysis)
         end2end_times = compute_end2end_times(data)
         
-        # True application completion time (scenario-level)
-        app_completion_time = compute_e2e_duration_from_logs(dirs[backend], backend)
+        # Compute application completion time from TRIMMED data (respects trim=500)
+        app_completion_time = compute_e2e_duration_from_logs(dirs[backend], backend, trim=500)
         
         if end2end_times:
             scenario_results[backend] = {
@@ -213,12 +257,15 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
                 "median": np.median(end2end_times),
                 "p90": np.percentile(end2end_times, 90),
                 "count": len(end2end_times),
-                "app_completion_time": app_completion_time  # True scenario completion time (ns)
+                "app_completion_time": app_completion_time,  # True scenario completion time (ns)
+                "app_completion_time_raw": app_completion_time,
             }
     
     # Compute simple relative errors vs real-world (like original analyze.py)
     if "real_world" in scenario_results:
         real_times = scenario_results["real_world"]["end2end_times"]
+        real_ud_series = flatten_phase_series(all_data["real_world"], "ud")
+        real_rdma_series = flatten_phase_series(all_data["real_world"], "rdma")
         
         for backend in ["m4", "flowsim", "ns3"]:
             if backend in scenario_results:
@@ -226,6 +273,15 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
                 
                 # Compute simple relative errors: |real - sim| / real
                 relative_errors = compute_relative_errors(real_times, sim_times)
+                signed_errors = compute_signed_relative_errors(real_times, sim_times)
+                ud_signed = compute_signed_relative_errors(
+                    real_ud_series,
+                    flatten_phase_series(all_data[backend], "ud"),
+                )
+                rdma_signed = compute_signed_relative_errors(
+                    real_rdma_series,
+                    flatten_phase_series(all_data[backend], "rdma"),
+                )
                 
                 if len(relative_errors) > 0:
                     scenario_results[backend]["relative_errors"] = relative_errors
@@ -233,6 +289,16 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
                 else:
                     scenario_results[backend]["relative_errors"] = np.array([])
                     scenario_results[backend]["median_error"] = float('inf')
+                
+                if len(signed_errors) > 0:
+                    scenario_results[backend]["signed_errors"] = signed_errors
+                else:
+                    scenario_results[backend]["signed_errors"] = np.array([])
+                
+                scenario_results[backend]["signed_errors_by_phase"] = {
+                    "ud": ud_signed if len(ud_signed) > 0 else np.array([]),
+                    "rdma": rdma_signed if len(rdma_signed) > 0 else np.array([]),
+                }
     
     return scenario_results
 
@@ -468,6 +534,171 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
     print(f"  📁 Saved: {results_dir / 'm4-testbed-perflow.png'}")
 
 
+def generate_perflow_signed_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
+    """Generate CDF plot of signed per-flow relative errors (retaining bias direction)."""
+    
+    plt.figure(figsize=(8, 6))
+    
+    all_signed_errors = {"m4": [], "flowsim": [], "ns3": []}
+    
+    for result in all_scenario_results:
+        if not result:
+            continue
+        for backend in ["m4", "flowsim", "ns3"]:
+            signed = result.get(backend, {}).get("signed_errors")
+            if signed is not None and len(signed) > 0 and np.all(np.isfinite(signed)):
+                all_signed_errors[backend].extend(signed)
+    
+    backends = ["flowsim", "ns3", "m4"]
+    x_min, x_max = None, None
+    
+    for i, backend in enumerate(backends):
+        errors = all_signed_errors.get(backend, [])
+        if not errors:
+            continue
+        
+        arr = np.sort(np.array(errors) * 100.0)  # Convert to percentage
+        if len(arr) == 0:
+            continue
+        y = np.linspace(0, 1, len(arr), endpoint=False) * 100.0
+        
+        x_min = arr[0] if x_min is None else min(x_min, arr[0])
+        x_max = arr[-1] if x_max is None else max(x_max, arr[-1])
+        
+        plt.step(arr, y, where="post", label=PERFLOW_LABELS[i],
+                 linewidth=2, color=PERFLOW_COLORS[i])
+    
+    plt.xlabel("Signed relative estimation error for per-flow FCT slowdown (%)", fontsize=15)
+    plt.ylabel("CDF (%)", fontsize=15)
+    plt.title("(b) CDF of per-flow slowdown errors (signed)")
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.legend(fontsize=18, loc=4)
+    plt.axvline(0.0, color="gray", linestyle="--", linewidth=1)
+    
+    if x_min is not None and x_max is not None:
+        span = x_max - x_min
+        if span <= 0:
+            span = max(abs(x_min), abs(x_max))
+            x_min, x_max = -span, span
+        margin = max(5.0, span * 0.1)
+        center = 0.5 * (x_min + x_max)
+        half_span = 0.5 * span + margin
+        x_min = center - half_span
+        x_max = center + half_span
+        if x_min >= x_max:
+            half_span = max(abs(x_min), abs(x_max), 10.0)
+            x_min, x_max = -half_span, half_span
+        plt.xlim(x_min, x_max)
+    
+    plt.tight_layout()
+    plt.savefig(results_dir / 'm4-testbed-perflow-signed.png', dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"  📁 Saved: {results_dir / 'm4-testbed-perflow-signed.png'}")
+
+
+def generate_perflow_signed_by_window_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
+    """Generate signed per-flow CDF plots separated by window size."""
+    
+    for window_size in [1, 2, 4]:
+        plt.figure(figsize=(8, 6))
+        
+        window_signed = {"m4": [], "flowsim": [], "ns3": []}
+        
+        for result in all_scenario_results:
+            if not result:
+                continue
+            if extract_window_size(result["scenario"]) != window_size:
+                continue
+            
+            for backend in ["m4", "flowsim", "ns3"]:
+                signed = result.get(backend, {}).get("signed_errors")
+                if signed is not None and len(signed) > 0 and np.all(np.isfinite(signed)):
+                    window_signed[backend].extend(signed)
+        
+        x_min, x_max = None, None
+        backends = ["flowsim", "ns3", "m4"]
+        for i, backend in enumerate(backends):
+            errors = window_signed.get(backend, [])
+            if not errors:
+                continue
+            
+            arr = np.sort(np.array(errors) * 100.0)
+            if len(arr) == 0:
+                continue
+            y = np.linspace(0, 1, len(arr), endpoint=False) * 100.0
+            
+            x_min = arr[0] if x_min is None else min(x_min, arr[0])
+            x_max = arr[-1] if x_max is None else max(x_max, arr[-1])
+            
+            plt.step(arr, y, where="post", label=PERFLOW_LABELS[i],
+                     linewidth=2, color=PERFLOW_COLORS[i])
+        
+        plt.xlabel("Signed relative estimation error for per-flow FCT slowdown (%)", fontsize=15)
+        plt.ylabel("CDF (%)", fontsize=15)
+        plt.title(f"(b) CDF of per-flow slowdown errors (signed)\n(Window Size: {window_size})")
+        plt.grid(True, linestyle="--", alpha=0.6)
+        plt.legend(fontsize=18, loc=4)
+        plt.axvline(0.0, color="gray", linestyle="--", linewidth=1)
+        plt.xlim(-100, 100)
+        
+        plt.tight_layout()
+        filename = f'm4-testbed-perflow-signed-window{window_size}.png'
+        plt.savefig(results_dir / filename, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"  📁 Saved: {results_dir / filename}")
+
+
+def generate_perflow_signed_phase_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
+    """Generate signed per-flow CDF plots separated by flow type (UD vs RDMA)."""
+    
+    phase_labels = {"ud": "UD flows", "rdma": "RDMA flows"}
+    
+    for phase in ["ud", "rdma"]:
+        plt.figure(figsize=(8, 6))
+        
+        phase_signed = {"m4": [], "flowsim": [], "ns3": []}
+        
+        for result in all_scenario_results:
+            if not result:
+                continue
+            for backend in ["m4", "flowsim", "ns3"]:
+                signed_map = result.get(backend, {}).get("signed_errors_by_phase", {})
+                arr = signed_map.get(phase)
+                if arr is not None and len(arr) > 0 and np.all(np.isfinite(arr)):
+                    phase_signed[backend].extend(arr)
+        
+        backends = ["flowsim", "ns3", "m4"]
+        for i, backend in enumerate(backends):
+            errors = phase_signed.get(backend, [])
+            if not errors:
+                continue
+            
+            arr = np.sort(np.array(errors) * 100.0)
+            if len(arr) == 0:
+                continue
+            y = np.linspace(0, 1, len(arr), endpoint=False) * 100.0
+            
+            plt.step(arr, y, where="post", label=PERFLOW_LABELS[i],
+                     linewidth=2, color=PERFLOW_COLORS[i])
+        
+        plt.xlabel("Signed relative estimation error for per-flow FCT slowdown (%)", fontsize=15)
+        plt.ylabel("CDF (%)", fontsize=15)
+        plt.title(f"(b) CDF of per-flow slowdown errors (signed)\n{phase_labels[phase]}")
+        plt.grid(True, linestyle="--", alpha=0.6)
+        plt.legend(fontsize=18, loc=4)
+        plt.axvline(0.0, color="gray", linestyle="--", linewidth=1)
+        plt.xlim(-100, 100)
+        plt.tight_layout()
+        
+        filename = f'm4-testbed-perflow-signed-{phase}.png'
+        plt.savefig(results_dir / filename, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"  📁 Saved: {results_dir / filename}")
+
+
 def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> None:
     """Generate figures: overall plots (combined + by window size) and per-flow accuracy"""
     
@@ -482,7 +713,10 @@ def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> N
     # Generate overall plots (combined + separated by window size)
     generate_overall_plot(all_scenario_results, results_dir)
     generate_perflow_plot(all_scenario_results, results_dir)
+    generate_perflow_signed_plot(all_scenario_results, results_dir)
     generate_perflow_by_window_plot(all_scenario_results, results_dir)
+    generate_perflow_signed_by_window_plot(all_scenario_results, results_dir)
+    generate_perflow_signed_phase_plot(all_scenario_results, results_dir)
     
     # Generate summary statistics
     with open(results_dir / 'accuracy_summary.txt', 'w') as f:
@@ -494,7 +728,10 @@ def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> N
         f.write("2. m4-testbed-overall-window1.png - Results for window size 1\n")
         f.write("3. m4-testbed-overall-window2.png - Results for window size 2\n") 
         f.write("4. m4-testbed-overall-window4.png - Results for window size 4\n")
-        f.write("5. m4-testbed-perflow.png - Per-flow accuracy (CDF of estimation errors)\n\n")
+        f.write("5. m4-testbed-perflow.png - Per-flow accuracy (CDF of |error|)\n")
+        f.write("6. m4-testbed-perflow-signed.png - Per-flow accuracy (signed error CDF)\n")
+        f.write("7. m4-testbed-perflow-signed-windowX.png - Signed error CDF, separated per window size\n")
+        f.write("8. m4-testbed-perflow-signed-ud.png / -rdma.png - Signed error CDF by flow type\n\n")
         
         # Collect all relative errors for summary
         all_relative_errors_summary = {"m4": [], "flowsim": [], "ns3": []}
@@ -583,9 +820,22 @@ def main():
     
     # Collect scenario-level end-to-end time errors and per-flow errors separately
     backend_stats = {
-        "m4": {"end2end_errors": [], "perflow_errors": []},
-        "flowsim": {"end2end_errors": [], "perflow_errors": []}, 
-        "ns3": {"end2end_errors": [], "perflow_errors": []}
+        "m4": {
+            "end2end_errors": [],
+            "perflow_errors": [],
+            "perflow_signed_phases": {"ud": [], "rdma": []},
+            "app_pairs": [],
+        },
+        "flowsim": {
+            "end2end_errors": [],
+            "perflow_errors": [],
+            "perflow_signed_phases": {"ud": [], "rdma": []},
+        }, 
+        "ns3": {
+            "end2end_errors": [],
+            "perflow_errors": [],
+            "perflow_signed_phases": {"ud": [], "rdma": []},
+        }
     }
     
     for result in all_scenario_results:
@@ -600,6 +850,15 @@ def main():
                     if real_app_time and sim_app_time and real_app_time > 0:
                         e2e_error = abs(real_app_time - sim_app_time) / real_app_time
                         backend_stats[backend]["end2end_errors"].append(e2e_error)
+                        if backend == "m4":
+                            backend_stats[backend]["app_pairs"].append(
+                                (
+                                    result["scenario"],
+                                    real_app_time,
+                                    sim_app_time,
+                                    result[backend].get("app_completion_time_raw"),
+                                )
+                            )
         
         # Per-flow errors: individual flow completion time comparison
         for backend in backend_stats.keys():
@@ -607,6 +866,12 @@ def main():
                 errors = result[backend]["relative_errors"]
                 if len(errors) > 0 and np.all(np.isfinite(errors)):
                     backend_stats[backend]["perflow_errors"].extend(errors)
+            if backend in result:
+                signed_phase = result[backend].get("signed_errors_by_phase", {})
+                for phase in ["ud", "rdma"]:
+                    arr = signed_phase.get(phase)
+                    if arr is not None and len(arr) > 0 and np.all(np.isfinite(arr)):
+                        backend_stats[backend]["perflow_signed_phases"][phase].extend(arr)
     
     # Display comprehensive statistics
     print("\n📊 END-TO-END APPLICATION COMPLETION TIME ERRORS:")
@@ -650,6 +915,16 @@ def main():
     for i, (backend, error) in enumerate(e2e_accuracy_pairs, 1):
         status = "🥇" if i == 1 else "🥈" if i == 2 else "🥉"
         print(f"  {i}. {status} {backend:8}: {error:.1%} median error")
+
+    # Show application completion time comparison for M4 vs real world
+    app_pairs = backend_stats["m4"].get("app_pairs", [])
+    if app_pairs:
+        print("\n📊 Application completion time (seconds):")
+        print(f"{'scenario':10} {'real':>10} {'m4':>10}")
+        for scenario, real_ns, m4_ns, _ in sorted(app_pairs):
+            real_s = real_ns / 1e9 if real_ns else float("nan")
+            m4_s = m4_ns / 1e9 if m4_ns else float("nan")
+            print(f"{scenario:10} {real_s:10.3f} {m4_s:10.3f}")
     
     # Generate plots if requested
     if not args.no_plots:

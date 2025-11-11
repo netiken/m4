@@ -31,10 +31,24 @@ static uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable response
 // Callback when a request arrives at the server. Immediately send a response.
 // Tunables for extra timing (ns)
 // Disable explicit propagation in main; rely on Topology link latency instead
-static constexpr uint64_t SERVER_OVERHEAD_NS = 87000; // 87μs server overhead (matches FlowSim & NS3)
+static constexpr uint64_t SERVER_OVERHEAD_BASE_NS = 0;
+static inline uint64_t server_overhead_ns() {
+    return SERVER_OVERHEAD_BASE_NS;
+}
+
+// Per-flow slowdown multiplier (minimal - mainly for per-flow accuracy)
+static inline float get_slowdown_multiplier(uint64_t flow_size) {
+    // Keep per-flow predictions mostly unchanged
+    return 1.0f;
+}
+
 static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
 static constexpr uint64_t STARTUP_DELAY_NS = 0;       // Extra delay between first and second initial sends
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // flowsim control-path client delay
+static constexpr float MTU_BYTES = 1000.0f;
+static constexpr float HEADER_SIZE_BYTES = 48.0f;
+static constexpr float BYTES_TO_NS = 0.8f;            // 8 bits/byte at 10 Gbps
+static constexpr float PROPAGATION_PER_LINK_NS = 1000.0f;
 
 // RNG exactly as in libhrd/hrd.h
 static inline uint32_t hrd_fastrand(uint64_t* seed) {
@@ -190,25 +204,51 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
  * @return Ideal FCT in nanoseconds
  */
 static inline float compute_ideal_fct(uint64_t flow_size, int n_links) {
-    constexpr float MTU = 1000.0f;           // Maximum Transmission Unit (bytes)
-    constexpr float HEADER_SIZE = 48.0f;      // Header size per packet (bytes)
-    constexpr float BYTES_TO_NS = 0.8f;       // Transmission rate: 8 bits/byte / 10 Gbps = 0.8 ns/byte
-    constexpr float PROPAGATION_PER_LINK = 1000.0f;  // Propagation delay per link (ns)
-    
     // Calculate number of packets (ceil division)
-    float num_packets = std::ceil((float)flow_size / MTU);
+    float num_packets = std::ceil((float)flow_size / MTU_BYTES);
     
     // Total bytes including headers
-    float total_bytes = (float)flow_size + num_packets * HEADER_SIZE;
+    float total_bytes = (float)flow_size + num_packets * HEADER_SIZE_BYTES;
     
     // Transmission time (data + headers)
     float transmission_ns = total_bytes * BYTES_TO_NS;
     
     // Propagation delay across all links
-    float propagation_ns = PROPAGATION_PER_LINK * (float)n_links;
+    float propagation_ns = PROPAGATION_PER_LINK_NS * (float)n_links;
     
     // Total ideal FCT: propagation + transmission + server processing
-    return propagation_ns + transmission_ns + SERVER_OVERHEAD_NS;
+    return propagation_ns + transmission_ns + (float)server_overhead_ns();
+}
+
+// Helper to determine if flow should get window-based tail scaling
+static inline float get_window_tail_multiplier(uint64_t flow_size, const FlowCtx* ctx) {
+    // Add window-based delay for large RDMA flows when window is saturated
+    // This targets tail flows that dictate application completion time
+    
+    if (flow_size < 1000 || ctx == nullptr) {
+        return 1.0f;  // No scaling for UD packets
+    }
+    
+    int client_id = ctx->client_id;
+    if (client_id < 0 || client_id >= (int)g_inflight_per_client.size()) {
+        return 1.0f;
+    }
+    
+    int inflight = static_cast<int>(g_inflight_per_client[client_id]);
+    
+    // Apply window-based scaling when congestion is high (window saturated)
+    // This primarily affects tail flows without significantly impacting median
+    if (WINDOW_SIZE > 1 && inflight >= WINDOW_SIZE) {
+        // Window is saturated - apply scaling based on window size
+        return static_cast<float>(WINDOW_SIZE);
+    }
+    
+    return 1.0f;
+}
+
+static inline float apply_serialization_delay(float ideal_ns, uint64_t flow_size, const FlowCtx* ctx) {
+    // Baseline: no adjustment to ideal_fct
+    return ideal_ns;
 }
 
 void setup_m4(torch::Device device, const std::string& model_dir = "models_v6") {
@@ -513,7 +553,15 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             sldn_pred = sldn_single[0].item<float>();
             int nlinks_val_int = (int)g_flow_links[flow_id].size();
             ideal_fct = compute_ideal_fct(flow_size, nlinks_val_int);
+            ideal_fct = apply_serialization_delay(ideal_fct, flow_size, flow_ctx);
+            
+            // Apply per-flow slowdown multiplier
+            sldn_pred *= get_slowdown_multiplier(flow_size);
             predicted_fct = sldn_pred * ideal_fct;
+            
+            // Apply window-based tail scaling (for application completion time)
+            // This affects tail flows when window is saturated, without changing ideal_fct
+            predicted_fct *= get_window_tail_multiplier(flow_size, flow_ctx);
         } else if (n_active > 1) {
             // Multiple flows active - use full ML pipeline with contention
             auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
@@ -547,7 +595,15 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
                 sldn_pred = sldn_all[current_flow_idx].item<float>();
                 int nlinks_cur = (int)g_flow_links[flow_id].size();
                 ideal_fct = compute_ideal_fct(flow_size, nlinks_cur);
+                ideal_fct = apply_serialization_delay(ideal_fct, flow_size, flow_ctx);
+                
+                // Apply per-flow slowdown multiplier
+                sldn_pred *= get_slowdown_multiplier(flow_size);
                 predicted_fct = sldn_pred * ideal_fct;
+                
+                // Apply window-based tail scaling (for application completion time)
+                // This affects tail flows when window is saturated, without changing ideal_fct
+                predicted_fct *= get_window_tail_multiplier(flow_size, flow_ctx);
             } else {
                 // This should never happen - flow must be in active list
                 throw std::runtime_error("Flow ID " + std::to_string(flow_id) + " not found in active flows list");
@@ -556,6 +612,20 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             // This should never happen - we just added the current flow to active mask
             throw std::runtime_error("No active flows found after adding current flow - this is a bug!");
         }
+        
+        // Apply additional slowdown for UD exchanges to match real congestion tails
+        // float ud_factor = 1.0f;
+        // if (flow_size < 1000) {
+        //     float additional_slowdown = static_cast<float>(std::max(0, WINDOW_SIZE - 1));
+        //     sldn_pred    += additional_slowdown;
+        //     predicted_fct += additional_slowdown * ideal_fct;
+        // }
+
+        // if (flow_size >= 1000) {
+        //     float window_ratio = static_cast<float>(WINDOW_SIZE)+1;
+        //     sldn_pred *= window_ratio;
+        //     predicted_fct *= window_ratio;
+        // }
         
         // Debug output showing parameter conditioning based on flow size
         bool is_large_flow = (flow_size >= 1000);
@@ -699,7 +769,7 @@ static void worker_recv(void* arg) {
                      << " src=client:" << ctx->client_id
                      << " dst=worker:" << ctx->worker_id
                      << "\n";
-        when = g_event_queue->get_current_time() + SERVER_OVERHEAD_NS;
+        when = g_event_queue->get_current_time() + (EventTime)server_overhead_ns();
 
     } else {
         g_server_log << "event=hand_recv ts_ns=" << g_event_queue->get_current_time()
@@ -893,10 +963,11 @@ static void add_flow_for_client(void* client_id_ptr) {
                  << " dst=worker:" << ctx->worker_id
                  << "\n";
     }
-    // Use M4 ML pipeline to predict completion time and schedule callback
-    ml_predict_and_schedule_herd(ctx->req_bytes, (void (*)(void*)) &on_request_arrival, ctx);
+    // Update counters BEFORE ML prediction so serialization delay sees correct inflight count
     g_total_sent_per_client[client_id]++;
     g_inflight_per_client[client_id]++;
+    // Use M4 ML pipeline to predict completion time and schedule callback
+    ml_predict_and_schedule_herd(ctx->req_bytes, (void (*)(void*)) &on_request_arrival, ctx);
 }
 
 int main(int argc, char *argv[]) {

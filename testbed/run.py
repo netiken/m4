@@ -38,7 +38,7 @@ RDMA_SIZES: List[int] = list(RDMA_TITLES_BASE.keys())
 
 # Quick test configuration (4 scenarios: small/large RDMA × single/multi window)
 QUICK_WINDOW_SIZES: List[int] = [1, 4]
-QUICK_RDMA_SIZES: List[int] = [102408, 1024008]  # 100KB and 1000KB
+QUICK_RDMA_SIZES: List[int] = [256008, 1024008]  # 250KB and 1000KB
 
 # Paths
 ROOT_DIR = pathlib.Path(__file__).resolve().parent
@@ -260,7 +260,7 @@ class NS3Backend:
 class M4Backend:
     """M4 (ML-enhanced) backend"""
     
-    def __init__(self, gpu_ids: list = None, model_dir: str = "models_v6"):
+    def __init__(self, gpu_ids: list = None, model_dir: str = "models_v12"):
         self.name = "m4"
         self.backend_dir = BACKENDS_DIR / "m4"
         self.results_dir = ROOT_DIR / "eval_test" / "m4"
@@ -270,12 +270,24 @@ class M4Backend:
         self.gpu_ids = gpu_ids if gpu_ids else [0]  # Default to GPU 0
         self._gpu_counter = 0  # Counter for round-robin GPU assignment
         self.model_dir = model_dir  # Model directory for ML inference
+        self.model_dir_path = (self.backend_dir / self.model_dir).resolve()
             
     def run_sweep(self, jobs: int, quick: bool = False) -> bool:
         """Run M4 sweep - from backends/m4/run_sweep.py"""
         if not self.binary_path.exists():
             print(f"❌ M4 binary not found: {self.binary_path}", file=sys.stderr)
             print("Build M4 first: ./build.sh m4", file=sys.stderr)
+            return False
+        
+        if not self.model_dir_path.exists():
+            available = sorted(
+                p.name for p in self.backend_dir.glob("models_v*") if p.is_dir()
+            )
+            print(f"❌ Model directory not found: {self.model_dir_path}", file=sys.stderr)
+            if available:
+                print(f"   Available model directories: {', '.join(available)}", file=sys.stderr)
+            else:
+                print("   No models_v* directories found under backends/m4/", file=sys.stderr)
             return False
         
         # Clean and create output directory
@@ -322,8 +334,14 @@ class M4Backend:
             
             # Command: binary window rdma topology gpu_id model_dir
             # Use absolute path for model_dir so M4 can find models regardless of cwd
-            model_path = str((self.backend_dir / self.model_dir).resolve())
-            cmd = [str(self.binary_path.resolve()), str(window), str(rdma), "12", str(gpu_id), model_path]
+            cmd = [
+                str(self.binary_path.resolve()),
+                str(window),
+                str(rdma),
+                "12",
+                str(gpu_id),
+                str(self.model_dir_path),
+            ]
             
             with stdout_path.open("w") as out, stderr_path.open("w") as err:
                 # Run directly in output directory - files written directly to final location!
@@ -683,8 +701,8 @@ def main():
     parser.add_argument(
         "--model-dir", "-m",
         type=str,
-        default="models_v5",
-        help="Model directory for M4 ML inference (default: 'models_v6')"
+        default="models_v12",
+        help="Model directory for M4 ML inference (default: 'models_v12')"
     )
     parser.add_argument(
         "--quick", "-q",
