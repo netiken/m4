@@ -341,6 +341,8 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         // Initialize h_vec for this flow (matching reference implementation)
         // Use testbed size transformation (matches dataset.py logic with enable_testbed=True)
         float normalized_size = std::log2f((float)flow_size + 1.0f);
+
+        h_vec[flow_id].zero_();
         h_vec[flow_id][0] = 1.0f;  // Constant feature
         h_vec[flow_id][2] = normalized_size;  // Normalized flow size  
         h_vec[flow_id][3] = static_cast<float>(g_flow_links[flow_id].size());  // Number of links along path
@@ -466,9 +468,10 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             // Step 3: LSTM rate updates with GNN output
             torch::Tensor params_active = flow_params_tensor.index_select(0, active_flow_indices); // [n_active, 13]
             torch::Tensor h_rate_input = torch::cat({h_flows_updated, params_active}, 1); // [n_active, h_dim+13]
-            torch::Tensor h_flows_old = h_vec.index_select(0, active_flow_indices);
+            // CRITICAL: Use TIME-UPDATED h_vec as second LSTM input, not the old one!
+            torch::Tensor h_flows_time_updated = h_vec.index_select(0, active_flow_indices);
             
-            torch::Tensor h_flows_final = lstmcell_rate.forward({h_rate_input, h_flows_old}).toTensor();
+            torch::Tensor h_flows_final = lstmcell_rate.forward({h_rate_input, h_flows_time_updated}).toTensor();
             // Use the current time-updated link hidden state as second input
                 auto z_link_time_cur = z_links_active;
             torch::Tensor z_links_final = lstmcell_rate_link.forward({z_links_updated, z_link_time_cur}).toTensor();
