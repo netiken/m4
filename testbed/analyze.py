@@ -51,10 +51,10 @@ QUICK_SCENARIOS = [
     "1000_1", "1000_4"   # 1000KB RDMA, window 1 & 4
 ]
 
-# Plot styling constants (define once, use everywhere)
-OURS_LABEL = "FLS"  # Label for M4 in plots (following paper convention)
-PLOT_COLORS = {"real_world": "black", "flowsim": "tab:blue", "ns3": "tab:orange", "m4": "tab:green"}
-PLOT_MARKERS = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
+# Plot styling constants (matching notebook style exactly)
+OURS_LABEL = "m4"  # Label for M4 in plots (following paper convention)
+PLOT_COLORS = {"real_world": "black", "flowsim": "orange", "ns3": "crimson", "m4": "cornflowerblue"}
+PLOT_MARKERS = {"real_world": "D", "flowsim": "^", "ns3": "o", "m4": "X"}  # Testbed=diamond, flowSim=triangle, UNISON=circle, FLS=X
 PLOT_LABELS = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
 PERFLOW_COLORS = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, FLS
 PERFLOW_LABELS = ["flowSim", "ns3", OURS_LABEL]
@@ -331,24 +331,24 @@ def extract_window_size(scenario: str) -> int:
 
 
 def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], results_dir: Path) -> None:
-    """Generate separate overall plots for each window size."""
+    """Generate overall plot for window size 2 only."""
     
     # Group results by window size
-    results_by_window = {"1": [], "2": [], "4": []}
+    results_by_window = {"2": []}
     
     for result in all_scenario_results:
         if not result:
             continue
         window_size = str(extract_window_size(result["scenario"]))
-        if window_size in results_by_window:
-            results_by_window[window_size].append(result)
+        if window_size == "2":
+            results_by_window["2"].append(result)
     
-    # Create separate plot for each window size
+    # Create plot for window size 2 only
     for window_size, scenario_results in results_by_window.items():
         if not scenario_results:
             continue
             
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(7, 4.5))
         
         # Collect data points by backend for this window size
         backend_data = {"real_world": [], "flowsim": [], "ns3": [], "m4": []}
@@ -370,14 +370,14 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
                 
             xs, ys = zip(*data_points)
             plt.plot(xs, ys, marker=PLOT_MARKERS[backend], label=PLOT_LABELS[backend],
-                    linewidth=2, color=PLOT_COLORS[backend], markersize=8, linestyle='None')
+                    color=PLOT_COLORS[backend], markersize=8, linestyle='None')
         
-        # Apply exact original styling with window size in title
-        plt.xlabel("Size of Data Packets (KB)")
-        plt.ylabel("Application Completion\nTime (ms)")
-        plt.title(f"(a) Application completion time vs. size of data packets\n(Window Size: {window_size})")
-        plt.grid(True, linestyle="--", alpha=0.6)  # Exact original grid style
-        plt.legend()
+        # Apply notebook styling
+        plt.xlabel("Size of Data Packets (KB)", fontsize=15)
+        plt.ylabel("Application Completion\nTime (ms)", fontsize=15)
+        # plt.title(f"(a) Application completion time vs. size of data packets")
+        plt.grid(True, alpha=0.3)
+        plt.legend(fontsize=15)
         plt.tight_layout()
         
         # Save with window size suffix
@@ -499,7 +499,7 @@ def generate_perflow_by_window_plot(all_scenario_results: List[Dict], results_di
 def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
     """Generate m4-testbed-perflow.png - Per-flow CDF plot using exact original styling."""
     
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=(7, 4.5))
     
     # Collect all relative errors across scenarios (simple metric)
     all_relative_errors = {"m4": [], "flowsim": [], "ns3": []}
@@ -514,34 +514,34 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
     # Use global styling constants
     backends = ["flowsim", "ns3", "m4"]
     
-    # Plot each backend as CDF using exact original style
+    # Plot each backend as CDF
     for i, backend in enumerate(backends):
         if backend in all_relative_errors and all_relative_errors[backend]:
             errors = np.array(all_relative_errors[backend])
-            # Remove infinite values like in original
+            # Remove infinite values
             finite_errors = errors[np.isfinite(errors)]
             
             if len(finite_errors) == 0:
                 continue
                 
-            # Sort and create CDF exactly like original
+            # Sort and create CDF
             arr = np.sort(finite_errors)
             y = np.linspace(0, 1, len(arr), endpoint=False)
             
-            # Convert to percentage for both axes to match original
+            # Convert to percentage for both axes
             arr_pct = arr * 100  # Convert to percentage
             y_pct = y * 100      # Convert to percentage
             
-            # Plot with step function exactly like original
+            # Plot with step function
             plt.step(arr_pct, y_pct, where="post", label=PERFLOW_LABELS[i], 
                     linewidth=2, color=PERFLOW_COLORS[i])
     
-    # Apply exact original styling from make_plots.py
+    # Apply notebook styling
     plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=15)
     plt.ylabel("CDF (%)", fontsize=15)  
     plt.title("(b) CDF of per-flow FCT slowdown errors")
-    plt.grid(True, linestyle="--", alpha=0.6)  # Exact original grid style
-    plt.legend(fontsize=18, loc=4)  # loc=4 is lower right, exact original style
+    plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=18, loc=4)  # loc=4 is lower right
     plt.tight_layout()
     plt.xlim(0.5, 1000)
     plt.xscale('log')
@@ -717,7 +717,7 @@ def generate_perflow_signed_phase_plot(all_scenario_results: List[Dict], results
 
 
 def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> None:
-    """Generate figures: overall plots (combined + by window size) and per-flow accuracy"""
+    """Generate figures: window2 overall plot and per-flow accuracy plot only"""
     
     if base_dir is None:
         base_dir = Path(__file__).parent
@@ -725,30 +725,20 @@ def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> N
     results_dir = base_dir / "results" 
     results_dir.mkdir(exist_ok=True)
     
-    print(f"\n📊 Generating figures with flow separation...")
+    print(f"\n📊 Generating figures...")
     
-    # Generate overall plots (combined + separated by window size)
-    generate_overall_plot(all_scenario_results, results_dir)
+    # Generate only window2 overall plot and per-flow plot
+    generate_overall_plots_by_window_size(all_scenario_results, results_dir)
     generate_perflow_plot(all_scenario_results, results_dir)
-    generate_perflow_signed_plot(all_scenario_results, results_dir)
-    generate_perflow_by_window_plot(all_scenario_results, results_dir)
-    generate_perflow_signed_by_window_plot(all_scenario_results, results_dir)
-    generate_perflow_signed_phase_plot(all_scenario_results, results_dir)
     
     # Generate summary statistics
     with open(results_dir / 'accuracy_summary.txt', 'w') as f:
-        f.write("M4 Network Simulation Analysis - Matching Your Target Figures\n")
+        f.write("M4 Network Simulation Analysis\n")
         f.write("=" * 60 + "\n\n")
         
         f.write("GENERATED FIGURES:\n")
-        f.write("1. m4-testbed-overall.png - Overall results (all window sizes combined)\n")
-        f.write("2. m4-testbed-overall-window1.png - Results for window size 1\n")
-        f.write("3. m4-testbed-overall-window2.png - Results for window size 2\n") 
-        f.write("4. m4-testbed-overall-window4.png - Results for window size 4\n")
-        f.write("5. m4-testbed-perflow.png - Per-flow accuracy (CDF of |error|)\n")
-        f.write("6. m4-testbed-perflow-signed.png - Per-flow accuracy (signed error CDF)\n")
-        f.write("7. m4-testbed-perflow-signed-windowX.png - Signed error CDF, separated per window size\n")
-        f.write("8. m4-testbed-perflow-signed-ud.png / -rdma.png - Signed error CDF by flow type\n\n")
+        f.write("1. m4-testbed-overall-window2.png - Application completion time (window size 2)\n")
+        f.write("2. m4-testbed-perflow.png - Per-flow FCT accuracy (CDF of relative errors)\n\n")
         
         # Collect all relative errors for summary
         all_relative_errors_summary = {"m4": [], "flowsim": [], "ns3": []}

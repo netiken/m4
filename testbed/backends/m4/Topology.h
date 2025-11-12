@@ -30,7 +30,6 @@ class Topology {
  public:
   static void set_event_queue(std::shared_ptr<EventQueue> event_queue) noexcept;
   Topology(int device_count, int npus_count) noexcept;
-  //[[nodiscard]] virtual Route route(uint32_t flow_id, DeviceId src, DeviceId dest) const noexcept = 0;
   void send(std::unique_ptr<Chunk> chunk) noexcept;
   [[nodiscard]] int get_npus_count() const noexcept;
   [[nodiscard]] int get_devices_count() const noexcept;
@@ -79,7 +78,6 @@ class Topology {
 
   EventTime current_time;
 
-  //void instantiate_devices() noexcept;
   void update_link_states();
   double calculate_bottleneck_rate(const std::pair<DeviceId, DeviceId>& link, const std::unordered_set<Chunk*>& fixed_chunks);
   void reschedule_active_chunks();

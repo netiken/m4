@@ -96,50 +96,41 @@ Outputs
 std::shared_ptr<EventQueue> event_queue;
 std::shared_ptr<Topology> topology;
 
-// ======================== HERD-like simulation constants ========================
-
-// HERD Protocol Parameters (mirroring herd/main.h)
+// HERD Protocol Constants
 static constexpr int HERD_NUM_KEYS = (8 * 1024 * 1024);
 static constexpr int NUM_WORKERS = 12;
-static int NUM_CLIENTS = 1;                           // Configurable per topology
-static int WINDOW_SIZE = 1;                           // Per-worker ring slots per client
+static int NUM_CLIENTS = 1;
+static int WINDOW_SIZE = 1;
 
-// Message Sizes  
-static constexpr uint64_t RESP_UD_BYTES = 41;         // Server's metadata response size
-static constexpr uint64_t HANDSHAKE_BYTES = 10;       // Client's handshake payload size
-static uint64_t RESP_RDMA_BYTES = 1024008;            // Server's large data response (configurable)
+// Message Sizes
+static constexpr uint64_t RESP_UD_BYTES = 41;
+static constexpr uint64_t HANDSHAKE_BYTES = 10;
+static uint64_t RESP_RDMA_BYTES = 1024008;
 
 // Timing Parameters
-static constexpr uint64_t SERVER_OVERHEAD_NS = 100000; 
-static constexpr uint64_t SEND_SPACING_NS = 2500;       // Inter-send spacing within batch  
-static constexpr uint64_t STARTUP_DELAY_NS = 0;         // Extra delay between first/second sends
-static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;    // Delay between UD resp and handshake
+static constexpr uint64_t SERVER_OVERHEAD_NS = 100000;
+static constexpr uint64_t SEND_SPACING_NS = 2500;
+static constexpr uint64_t STARTUP_DELAY_NS = 0;
+static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;
 
 // Simulation Parameters
-static constexpr int OPS_PER_CLIENT = 650;             // Total operations per client
-static constexpr int KEY_SIZE_BYTES = 4;               // Key size for CityHash
+static constexpr int OPS_PER_CLIENT = 650;
+static constexpr int KEY_SIZE_BYTES = 4;
 
-// Network Parameters  
-static constexpr double DEFAULT_BANDWIDTH_BPNS = 10.0; // 10 Gbps = 10 bytes/ns
-static constexpr double DATACENTER_DELAY_NS = 1000.0;  // 1μs per hop (matches paper & NS3)
-static constexpr double RACK_DELAY_NS = 1000.0;        // 1μs per hop
-static constexpr double SINGLE_LINK_DELAY_NS = 1000.0; // 1μs per hop
+// Network Parameters
+static constexpr double DEFAULT_BANDWIDTH_BPNS = 10.0;
+static constexpr double DATACENTER_DELAY_NS = 1000.0;
+static constexpr double RACK_DELAY_NS = 1000.0;
+static constexpr double SINGLE_LINK_DELAY_NS = 1000.0;
 
-// RNG Constants (HERD fastrand)
-static constexpr uint64_t RNG_MULTIPLIER = 1103515245;
-static constexpr uint64_t RNG_INCREMENT = 12345;
-
-
-// RNG exactly as in libhrd/hrd.h
 static inline uint32_t hrd_fastrand(uint64_t* seed) {
-    *seed = *seed * RNG_MULTIPLIER + RNG_INCREMENT;
+    *seed = *seed * 1103515245 + 12345;
     return (uint32_t)(*seed >> 32);
 }
 
-// Value length derivation exactly matching herd/client.c & worker.c
 static inline uint8_t herd_val_len_from_key_parts(uint64_t part0, uint64_t part1) {
     const uint8_t min_len = 8;
-    const uint8_t max_len = MICA_MAX_VALUE; // 46 bytes for 64B mica_op
+    const uint8_t max_len = MICA_MAX_VALUE;
     const uint32_t range = (uint32_t)(max_len - min_len + 1);
     uint64_t mix = part0 ^ (part1 >> 32) ^ (part1 & 0xffffffffULL);
     return (uint8_t)(min_len + (mix % range));
@@ -166,8 +157,8 @@ static int* herd_get_random_permutation(int n, int clt_gid, uint64_t* seed) {
 struct ClientState {
     int id;
     uint64_t seed;
-    int* key_perm; // permutation array of size HERD_NUM_KEYS
-    int ws[NUM_WORKERS]; // per-worker window slot ring index
+    int* key_perm;
+    int ws[NUM_WORKERS];
 
     ClientState() : id(0), seed(0xdeadbeef), key_perm(nullptr) {
         for (int i = 0; i < NUM_WORKERS; i++) ws[i] = 0;
@@ -201,7 +192,7 @@ struct FlowRecord {
     EventTime start_ns;
     EventTime end_ns;
     uint64_t fct_ns;
-    std::string stage; // "c2s" or "s2c"
+    std::string stage;
 };
 
 static std::vector<ClientState> g_clients;

@@ -260,7 +260,7 @@ class NS3Backend:
 class M4Backend:
     """M4 (ML-enhanced) backend"""
     
-    def __init__(self, gpu_ids: list = None, model_dir: str = "models_v12"):
+    def __init__(self, gpu_ids: list = None, model_dir: str = "checkpoints"):
         self.name = "m4"
         self.backend_dir = BACKENDS_DIR / "m4"
         self.results_dir = ROOT_DIR / "eval_test" / "m4"
@@ -691,8 +691,8 @@ def main():
     parser.add_argument(
         "--model-dir", "-m",
         type=str,
-        default="models_v12",
-        help="Model directory for M4 ML inference (default: 'models_v12')"
+        default="checkpoints",
+        help="Model directory for M4 ML inference (default: 'checkpoints')"
     )
     parser.add_argument(
         "--quick", "-q",

@@ -16,38 +16,36 @@
 // CityHash for 128-bit key generation (exactly as in HERD)
 #include "rdma_bench/mica/mica.h" // Brings in city.h and MICA_MAX_VALUE
 
-// ======================== HERD-like simulation bits ========================
-// Minimal constants mirroring herd/main.h
+// HERD Protocol Constants
 static constexpr int HERD_NUM_KEYS = (8 * 1024 * 1024);
 static constexpr int NUM_WORKERS = 12;
 static int NUM_CLIENTS = 1; // configurable per-topology mode
 static int WINDOW_SIZE = 16; // per-worker ring slots per client
 
-// New protocol constants for staged exchange
-static constexpr uint64_t RESP_UD_BYTES = 41;       // Server's first small response
-static constexpr uint64_t HANDSHAKE_BYTES = 10;     // Client's handshake payload size
-static uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable response
+// Message Sizes
+static constexpr uint64_t RESP_UD_BYTES = 41;
+static constexpr uint64_t HANDSHAKE_BYTES = 10;
+static uint64_t RESP_RDMA_BYTES = 1024008;
 
-// Callback when a request arrives at the server. Immediately send a response.
-// Tunables for extra timing (ns)
-// Disable explicit propagation in main; rely on Topology link latency instead
+// Timing Parameters
 
 static constexpr uint64_t SERVER_OVERHEAD_NS = 1500000;
-static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
-static constexpr uint64_t STARTUP_DELAY_NS = 0;       // Extra delay between first and second initial sends
-static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // flowsim control-path client delay
+static constexpr uint64_t SEND_SPACING_NS = 2500;
+static constexpr uint64_t STARTUP_DELAY_NS = 0;
+static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;
+// Network Parameters
 static constexpr float MTU_BYTES = 1000.0f;
 static constexpr float HEADER_SIZE_BYTES = 48.0f;
-static constexpr float BYTES_TO_NS = 0.8f;            // 8 bits/byte at 10 Gbps
+static constexpr float BYTES_TO_NS = 0.8f;
 static constexpr float PROPAGATION_PER_LINK_NS = 1000.0f;
 
-// RNG exactly as in libhrd/hrd.h
+// RNG (HERD fastrand)
 static inline uint32_t hrd_fastrand(uint64_t* seed) {
     *seed = *seed * 1103515245 + 12345;
     return (uint32_t)(*seed >> 32);
 }
 
-// Value length derivation exactly matching herd/client.c & worker.c
+// HERD value length derivation
 static inline uint8_t herd_val_len_from_key_parts(uint64_t part0, uint64_t part1) {
     const uint8_t min_len = 8;
     const uint8_t max_len = MICA_MAX_VALUE; // 46 bytes for 64B mica_op
@@ -56,10 +54,9 @@ static inline uint8_t herd_val_len_from_key_parts(uint64_t part0, uint64_t part1
     return (uint8_t)(min_len + (mix % range));
 }
 
-// Generate random permutation of [0, n-1] as in herd/client.c
+// Generate random key permutation per client
 static int* herd_get_random_permutation(int n, int clt_gid, uint64_t* seed) {
     assert(n > 0);
-    // Advance RNG based on client ID to avoid correlation
     for (int i = 0; i < clt_gid * HERD_NUM_KEYS; i++) {
         hrd_fastrand(seed);
     }
@@ -78,8 +75,8 @@ static int* herd_get_random_permutation(int n, int clt_gid, uint64_t* seed) {
 struct ClientState {
     int id;
     uint64_t seed;
-    int* key_perm; // permutation array of size HERD_NUM_KEYS
-    int ws[NUM_WORKERS]; // per-worker window slot ring index
+    int* key_perm;
+    int ws[NUM_WORKERS];
 
     ClientState() : id(0), seed(0xdeadbeef), key_perm(nullptr) {
         for (int i = 0; i < NUM_WORKERS; i++) ws[i] = 0;
@@ -87,24 +84,24 @@ struct ClientState {
 };
 
 struct FlowCtx {
-    int op_index;    // global op index used for FCT output
-    int client_id;   // 0
-    int worker_id;   // 0
-    int slot;        // window slot used (0..WINDOW_SIZE-1)
-    bool is_update;  // PUT vs GET
-    uint8_t vlen;    // value length for PUT or GET-hit
+    int op_index;
+    int client_id;
+    int worker_id;
+    int slot;
+    bool is_update;
+    uint8_t vlen;
     uint64_t req_bytes;
     uint64_t resp_bytes;
-    bool is_handshake; // false: GET phase; true: handshake phase
+    bool is_handshake;
     EventTime start_time;
-    EventTime req_send_time;    // when client sent the initial request (for UD FCT)
-    EventTime server_send_time; // for s->c stage FCT
-    EventTime handshake_send_time; // when client sent the handshake
-    Route route_fwd; // client -> worker
-    Route route_rev; // worker -> client
-    uint64_t ud_predicted_fct_ns;   // ML-predicted UD FCT (req→hand_send)
-    uint64_t rdma_predicted_fct_ns; // ML-predicted RDMA FCT (hand_send→rdma_recv)
-    uint64_t server_delay_ns;       // Additional server delay (for app time only)
+    EventTime req_send_time;
+    EventTime server_send_time;
+    EventTime handshake_send_time;
+    Route route_fwd;
+    Route route_rev;
+    uint64_t ud_predicted_fct_ns;
+    uint64_t rdma_predicted_fct_ns;
+    uint64_t server_delay_ns;
 };
 
 struct FlowRecord {
@@ -117,30 +114,26 @@ struct FlowRecord {
     EventTime start_ns;
     EventTime end_ns;
     uint64_t fct_ns;
-    std::string stage; // "c2s" or "s2c"
+    std::string stage;
 };
 
 static std::vector<ClientState> g_clients;
-static std::vector<Route> g_routes_c2s; // per-client route to server
-static std::vector<Route> g_routes_s2c; // per-client route back
+static std::vector<Route> g_routes_c2s;
+static std::vector<Route> g_routes_s2c;
 static std::vector<FlowRecord> g_flow_records;
-static std::vector<std::deque<FlowCtx*>> g_pending_completions; // per-client CQ buffers
-static std::vector<bool> g_poll_scheduled; // per-client poll scheduled flag
-static std::vector<uint64_t> g_total_sent_per_client; // per-client total sends
-static std::vector<uint64_t> g_client_limit; // per-client send limit
-static std::vector<uint32_t> g_inflight_per_client; // per-client active flows (sliding window)
-static uint64_t g_next_op_index = 0; // global unique op index
-static std::vector<std::ofstream> g_client_logs; // one per client
+static std::vector<std::deque<FlowCtx*>> g_pending_completions;
+static std::vector<bool> g_poll_scheduled;
+static std::vector<uint64_t> g_total_sent_per_client;
+static std::vector<uint64_t> g_client_limit;
+static std::vector<uint32_t> g_inflight_per_client;
+static uint64_t g_next_op_index = 0;
+static std::vector<std::ofstream> g_client_logs;
 static std::ofstream g_server_log;
-// HERD record aggregation is now handled by g_flow_records
-// Shared pointers to use inside callbacks
 static std::shared_ptr<EventQueue> g_event_queue;
 static std::shared_ptr<Topology> g_topology;
 
-// ======================== ML Pipeline State Variables ========================
-// All ML state tensors for LSTM+GNN network simulation (from inference_old)
-// GPU ID will be set from command-line argument (default: 0)
-torch::Device device(torch::kCUDA, 0);  // Will be updated in main() if gpu_id argument provided
+// ML Pipeline State Variables
+torch::Device device(torch::kCUDA, 0);
 
 // Model components
 torch::jit::script::Module lstmcell_time, lstmcell_rate;
@@ -148,22 +141,19 @@ torch::jit::script::Module lstmcell_time_link, lstmcell_rate_link;
 torch::jit::script::Module gnn_layer_0, gnn_layer_1, gnn_layer_2;
 torch::jit::script::Module output_layer;
 
-// Flow and topology data - removed global params, now stored per-flow
-torch::Tensor flow_params_tensor;  // [max_flows, 13] - parameters for each flow
-// Flow -> path link indices and link index mapping for multi-link topologies
+// Flow and topology data
+torch::Tensor flow_params_tensor;
 #include <unordered_map>
 #include <unordered_set>
-static std::unordered_map<long long, int> g_link_index_map; // undirected (min,max) -> idx
-static std::vector<std::vector<int>> g_c2s_link_indices; // per-client link indices (client -> server path)
-static std::vector<std::vector<int>> g_s2c_link_indices; // per-client link indices (server -> client path)
-static std::vector<std::vector<int>> g_flow_links;        // per-flow-id link indices used by that flow
-static int g_n_links_override = -1;                       // computed link count when routes are known
+static std::unordered_map<long long, int> g_link_index_map;
+static std::vector<std::vector<int>> g_c2s_link_indices;
+static std::vector<std::vector<int>> g_s2c_link_indices;
+static std::vector<std::vector<int>> g_flow_links;
+static int g_n_links_override = -1;
 
-// Only keep necessary tensors for HERD simulation
-
-// ML state vectors (CRITICAL for LSTM+GNN)
-torch::Tensor h_vec;        // Hidden states for flows
-torch::Tensor z_t_link;     // Hidden states for links
+// ML state vectors
+torch::Tensor h_vec;
+torch::Tensor z_t_link;
 
 // Flow tracking
 torch::Tensor link_to_graph_id;
@@ -177,59 +167,38 @@ torch::Tensor res_fct_tensor;
 torch::Tensor res_sldn_tensor;
 torch::Tensor sldn_est;
 
-// Cache and counters for HERD simulation
+// Cache and counters
 static torch::Tensor ones_cache;
 int graph_id_counter = 0;
 int graph_id_cur = 0;
 int n_flows_active = 0;
 int n_flows_completed = 0;
 
-// ML prediction service for HERD network simulation
-// Forward declaration for ML-based FCT prediction
+// Forward declaration
 static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(void*), void* ctx);
 
-// ======================== ML Helper Functions ========================
+// ML Helper Functions
 
-/**
- * Compute ideal (baseline) flow completion time with no contention.
- * Matches training formula: propagation + transmission + pipeline_fill
- * Note: Server overhead is added separately via get_server_contention_delay_ns()
- * 
- * @param flow_size Flow size in bytes
- * @param n_links Number of links in the path
- * @return Ideal FCT in nanoseconds
- */
+// Compute ideal FCT (matches training formula: propagation + transmission + pipeline_fill)
 static inline float compute_ideal_fct(uint64_t flow_size, int n_links) {
-    // Calculate number of packets (ceil division)
     float num_packets = std::ceil((float)flow_size / MTU_BYTES);
-    
-    // Total bytes including headers
     float total_bytes = (float)flow_size + num_packets * HEADER_SIZE_BYTES;
-    
-    // Transmission time (full flow serialization)
     float transmission_ns = total_bytes * BYTES_TO_NS;
-    
-    // Propagation delay: n_links - 1 hops (matches training)
     float propagation_ns = PROPAGATION_PER_LINK_NS * (float)(n_links - 1);
-    
-    // Pipeline fill: first packet crosses intermediate hops before full transmission
-    // This accounts for pipelined packet transmission across multiple switches
     float first_packet_bytes = std::min(MTU_BYTES, (float)flow_size) + HEADER_SIZE_BYTES;
     float pipeline_ns = first_packet_bytes * BYTES_TO_NS * (float)(n_links - 2);
-    
-    // Total ideal FCT (matches training formula exactly)
     return propagation_ns + transmission_ns + pipeline_ns;
 }
 
-// Compute server-side processing delay for application completion time
+// Compute server delay (window-based scaling)
 static inline uint64_t get_server_contention_delay_ns(uint64_t flow_size, const FlowCtx* ctx) {
     if (flow_size < 1000 || ctx == nullptr) {
-        return 0;  // No delay for UD packets
+        return 0;
     }
     return SERVER_OVERHEAD_NS * WINDOW_SIZE * WINDOW_SIZE;
 }
 
-void setup_m4(torch::Device device, const std::string& model_dir = "models_v6") {
+void setup_m4(torch::Device device, const std::string& model_dir = "checkpoints") {
     if (!torch::cuda::is_available()) {
         std::cerr << "[ERROR] CUDA is not available! M4 requires GPU for ML inference." << std::endl;
         std::cerr << "Please ensure:" << std::endl;
@@ -327,11 +296,7 @@ void setup_m4_tensors_for_herd(torch::Device device, int32_t max_flows, int32_t 
     g_flow_links.resize(max_flows);
 }
 
-// Global flow ID counter for HERD flows
 static int g_herd_flow_id = 0;
-
-// ML prediction service for HERD flows with full LSTM+GNN+state maintenance
-// Forward declare callbacks used for direction detection
 static void on_request_arrival(void* arg);
 static void on_response_arrival(void* arg);
 static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(void*), void* ctx) {
@@ -698,30 +663,24 @@ static void client_completion_ready(void* arg);
 static void client_start_batch(void* arg);
 static void add_flow_for_client(void* client_id_ptr);
 
-// HERD callbacks - copied exactly from flowsim
+// HERD Protocol Callbacks
+
 static void on_request_arrival(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Determine response size for current phase
-    // Phase 1 (GET): server responds with small UD-sized message
-    // Phase 2 (handshake): server responds with large RDMA-sized message
     if (ctx->is_handshake) {
         ctx->resp_bytes = RESP_RDMA_BYTES;
     } else {
         ctx->resp_bytes = RESP_UD_BYTES;
     }
-    // Record client->server FCT (c2s stage)
     add_flow_record(ctx->op_index, ctx->client_id, ctx->worker_id, ctx->slot,
                    ctx->req_bytes, 0, ctx->start_time, g_event_queue->get_current_time(),
                    ctx->is_handshake ? "c2s_handshake" : "c2s_get");
-    // No extra propagation here; Topology models per-hop latency
     EventTime when = g_event_queue->get_current_time();
     g_event_queue->schedule_event(when, (void (*)(void*)) &worker_recv, ctx);
 }
 
 static void worker_recv(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log request receive at worker (after propagation)
-    // No base server overhead here - custom delays are added in get_server_contention_delay_ns()
     EventTime when = g_event_queue->get_current_time();
     
     if (!ctx->is_handshake) {
@@ -745,7 +704,6 @@ static void worker_recv(void* arg) {
                      << " dst=worker:" << ctx->worker_id
                      << "\n";
     }
-    // Schedule worker send immediately (custom server delays added at completion time)
     g_event_queue->schedule_event(when, (void (*)(void*)) &worker_send, ctx);
 }
 
@@ -786,7 +744,6 @@ static void on_response_arrival(void* arg) {
     else g_event_queue->schedule_event(when, (void (*)(void*)) &client_recv_ud, ctx);
 }
 
-// Client receives the small UD-style response and immediately sends handshake
 static void client_recv_ud(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     // Log: resp_recv_ud (using actual timestamp - not used for per-flow FCT calculation)
@@ -813,7 +770,6 @@ static void client_recv_ud(void* arg) {
     g_event_queue->schedule_event(when, (void (*)(void*)) &client_send_handshake, ctx);
 }
 
-// Client sends the handshake after the configured delay
 static void client_send_handshake(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     ctx->start_time = g_event_queue->get_current_time();
@@ -838,7 +794,6 @@ static void client_send_handshake(void* arg) {
     ml_predict_and_schedule_herd(ctx->req_bytes, (void (*)(void*)) &on_request_arrival, ctx);
 }
 
-// Client receives the large RDMA-style response, finalizes, and slides the window
 static void client_recv_rdma_finalize(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     // Log: resp_rdma_read
@@ -900,7 +855,6 @@ static void client_start_batch(void* arg) {
     }
 }
 
-// Issue one GET for a specific client to maintain sliding window
 static void add_flow_for_client(void* client_id_ptr) {
     int client_id = *(int*)client_id_ptr; free(client_id_ptr);
     int op_index = (int)g_next_op_index; g_next_op_index++;
