@@ -163,8 +163,26 @@ def compute_e2e_duration_from_logs(scenario_dir: Path, backend: str = None, trim
     """Compute true end-to-end application completion time from timestamp logs with trimming support."""
     timestamps = []
     
+    # For M4 backend, use flows.txt which has ACTUAL timestamps (includes server delay)
+    # Client logs have PREDICTED timestamps which we use for per-flow FCT metrics only
+    if backend == "m4":
+        flows_txt = scenario_dir / "flows.txt"
+        if flows_txt.exists():
+            try:
+                with flows_txt.open("r") as f:
+                    for line in f:
+                        parts = line.strip().split()
+                        if len(parts) >= 8:
+                            # Format: op_index client_id worker_id slot req_bytes resp_bytes start_ns end_ns fct_ns stage
+                            start_ns = int(parts[6])
+                            end_ns = int(parts[7])
+                            timestamps.append(start_ns)
+                            timestamps.append(end_ns)
+            except Exception:
+                pass
+    
     # For real world data, try flows_debug.txt
-    if backend is None or backend == "real_world":
+    if not timestamps and (backend is None or backend == "real_world"):
         flows_debug = scenario_dir / "flows_debug.txt"
         if flows_debug.exists():
             import re
@@ -177,7 +195,7 @@ def compute_e2e_duration_from_logs(scenario_dir: Path, backend: str = None, trim
             except Exception:
                 pass
     
-    # For all backends, try grouped_flows.txt with t=X ns format
+    # For all other backends, try grouped_flows.txt with t=X ns format
     if not timestamps:
         grouped_flows = scenario_dir / "grouped_flows.txt"
         if grouped_flows.exists():
