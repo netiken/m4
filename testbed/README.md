@@ -1,80 +1,53 @@
 # M4 Network Simulation Testbed
 
-## Setup
-```bash
-cd /data1/lichenni/m4
-uv pip install -e .
-```
+Unified testbed for comparing M4 (ML-enhanced), FlowSim (flow-level), and NS3 (packet-level) network simulators against real hardware measurements.
 
-## Build Network Backends
+## Quick Start
 
-Build all backends or specific ones:
 ```bash
-# Build all backends (NS3, FlowSim, M4)
+# 1. Build backends
 ./build.sh all
 
-# Build only NS3
-./build.sh ns3
+# 2. Run simulations (M4 example with 8 parallel jobs)
+python run.py m4 --jobs 8
 
-# Build only FlowSim
-./build.sh flowsim
-
-# Build only M4 (uses .venv for LibTorch)
-./build.sh m4
-```
-
-## Run Simulations
-
-Run all backends or specific ones with unified runner:
-```bash
-# Run both NS3 and FlowSim (with 32 parallel jobs by default)
-python run.py all
-
-# Run only NS3 (with 32 parallel jobs)
-python run.py ns3
-
-# Run only FlowSim (with 32 parallel jobs)
-python run.py flowsim
-
-# Run with custom number of parallel jobs
-python run.py ns3 --jobs 16
-python run.py flowsim --jobs 8
-```
-
-Results will be saved to:
-- NS3: `eval_test/ns3/`
-- FlowSim: `eval_test/flowsim/`
-- Testbed (real-world data): `eval_test/testbed/`
-
-## Analyze Results
-```bash
+# 3. Analyze results
 python analyze.py
 ```
 
-This will:
-- Analyze all scenarios from `eval_test/`
-- Generate plots in `results/`
-- Display summary statistics
+Results are saved to `eval_test/{backend}/` and plots to `results/`.
 
-## Manual Testing (Optional)
+## Available Backends
 
-### M4
+- **m4**: ML-enhanced simulator (LSTM + GNN)
+- **flowsim**: Flow-level event-driven simulator
+- **ns3**: Packet-level simulator (UNISON)
+- **all**: Run all backends
+
+## Common Commands
+
 ```bash
-cd backends/m4
-mkdir -p build && cd build
-cmake .. && make
-./no_flowsim 12 1024008
+# Build specific backend
+./build.sh m4|flowsim|ns3|all
+
+# Run with options
+python run.py m4 --jobs 16              # Parallel jobs (default: 32)
+python run.py m4 --quick                # Quick test (4 scenarios)
+
+# Analyze specific scenarios
+python analyze.py --scenario 250_1      # Single scenario
+python analyze.py --quick               # Quick test scenarios only
+python analyze.py --no-plots            # Summary stats only
 ```
 
-### FlowSim
-```bash
-cd backends/flowsim
-make
-./main 1 1024008 12  # window=1, rdma_size=1024008, topology=12
-```
+## Directory Structure
 
-### NS3/UNISON
-```bash
-cd backends/UNISON
-./ns3 run "twelve --maxWindows=2 --dataBytes=1024008"
+```
+eval_test/
+├── testbed/     # Real hardware measurements (ground truth)
+├── m4/          # M4 simulation results
+├── flowsim/     # FlowSim simulation results
+└── ns3/         # NS3 simulation results
+
+results/         # Generated plots and accuracy summaries
 ```
