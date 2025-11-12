@@ -264,7 +264,7 @@ class M4Backend:
         self.name = "m4"
         self.backend_dir = BACKENDS_DIR / "m4"
         self.results_dir = ROOT_DIR / "eval_test" / "m4"
-        self.binary_path = self.backend_dir / "build" / "no_flowsim"
+        self.binary_path = self.backend_dir / "build" / "main"
         self._file_lock = threading.Lock()  # Lock to prevent concurrent file access
         # Support multiple GPUs - assign tasks round-robin to available GPUs
         self.gpu_ids = gpu_ids if gpu_ids else [0]  # Default to GPU 0

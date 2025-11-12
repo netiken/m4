@@ -5,38 +5,30 @@ project(FlowSim)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Optimization flags for maximum performance
-#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -fPIC -march=native -mtune=native -ffast-math -funroll-loops -fopenmp -fno-exceptions -fno-plt -floop-parallelize-all -DNDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "-g -O3")
-
 set(CMAKE_BUILD_TYPE Debug)
 
 
-# Locate LibTorch from virtual environment or conda
-# Priority: 1) CONDA_PREFIX env var, 2) Auto-detect .venv in project root
+# Locate LibTorch from conda or .venv
 if(DEFINED ENV{CONDA_PREFIX})
     set(PYTHON_ENV_PREFIX $ENV{CONDA_PREFIX})
     message(STATUS "Using Python environment from CONDA_PREFIX: ${PYTHON_ENV_PREFIX}")
 else()
-    # Auto-detect .venv in project root (for uv-managed venvs)
     set(VENV_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../.venv")
     if(EXISTS "${VENV_PATH}")
         set(PYTHON_ENV_PREFIX "${VENV_PATH}")
         message(STATUS "Auto-detected virtual environment: ${PYTHON_ENV_PREFIX}")
     else()
         get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
-        message(FATAL_ERROR "Python environment not found. Please either:\n"
-                            "  1) Activate conda environment, OR\n"
-                            "  2) Install PyTorch in .venv: cd ${PROJECT_ROOT} && uv pip install torch torchvision")
+        message(FATAL_ERROR "Python environment not found. Install PyTorch: cd ${PROJECT_ROOT} && uv pip install torch")
     endif()
 endif()
 
-# Locate the Torch CMake package in the Python environment
+# Find LibTorch
 file(GLOB TORCH_CMAKE_DIRS "${PYTHON_ENV_PREFIX}/lib/python*/site-packages/torch/share/cmake/Torch")
 if(NOT TORCH_CMAKE_DIRS)
     get_filename_component(PROJECT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
-    message(FATAL_ERROR "Unable to locate LibTorch under ${PYTHON_ENV_PREFIX}.\n"
-                        "Install PyTorch: cd ${PROJECT_ROOT} && uv pip install torch torchvision")
+    message(FATAL_ERROR "Unable to locate LibTorch. Install PyTorch: cd ${PROJECT_ROOT} && uv pip install torch")
 endif()
 list(SORT TORCH_CMAKE_DIRS)
 list(REVERSE TORCH_CMAKE_DIRS)
@@ -45,18 +37,10 @@ set(CMAKE_PREFIX_PATH "${TORCH_CMAKE_DIR}")
 set(Torch_DIR "${TORCH_CMAKE_DIR}")
 message(STATUS "Found LibTorch at: ${TORCH_CMAKE_DIR}")
 
-# Find the Torch package (will auto-detect CUDA support from PyTorch installation)
-# M4 uses GPU for PyTorch model inference - see main.cpp line 133: torch::Device device(torch::kCUDA, 0)
-# Ensure PyTorch was installed with CUDA: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 find_package(Torch REQUIRED)
 
-# Add shared library target
-#add_library(inference_shared SHARED src/inference.cpp)
-#add_library(flowsim SHARED main.cpp)
-
-# Only keep the integrated no_flowsim target - no separate flowsim needed
-
-SET(NOFLOWSIM_SOURCES
+# M4 executable with integrated ML inference
+SET(M4_SOURCES
     main.cpp
     Device.h
     Device.cpp
@@ -77,54 +61,39 @@ SET(NOFLOWSIM_SOURCES
     Type.h
 )
 
-# Add executable target - only the integrated no_flowsim
-add_executable(no_flowsim ${NOFLOWSIM_SOURCES})
+# Add executable target
+add_executable(main ${M4_SOURCES})
 
 # Set linker flags to reduce binary size
-set_target_properties(no_flowsim PROPERTIES
+set_target_properties(main PROPERTIES
     LINK_FLAGS "-Wl,--strip-all -Wl,--gc-sections"
 )
 
-# Link the Torch library to the integrated executable
-target_link_libraries(no_flowsim "${TORCH_LIBRARIES}")
+target_link_libraries(main "${TORCH_LIBRARIES}")
 
-#add_subdirectory(rapidyaml/ext/c4core)
 add_subdirectory(rapidyaml)
+target_include_directories(main PRIVATE "${PYTHON_ENV_PREFIX}/include")
+target_include_directories(main PRIVATE ${TORCH_INCLUDE_DIRS})
+target_include_directories(main PRIVATE rapidyaml/src rapidyaml/src/c4)
+target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rdma_bench)
+target_link_libraries(main ryml)
 
-# Include directories AFTER adding subdirectories to avoid polluting subprojects
-target_include_directories(no_flowsim PRIVATE "${PYTHON_ENV_PREFIX}/include")
-target_include_directories(no_flowsim PRIVATE ${TORCH_INCLUDE_DIRS})
-target_include_directories(no_flowsim PRIVATE rapidyaml/src rapidyaml/src/c4)
-target_include_directories(no_flowsim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rdma_bench)
-target_link_libraries(no_flowsim ryml)
-
-# Link CityHash C object to satisfy CityHash128 used via mica.h
+# Link CityHash
 add_library(cityhash_c OBJECT rdma_bench/mica/city.c)
-target_link_libraries(no_flowsim cityhash_c)
-
-# Ensure C symbols are visible when linking with C++
-set_target_properties(no_flowsim PROPERTIES LINKER_LANGUAGE CXX)
-
-# Compile city.c as C++ so symbols match C++ caller
+target_link_libraries(main cityhash_c)
+set_target_properties(main PROPERTIES LINKER_LANGUAGE CXX)
 set_source_files_properties(rdma_bench/mica/city.c PROPERTIES LANGUAGE CXX)
 
-# Enable link-time optimization
-set_property(TARGET no_flowsim PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-
-# CUDA-specific optimizations (if using GPU)
+# Optimizations
+set_property(TARGET main PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 if (TORCH_CUDA_ARCH_LIST)
-    set_target_properties(no_flowsim PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
+    set_target_properties(main PROPERTIES CUDA_ARCHITECTURES "${TORCH_CUDA_ARCH_LIST}")
 endif()
 
-# Set RPATH to find Torch libraries at runtime
-set_target_properties(no_flowsim PROPERTIES
-    BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib"
-    INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib"
-)
-
-# Prepend the system libstdc++ path to RPATH so runtime prefers GLIBCXX from the system
-# This mirrors the manual LD_LIBRARY_PATH workaround (using /usr/lib/x86_64-linux-gnu first)
+# RPATH configuration
 set(SYSTEM_CXXLIB_PATH "/usr/lib/x86_64-linux-gnu")
-set_property(TARGET no_flowsim APPEND PROPERTY BUILD_RPATH "${SYSTEM_CXXLIB_PATH}")
-set_property(TARGET no_flowsim APPEND PROPERTY INSTALL_RPATH "${SYSTEM_CXXLIB_PATH}")
-target_link_options(no_flowsim PRIVATE -Wl,-rpath,${SYSTEM_CXXLIB_PATH})
+set_target_properties(main PROPERTIES
+    BUILD_RPATH "${TORCH_INSTALL_PREFIX}/lib;${SYSTEM_CXXLIB_PATH}"
+    INSTALL_RPATH "${TORCH_INSTALL_PREFIX}/lib;${SYSTEM_CXXLIB_PATH}"
+)
+target_link_options(main PRIVATE -Wl,-rpath,${SYSTEM_CXXLIB_PATH})

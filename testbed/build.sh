@@ -99,12 +99,12 @@ function build_m4() {
     cmake ..
     
     print_info "Building M4..."
-    cmake --build . --target no_flowsim -j$(nproc)
+    cmake --build . --target main -j$(nproc)
     
     # Check if binary exists
-    if [ -f "no_flowsim" ]; then
+    if [ -f "main" ]; then
         print_success "M4 built successfully!"
-        print_info "Binary: build/no_flowsim"
+        print_info "Binary: build/main"
     else
         print_error "M4 build failed - binary not found"
         return 1
