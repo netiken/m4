@@ -26,7 +26,6 @@ LINE_RE = re.compile(r"\[(ud|rdma)\] client=(\d+) id=\d+(?:-\d+)? dur_ns=(\d+)")
 
 # All 11-client experiment scenarios  
 ALL_SCENARIOS = [
-    # "100_2", "100_4", 
     "250_1", "250_2", "250_4", 
     "300_1", "300_2", "300_4",
     "400_1", "400_2", "400_4", 
@@ -35,14 +34,6 @@ ALL_SCENARIOS = [
     "750_1", "750_2", "750_4", 
     "900_1", "900_2", "900_4",
     "1000_1", "1000_2", "1000_4"
-    # "250_1", "250_2",
-    # "300_1", "300_2", 
-    # "400_1", "400_2", 
-    # "500_1", "500_2", 
-    # "650_1", "650_2", 
-    # "750_1", "750_2", 
-    # "900_1", "900_2", 
-    # "1000_1", "1000_2", 
 ]
 
 # Quick test scenarios (matches run.py --quick)
@@ -348,7 +339,7 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
         if not scenario_results:
             continue
             
-        plt.figure(figsize=(7, 4.5))
+        plt.figure(figsize=(8, 4))
         
         # Collect data points by backend for this window size
         backend_data = {"real_world": [], "flowsim": [], "ns3": [], "m4": []}
@@ -370,14 +361,14 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
                 
             xs, ys = zip(*data_points)
             plt.plot(xs, ys, marker=PLOT_MARKERS[backend], label=PLOT_LABELS[backend],
-                    color=PLOT_COLORS[backend], markersize=8, linestyle='None')
+                    color=PLOT_COLORS[backend], markersize=12, linestyle='None')
         
         # Apply notebook styling
-        plt.xlabel("Size of Data Packets (KB)", fontsize=15)
-        plt.ylabel("Application Completion\nTime (ms)", fontsize=15)
-        # plt.title(f"(a) Application completion time vs. size of data packets")
+        plt.xlabel("Size of Data Packets (KB)", fontsize=18)
+        plt.ylabel("Application Completion\nTime (ms)", fontsize=18)
+        plt.tick_params(axis='both', which='major', labelsize=16)
         plt.grid(True, alpha=0.3)
-        plt.legend(fontsize=15)
+        plt.legend(fontsize=18, frameon=False,ncol=2)
         plt.tight_layout()
         
         # Save with window size suffix
@@ -388,118 +379,10 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
         print(f"  📁 Saved: {results_dir / filename}")
 
 
-def generate_overall_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
-    """Generate combined overall plot and separate plots by window size."""
-    
-    # Generate separate plots by window size (more detailed analysis)
-    generate_overall_plots_by_window_size(all_scenario_results, results_dir)
-    
-    # Also generate combined plot for comparison
-    plt.figure(figsize=(10, 6))
-    
-    # Collect data points by backend (all window sizes combined)
-    backend_data = {"real_world": [], "flowsim": [], "ns3": [], "m4": []}
-    
-    for result in all_scenario_results:
-        if not result:
-            continue
-            
-        packet_size = extract_packet_size(result["scenario"])
-        
-        for backend in ["real_world", "flowsim", "ns3", "m4"]:
-            if backend in result and "app_completion_time" in result[backend]:
-                # Use application completion time (scenario duration), not median per-flow
-                app_time_s = result[backend]["app_completion_time"] / 1e9  # ns -> s
-                backend_data[backend].append((packet_size, app_time_s * 1000))  # s -> ms
-    
-    # Plot each backend using global styling constants
-    for backend in ["real_world", "flowsim", "ns3", "m4"]:
-        data_points = backend_data[backend]
-        if not data_points:
-            continue
-            
-        xs, ys = zip(*data_points)
-        plt.plot(xs, ys, marker=PLOT_MARKERS[backend], label=PLOT_LABELS[backend],
-                linewidth=2, color=PLOT_COLORS[backend], markersize=8, linestyle='None')
-    
-    # Apply exact original styling
-    plt.xlabel("Size of Data Packets (KB)")
-    plt.ylabel("Application Completion\nTime (ms)")
-    plt.title("(a) Application completion time vs. size of data packets\n(All Window Sizes Combined)")
-    plt.grid(True, linestyle="--", alpha=0.6)  # Exact original grid style
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(results_dir / 'm4-testbed-overall.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    print(f"  📁 Saved: {results_dir / 'm4-testbed-overall.png'}")
-
-
-def generate_perflow_by_window_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
-    """Generate per-flow CDFs separated by window size."""
-    
-    # Group errors by window size
-    for window_size in [1, 2, 4]:
-        plt.figure(figsize=(8, 6))
-        
-        # Collect relative errors for this window size
-        window_errors = {"m4": [], "flowsim": [], "ns3": []}
-        
-        for result in all_scenario_results:
-            if not result:
-                continue
-            result_window = extract_window_size(result["scenario"])
-            if result_window != window_size:
-                continue
-                
-            for backend in ["m4", "flowsim", "ns3"]:
-                if backend in result and "relative_errors" in result[backend]:
-                    window_errors[backend].extend(result[backend]["relative_errors"])
-        
-        # Use global styling constants
-        backends = ["flowsim", "ns3", "m4"]
-        
-        # Plot each backend as CDF
-        for i, backend in enumerate(backends):
-            if backend in window_errors and window_errors[backend]:
-                errors = np.array(window_errors[backend])
-                finite_errors = errors[np.isfinite(errors)]
-                
-                if len(finite_errors) == 0:
-                    continue
-                    
-                # Sort and create CDF
-                arr = np.sort(finite_errors)
-                y = np.linspace(0, 1, len(arr), endpoint=False)
-                
-                # Convert to percentage
-                arr_pct = arr * 100
-                y_pct = y * 100
-                
-                plt.step(arr_pct, y_pct, where="post", label=PERFLOW_LABELS[i], 
-                        linewidth=2, color=PERFLOW_COLORS[i])
-        
-        # Apply styling
-        plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=15)
-        plt.ylabel("CDF (%)", fontsize=15)
-        plt.title(f"(b) CDF of per-flow FCT slowdown errors\n(Window Size: {window_size})")
-        plt.grid(True, linestyle="--", alpha=0.6)
-        plt.legend(fontsize=18, loc=4)
-        plt.xlim(0.5, 1000)
-        plt.xscale('log')
-        plt.tight_layout()
-        
-        filename = f'm4-testbed-perflow-window{window_size}.png'
-        plt.savefig(results_dir / filename, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print(f"  📁 Saved: {results_dir / filename}")
-
-
 def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
     """Generate m4-testbed-perflow.png - Per-flow CDF plot using exact original styling."""
     
-    plt.figure(figsize=(7, 4.5))
+    plt.figure(figsize=(8, 4))
     
     # Collect all relative errors across scenarios (simple metric)
     all_relative_errors = {"m4": [], "flowsim": [], "ns3": []}
@@ -534,186 +417,21 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
             
             # Plot with step function
             plt.step(arr_pct, y_pct, where="post", label=PERFLOW_LABELS[i], 
-                    linewidth=2, color=PERFLOW_COLORS[i])
+                    linewidth=3, color=PERFLOW_COLORS[i])
     
     # Apply notebook styling
-    plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=15)
-    plt.ylabel("CDF (%)", fontsize=15)  
-    plt.title("(b) CDF of per-flow FCT slowdown errors")
+    plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=18)
+    plt.ylabel("CDF (%)", fontsize=18)  
+    plt.tick_params(axis='both', which='major', labelsize=16)
     plt.grid(True, alpha=0.3)
-    plt.legend(fontsize=18, loc=4)  # loc=4 is lower right
+    plt.legend(fontsize=18, loc=4, frameon=False)  # loc=4 is lower right
     plt.tight_layout()
-    plt.xlim(0.5, 1000)
-    plt.xscale('log')
+    plt.xlim(0, 200)
+    # plt.xscale('log')
     plt.savefig(results_dir / 'm4-testbed-perflow.png', dpi=300, bbox_inches='tight')
     plt.close()
     
     print(f"  📁 Saved: {results_dir / 'm4-testbed-perflow.png'}")
-
-
-def generate_perflow_signed_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
-    """Generate CDF plot of signed per-flow relative errors (retaining bias direction)."""
-    
-    plt.figure(figsize=(8, 6))
-    
-    all_signed_errors = {"m4": [], "flowsim": [], "ns3": []}
-    
-    for result in all_scenario_results:
-        if not result:
-            continue
-        for backend in ["m4", "flowsim", "ns3"]:
-            signed = result.get(backend, {}).get("signed_errors")
-            if signed is not None and len(signed) > 0 and np.all(np.isfinite(signed)):
-                all_signed_errors[backend].extend(signed)
-    
-    backends = ["flowsim", "ns3", "m4"]
-    x_min, x_max = None, None
-    
-    for i, backend in enumerate(backends):
-        errors = all_signed_errors.get(backend, [])
-        if not errors:
-            continue
-        
-        arr = np.sort(np.array(errors) * 100.0)  # Convert to percentage
-        if len(arr) == 0:
-            continue
-        y = np.linspace(0, 1, len(arr), endpoint=False) * 100.0
-        
-        x_min = arr[0] if x_min is None else min(x_min, arr[0])
-        x_max = arr[-1] if x_max is None else max(x_max, arr[-1])
-        
-        plt.step(arr, y, where="post", label=PERFLOW_LABELS[i],
-                 linewidth=2, color=PERFLOW_COLORS[i])
-    
-    plt.xlabel("Signed relative estimation error for per-flow FCT slowdown (%)", fontsize=15)
-    plt.ylabel("CDF (%)", fontsize=15)
-    plt.title("(b) CDF of per-flow slowdown errors (signed)")
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.legend(fontsize=18, loc=4)
-    plt.axvline(0.0, color="gray", linestyle="--", linewidth=1)
-    
-    if x_min is not None and x_max is not None:
-        span = x_max - x_min
-        if span <= 0:
-            span = max(abs(x_min), abs(x_max))
-            x_min, x_max = -span, span
-        margin = max(5.0, span * 0.1)
-        center = 0.5 * (x_min + x_max)
-        half_span = 0.5 * span + margin
-        x_min = center - half_span
-        x_max = center + half_span
-        if x_min >= x_max:
-            half_span = max(abs(x_min), abs(x_max), 10.0)
-            x_min, x_max = -half_span, half_span
-        plt.xlim(x_min, x_max)
-    
-    plt.tight_layout()
-    plt.savefig(results_dir / 'm4-testbed-perflow-signed.png', dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    print(f"  📁 Saved: {results_dir / 'm4-testbed-perflow-signed.png'}")
-
-
-def generate_perflow_signed_by_window_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
-    """Generate signed per-flow CDF plots separated by window size."""
-    
-    for window_size in [1, 2, 4]:
-        plt.figure(figsize=(8, 6))
-        
-        window_signed = {"m4": [], "flowsim": [], "ns3": []}
-        
-        for result in all_scenario_results:
-            if not result:
-                continue
-            if extract_window_size(result["scenario"]) != window_size:
-                continue
-            
-            for backend in ["m4", "flowsim", "ns3"]:
-                signed = result.get(backend, {}).get("signed_errors")
-                if signed is not None and len(signed) > 0 and np.all(np.isfinite(signed)):
-                    window_signed[backend].extend(signed)
-        
-        x_min, x_max = None, None
-        backends = ["flowsim", "ns3", "m4"]
-        for i, backend in enumerate(backends):
-            errors = window_signed.get(backend, [])
-            if not errors:
-                continue
-            
-            arr = np.sort(np.array(errors) * 100.0)
-            if len(arr) == 0:
-                continue
-            y = np.linspace(0, 1, len(arr), endpoint=False) * 100.0
-            
-            x_min = arr[0] if x_min is None else min(x_min, arr[0])
-            x_max = arr[-1] if x_max is None else max(x_max, arr[-1])
-            
-            plt.step(arr, y, where="post", label=PERFLOW_LABELS[i],
-                     linewidth=2, color=PERFLOW_COLORS[i])
-        
-        plt.xlabel("Signed relative estimation error for per-flow FCT slowdown (%)", fontsize=15)
-        plt.ylabel("CDF (%)", fontsize=15)
-        plt.title(f"(b) CDF of per-flow slowdown errors (signed)\n(Window Size: {window_size})")
-        plt.grid(True, linestyle="--", alpha=0.6)
-        plt.legend(fontsize=18, loc=4)
-        plt.axvline(0.0, color="gray", linestyle="--", linewidth=1)
-        plt.xlim(-100, 100)
-        
-        plt.tight_layout()
-        filename = f'm4-testbed-perflow-signed-window{window_size}.png'
-        plt.savefig(results_dir / filename, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print(f"  📁 Saved: {results_dir / filename}")
-
-
-def generate_perflow_signed_phase_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
-    """Generate signed per-flow CDF plots separated by flow type (UD vs RDMA)."""
-    
-    phase_labels = {"ud": "UD flows", "rdma": "RDMA flows"}
-    
-    for phase in ["ud", "rdma"]:
-        plt.figure(figsize=(8, 6))
-        
-        phase_signed = {"m4": [], "flowsim": [], "ns3": []}
-        
-        for result in all_scenario_results:
-            if not result:
-                continue
-            for backend in ["m4", "flowsim", "ns3"]:
-                signed_map = result.get(backend, {}).get("signed_errors_by_phase", {})
-                arr = signed_map.get(phase)
-                if arr is not None and len(arr) > 0 and np.all(np.isfinite(arr)):
-                    phase_signed[backend].extend(arr)
-        
-        backends = ["flowsim", "ns3", "m4"]
-        for i, backend in enumerate(backends):
-            errors = phase_signed.get(backend, [])
-            if not errors:
-                continue
-            
-            arr = np.sort(np.array(errors) * 100.0)
-            if len(arr) == 0:
-                continue
-            y = np.linspace(0, 1, len(arr), endpoint=False) * 100.0
-            
-            plt.step(arr, y, where="post", label=PERFLOW_LABELS[i],
-                     linewidth=2, color=PERFLOW_COLORS[i])
-        
-        plt.xlabel("Signed relative estimation error for per-flow FCT slowdown (%)", fontsize=15)
-        plt.ylabel("CDF (%)", fontsize=15)
-        plt.title(f"(b) CDF of per-flow slowdown errors (signed)\n{phase_labels[phase]}")
-        plt.grid(True, linestyle="--", alpha=0.6)
-        plt.legend(fontsize=18, loc=4)
-        plt.axvline(0.0, color="gray", linestyle="--", linewidth=1)
-        plt.xlim(-100, 100)
-        plt.tight_layout()
-        
-        filename = f'm4-testbed-perflow-signed-{phase}.png'
-        plt.savefig(results_dir / filename, dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print(f"  📁 Saved: {results_dir / filename}")
 
 
 def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> None:
