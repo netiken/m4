@@ -110,10 +110,10 @@ static constexpr uint64_t HANDSHAKE_BYTES = 10;       // Client's handshake payl
 static uint64_t RESP_RDMA_BYTES = 1024008;            // Server's large data response (configurable)
 
 // Timing Parameters
-static constexpr uint64_t SERVER_OVERHEAD_NS = 87000;  // 87μs server processing overhead
-static constexpr uint64_t SEND_SPACING_NS = 2500;      // Inter-send spacing within batch  
-static constexpr uint64_t STARTUP_DELAY_NS = 0;        // Extra delay between first/second sends
-static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;   // Delay between UD resp and handshake
+static constexpr uint64_t SERVER_OVERHEAD_NS = 100000; 
+static constexpr uint64_t SEND_SPACING_NS = 2500;       // Inter-send spacing within batch  
+static constexpr uint64_t STARTUP_DELAY_NS = 0;         // Extra delay between first/second sends
+static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;    // Delay between UD resp and handshake
 
 // Simulation Parameters
 static constexpr int OPS_PER_CLIENT = 650;             // Total operations per client
@@ -260,6 +260,11 @@ static void on_request_arrival(void* arg) {
     event_queue->schedule_event(when, (void (*)(void*)) &worker_recv, ctx);
 }
 
+// Get server delay based on window size
+static inline uint64_t get_server_delay_ns() {
+    return SERVER_OVERHEAD_NS * WINDOW_SIZE * WINDOW_SIZE;
+}
+
 static void worker_recv(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     // Log request receive at worker (after propagation)
@@ -274,7 +279,7 @@ static void worker_recv(void* arg) {
                      << " src=client:" << ctx->client_id
                      << " dst=worker:" << ctx->worker_id
                      << "\n";
-        when = event_queue->get_current_time() + SERVER_OVERHEAD_NS;
+        when = event_queue->get_current_time() + get_server_delay_ns();
 
     } else {
         g_server_log << "event=hand_recv ts_ns=" << event_queue->get_current_time()
@@ -286,7 +291,7 @@ static void worker_recv(void* arg) {
                      << " src=client:" << ctx->client_id
                      << " dst=worker:" << ctx->worker_id
                      << "\n";
-        when = event_queue->get_current_time(); //no overhead for handshake (RDMA DMA technique)
+        when = event_queue->get_current_time() + get_server_delay_ns();
     }
     // Schedule worker send after overhead
     event_queue->schedule_event(when, (void (*)(void*)) &worker_send, ctx);

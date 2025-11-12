@@ -58,7 +58,7 @@ PLOT_MARKERS = {"real_world": "D", "flowsim": "o", "ns3": "s", "m4": "^"}
 PLOT_LABELS = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
 PERFLOW_COLORS = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, FLS
 PERFLOW_LABELS = ["flowSim", "ns3", OURS_LABEL]
-def load_data(file_path: Path, trim: int = 500) -> Tuple[Dict[Tuple[int, str], List[int]], List[Tuple[int, str, int]]]:
+def load_data(file_path: Path, trim: int = 0) -> Tuple[Dict[Tuple[int, str], List[int]], List[Tuple[int, str, int]]]:
     """Load experiment data from a simulation output file.
     
     Returns:
@@ -75,7 +75,7 @@ def load_data(file_path: Path, trim: int = 500) -> Tuple[Dict[Tuple[int, str], L
                 op_type, client_str, dur_str = match.groups()
                 ordered_entries.append((int(client_str), op_type, int(dur_str)))
     
-    # Apply trim
+    # Apply trim: remove first and last 'trim' entries
     trimmed_entries = ordered_entries
     if trim > 0 and len(ordered_entries) > 2 * trim:
         trimmed_entries = ordered_entries[trim:-trim]
@@ -247,11 +247,13 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
     }
     
     # Load data from all backends (now returns both data dict and trimmed entries)
+    # Use trim=300 to match the trim used in compute_e2e_duration_from_logs
+    TRIM_FLOWS = 50
     all_data = {}
     all_trimmed_entries = {}
     for name, file_path in files.items():
         if file_path.exists():
-            data, trimmed_entries = load_data(file_path)
+            data, trimmed_entries = load_data(file_path, trim=TRIM_FLOWS)
             if data:
                 all_data[name] = data
                 all_trimmed_entries[name] = trimmed_entries
@@ -266,8 +268,8 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
         # Per-flow times (for individual flow analysis)
         end2end_times = compute_end2end_times(data)
         
-        # Compute application completion time from TRIMMED data (respects trim=500)
-        app_completion_time = compute_e2e_duration_from_logs(dirs[backend], backend, trim=500)
+        # Compute application completion time from TRIMMED data (respects trim)
+        app_completion_time = compute_e2e_duration_from_logs(dirs[backend], backend, trim=TRIM_FLOWS)
         
         if end2end_times:
             scenario_results[backend] = {

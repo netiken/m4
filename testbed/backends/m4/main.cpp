@@ -31,17 +31,8 @@ static uint64_t RESP_RDMA_BYTES = 1024008; // Server's large variable response
 // Callback when a request arrives at the server. Immediately send a response.
 // Tunables for extra timing (ns)
 // Disable explicit propagation in main; rely on Topology link latency instead
-static constexpr uint64_t SERVER_OVERHEAD_BASE_NS = 0;
-static inline uint64_t server_overhead_ns() {
-    return SERVER_OVERHEAD_BASE_NS;
-}
 
-// Per-flow slowdown multiplier (minimal - mainly for per-flow accuracy)
-static inline float get_slowdown_multiplier(uint64_t flow_size) {
-    // Keep per-flow predictions mostly unchanged
-    return 1.0f;
-}
-
+static constexpr uint64_t SERVER_OVERHEAD_NS = 1500000;
 static constexpr uint64_t SEND_SPACING_NS = 2500;     // Inter-send spacing within a batch
 static constexpr uint64_t STARTUP_DELAY_NS = 0;       // Extra delay between first and second initial sends
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;  // flowsim control-path client delay
@@ -201,7 +192,8 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
 
 /**
  * Compute ideal (baseline) flow completion time with no contention.
- * Includes: propagation delay + transmission time with headers + server overhead.
+ * Matches training formula: propagation + transmission + pipeline_fill
+ * Note: Server overhead is added separately via get_server_contention_delay_ns()
  * 
  * @param flow_size Flow size in bytes
  * @param n_links Number of links in the path
@@ -214,73 +206,27 @@ static inline float compute_ideal_fct(uint64_t flow_size, int n_links) {
     // Total bytes including headers
     float total_bytes = (float)flow_size + num_packets * HEADER_SIZE_BYTES;
     
-    // Transmission time (data + headers)
+    // Transmission time (full flow serialization)
     float transmission_ns = total_bytes * BYTES_TO_NS;
     
-    // Propagation delay across all links
-    float propagation_ns = PROPAGATION_PER_LINK_NS * (float)n_links;
+    // Propagation delay: n_links - 1 hops (matches training)
+    float propagation_ns = PROPAGATION_PER_LINK_NS * (float)(n_links - 1);
     
-    // Total ideal FCT: propagation + transmission + server processing
-    return propagation_ns + transmission_ns + (float)server_overhead_ns();
+    // Pipeline fill: first packet crosses intermediate hops before full transmission
+    // This accounts for pipelined packet transmission across multiple switches
+    float first_packet_bytes = std::min(MTU_BYTES, (float)flow_size) + HEADER_SIZE_BYTES;
+    float pipeline_ns = first_packet_bytes * BYTES_TO_NS * (float)(n_links - 2);
+    
+    // Total ideal FCT (matches training formula exactly)
+    return propagation_ns + transmission_ns + pipeline_ns;
 }
 
 // Compute server-side processing delay for application completion time
-// This delay is NOT included in the ML-predicted FCT (keeps per-flow accurate)
-// but IS added to actual completion time (affects app-level metric)
 static inline uint64_t get_server_contention_delay_ns(uint64_t flow_size, const FlowCtx* ctx) {
-    // Only apply to RDMA flows (large data transfers that experience server queuing)
     if (flow_size < 1000 || ctx == nullptr) {
         return 0;  // No delay for UD packets
     }
-    
-    int client_id = ctx->client_id;
-    if (client_id < 0 || client_id >= (int)g_inflight_per_client.size()) {
-        return 0;
-    }
-    
-    int inflight = static_cast<int>(g_inflight_per_client[client_id]);
-    
-    // Apply server delay based on window size to model server-side queuing/processing
-    // This delay affects app completion time but NOT per-flow FCT metrics
-    // Values calibrated from baseline analysis: M4 is ~40-72% too fast
-    // Delays calculated as: (total_gap_seconds * 1e9) / num_rdma_flows_per_scenario
-    //
-    // Baseline gaps (from 24 scenarios):
-    //   Window=1: 1.543s gap → 108μs per RDMA flow (14,300 flows)
-    //   Window=2: 1.832s gap → 128μs per RDMA flow (when saturated)
-    //   Window=4: 2.662s gap → 186μs per RDMA flow (when saturated)
-    
-    // Apply delay to ALL RDMA flows (not just when saturated)
-    // Delays are applied per-flow but accumulate SEQUENTIALLY within each client
-    // With 11 clients running ~650 RDMA flows each, delays add up per-client
-    //
-    // Delays calibrated iteratively based on observed errors:
-    //   Window=1: 1634μs × 1.03 = 1684 μs per flow (to close 3.1% gap)
-    //   Window=2: 2355μs × 1.24 = 2925 μs per flow (to close 24.2% gap)
-    //   Window=4: 3706μs × 1.53 = 5667 μs per flow (to close 52.9% gap)
-    uint64_t delay = 0;
-    if (WINDOW_SIZE == 1) {
-        // Window=1: M4 is ~24% too fast (1.062s gap)
-        delay = 1000000;  // 1634 μs server processing delay per RDMA flow
-    } else if (WINDOW_SIZE == 2) {
-        // Window=2: M4 is ~39% too fast (1.531s gap)
-        delay = 4000000;  // 2355 μs server processing delay
-    } else if (WINDOW_SIZE == 4) {
-        // Window=4: M4 is ~64% too fast (2.409s gap)
-        delay = 8000000;  // 3706 μs server processing delay
-    }
-    
-    return delay;
-}
-
-// Kept for compatibility - now disabled
-static inline float get_window_tail_multiplier(uint64_t flow_size, const FlowCtx* ctx) {
-    return 1.0f;  // Disabled - using server delay approach instead
-}
-
-static inline float apply_serialization_delay(float ideal_ns, uint64_t flow_size, const FlowCtx* ctx) {
-    // Baseline: no adjustment to ideal_fct
-    return ideal_ns;
+    return SERVER_OVERHEAD_NS * WINDOW_SIZE * WINDOW_SIZE;
 }
 
 void setup_m4(torch::Device device, const std::string& model_dir = "models_v6") {
@@ -585,14 +531,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             sldn_pred = sldn_single[0].item<float>();
             int nlinks_val_int = (int)g_flow_links[flow_id].size();
             ideal_fct = compute_ideal_fct(flow_size, nlinks_val_int);
-            ideal_fct = apply_serialization_delay(ideal_fct, flow_size, flow_ctx);
-            
-            // Apply per-flow slowdown multiplier
-            sldn_pred *= get_slowdown_multiplier(flow_size);
             predicted_fct = sldn_pred * ideal_fct;
-            
-            // Apply gentler window-based multiplier for contention
-            predicted_fct *= get_window_tail_multiplier(flow_size, flow_ctx);
         } else if (n_active > 1) {
             // Multiple flows active - use full ML pipeline with contention
             auto options_float = torch::TensorOptions().dtype(torch::kFloat32).device(device);
@@ -626,14 +565,7 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
                 sldn_pred = sldn_all[current_flow_idx].item<float>();
                 int nlinks_cur = (int)g_flow_links[flow_id].size();
                 ideal_fct = compute_ideal_fct(flow_size, nlinks_cur);
-                ideal_fct = apply_serialization_delay(ideal_fct, flow_size, flow_ctx);
-                
-                // Apply per-flow slowdown multiplier
-                sldn_pred *= get_slowdown_multiplier(flow_size);
                 predicted_fct = sldn_pred * ideal_fct;
-                
-                // Apply gentler window-based multiplier for contention
-                predicted_fct *= get_window_tail_multiplier(flow_size, flow_ctx);
             } else {
                 // This should never happen - flow must be in active list
                 throw std::runtime_error("Flow ID " + std::to_string(flow_id) + " not found in active flows list");
@@ -642,20 +574,6 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
             // This should never happen - we just added the current flow to active mask
             throw std::runtime_error("No active flows found after adding current flow - this is a bug!");
         }
-        
-        // Apply additional slowdown for UD exchanges to match real congestion tails
-        // float ud_factor = 1.0f;
-        // if (flow_size < 1000) {
-        //     float additional_slowdown = static_cast<float>(std::max(0, WINDOW_SIZE - 1));
-        //     sldn_pred    += additional_slowdown;
-        //     predicted_fct += additional_slowdown * ideal_fct;
-        // }
-
-        // if (flow_size >= 1000) {
-        //     float window_ratio = static_cast<float>(WINDOW_SIZE)+1;
-        //     sldn_pred *= window_ratio;
-        //     predicted_fct *= window_ratio;
-        // }
         
         // Debug output showing parameter conditioning based on flow size
         bool is_large_flow = (flow_size >= 1000);
@@ -803,7 +721,9 @@ static void on_request_arrival(void* arg) {
 static void worker_recv(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     // Log request receive at worker (after propagation)
-    EventTime when;
+    // No base server overhead here - custom delays are added in get_server_contention_delay_ns()
+    EventTime when = g_event_queue->get_current_time();
+    
     if (!ctx->is_handshake) {
         g_server_log << "event=reqq_recv ts_ns=" << g_event_queue->get_current_time()
                      << " id=" << ctx->op_index
@@ -814,8 +734,6 @@ static void worker_recv(void* arg) {
                      << " src=client:" << ctx->client_id
                      << " dst=worker:" << ctx->worker_id
                      << "\n";
-        when = g_event_queue->get_current_time() + (EventTime)server_overhead_ns();
-
     } else {
         g_server_log << "event=hand_recv ts_ns=" << g_event_queue->get_current_time()
                      << " id=" << ctx->op_index
@@ -826,9 +744,8 @@ static void worker_recv(void* arg) {
                      << " src=client:" << ctx->client_id
                      << " dst=worker:" << ctx->worker_id
                      << "\n";
-        when = g_event_queue->get_current_time(); //no overhead for handshake (RDMA DMA technique)
     }
-    // Schedule worker send after overhead
+    // Schedule worker send immediately (custom server delays added at completion time)
     g_event_queue->schedule_event(when, (void (*)(void*)) &worker_send, ctx);
 }
 
@@ -1069,7 +986,7 @@ int main(int argc, char *argv[]) {
     }
     
     // Model directory argument (argv[5]) - for testing different models
-    std::string model_dir = "models_v6";  // Default
+    std::string model_dir = "checkpoints";  // Default
     if (argc >= 6) {
         model_dir = argv[5];
         std::cout << "[INFO] Using model directory: " << model_dir << std::endl;
