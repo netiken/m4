@@ -1,0 +1,24 @@
+M4 Network Simulation Analysis
+============================================================
+
+GENERATED FIGURES:
+1. m4-testbed-overall-window2.png - Application completion time (window size 2)
+2. m4-testbed-perflow.png - Per-flow FCT accuracy (CDF of relative errors)
+
+SCENARIO COVERAGE:
+  Packet sizes: [250, 300, 400, 500, 650, 750, 900, 1000] KB
+  Total scenarios: 24
+
+APPLICATION-LEVEL PERFORMANCE (End-to-End Completion Time):
+  m4      : median: 20.8%, scenarios:  24
+  ns3     : median: 25.8%, scenarios:  24
+  flowSim : median: 86.3%, scenarios:  24
+
+  Ranking: m4 (20.8%) > ns3 (25.8%) > flowSim (86.3%)
+
+PER-FLOW PERFORMANCE (Individual Flow FCT Estimation):
+  m4      : median: 23.8%, samples: 169436
+  ns3     : median: 58.3%, samples: 169436
+  flowSim : median: 69.6%, samples: 169436
+
+  Ranking: m4 (23.8%) > ns3 (58.3%) > flowSim (69.6%)

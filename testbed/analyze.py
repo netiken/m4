@@ -364,11 +364,11 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
                     color=PLOT_COLORS[backend], markersize=12, linestyle='None')
         
         # Apply notebook styling
-        plt.xlabel("Size of Data Packets (KB)", fontsize=18)
-        plt.ylabel("Application Completion\nTime (ms)", fontsize=18)
+        plt.xlabel("Size of Data Packets (KB)", fontsize=20)
+        plt.ylabel("Application Completion\nTime (ms)", fontsize=20)
         plt.tick_params(axis='both', which='major', labelsize=16)
         plt.grid(True, alpha=0.3)
-        plt.legend(fontsize=18, frameon=False,ncol=2)
+        plt.legend(fontsize=20, frameon=False,ncol=2)
         plt.tight_layout()
         
         # Save with window size suffix
@@ -420,11 +420,11 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
                     linewidth=3, color=PERFLOW_COLORS[i])
     
     # Apply notebook styling
-    plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=18)
-    plt.ylabel("CDF (%)", fontsize=18)  
+    plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=20)
+    plt.ylabel("CDF (%)", fontsize=20)  
     plt.tick_params(axis='both', which='major', labelsize=16)
     plt.grid(True, alpha=0.3)
-    plt.legend(fontsize=18, loc=4, frameon=False)  # loc=4 is lower right
+    plt.legend(fontsize=20, loc=4, frameon=False)  # loc=4 is lower right
     plt.tight_layout()
     plt.xlim(0, 200)
     # plt.xscale('log')
@@ -458,15 +458,6 @@ def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> N
         f.write("1. m4-testbed-overall-window2.png - Application completion time (window size 2)\n")
         f.write("2. m4-testbed-perflow.png - Per-flow FCT accuracy (CDF of relative errors)\n\n")
         
-        # Collect all relative errors for summary
-        all_relative_errors_summary = {"m4": [], "flowsim": [], "ns3": []}
-        for result in all_scenario_results:
-            if not result:
-                continue
-            for backend in ["m4", "flowsim", "ns3"]:
-                if backend in result and "relative_errors" in result[backend]:
-                    all_relative_errors_summary[backend].extend(result[backend]["relative_errors"])
-        
         # Show scenario coverage
         f.write(f"SCENARIO COVERAGE:\n")
         packet_sizes = set()
@@ -476,27 +467,63 @@ def generate_plots(all_scenario_results: List[Dict], base_dir: Path = None) -> N
         f.write(f"  Packet sizes: {sorted(packet_sizes)} KB\n")
         f.write(f"  Total scenarios: {len(all_scenario_results)}\n\n")
         
-        # Relative error statistics
-        f.write("RELATIVE ESTIMATION ERRORS (as percentage):\n")
+        # Collect application-level errors (end-to-end completion time)
+        app_errors = {"m4": [], "flowsim": [], "ns3": []}
+        for result in all_scenario_results:
+            if "real_world" in result and "app_completion_time" in result["real_world"]:
+                real_app_time = result["real_world"]["app_completion_time"]
+                for backend in ["m4", "flowsim", "ns3"]:
+                    if backend in result and "app_completion_time" in result[backend]:
+                        sim_app_time = result[backend]["app_completion_time"]
+                        if real_app_time and sim_app_time and real_app_time > 0:
+                            e2e_error = abs(real_app_time - sim_app_time) / real_app_time
+                            app_errors[backend].append(e2e_error)
+        
+        # Collect per-flow errors
+        perflow_errors = {"m4": [], "flowsim": [], "ns3": []}
+        for result in all_scenario_results:
+            if not result:
+                continue
+            for backend in ["m4", "flowsim", "ns3"]:
+                if backend in result and "relative_errors" in result[backend]:
+                    perflow_errors[backend].extend(result[backend]["relative_errors"])
+        
+        # Application-level performance
+        f.write("APPLICATION-LEVEL PERFORMANCE (End-to-End Completion Time):\n")
         cdf_labels = {'m4': OURS_LABEL, 'ns3': 'ns3', 'flowsim': 'flowSim'}
-        accuracy_ranking = []
+        app_ranking = []
         
         for backend in ["m4", "ns3", "flowsim"]:
-            if all_relative_errors_summary[backend]:
-                errors_pct = np.array(all_relative_errors_summary[backend]) * 100
+            if app_errors[backend]:
+                errors_pct = np.array(app_errors[backend]) * 100
                 median_error = np.median(errors_pct)
-                p90_error = np.percentile(errors_pct, 90)
-                accuracy_ranking.append((cdf_labels[backend], median_error))
+                app_ranking.append((cdf_labels[backend], median_error))
                 
                 f.write(f"  {cdf_labels[backend]:8}: median: {median_error:.1f}%, "
-                       f"p90: {p90_error:.1f}%, "
+                       f"scenarios: {len(errors_pct):3}\n")
+        
+        app_ranking.sort(key=lambda x: x[1])
+        f.write(f"\n  Ranking: ")
+        f.write(" > ".join([f"{backend} ({err:.1f}%)" for backend, err in app_ranking]))
+        f.write("\n\n")
+        
+        # Per-flow performance
+        f.write("PER-FLOW PERFORMANCE (Individual Flow FCT Estimation):\n")
+        perflow_ranking = []
+        
+        for backend in ["m4", "ns3", "flowsim"]:
+            if perflow_errors[backend]:
+                errors_pct = np.array(perflow_errors[backend]) * 100
+                median_error = np.median(errors_pct)
+                perflow_ranking.append((cdf_labels[backend], median_error))
+                
+                f.write(f"  {cdf_labels[backend]:8}: median: {median_error:.1f}%, "
                        f"samples: {len(errors_pct):6}\n")
         
-        # Show accuracy ranking
-        accuracy_ranking.sort(key=lambda x: x[1])  # Sort by median error (lower = better)
-        f.write(f"\nACCURACY RANKING (best to worst):\n")
-        for i, (backend, error) in enumerate(accuracy_ranking, 1):
-            f.write(f"  {i}. {backend} (median error: {error:.1f}%)\n")
+        perflow_ranking.sort(key=lambda x: x[1])
+        f.write(f"\n  Ranking: ")
+        f.write(" > ".join([f"{backend} ({err:.1f}%)" for backend, err in perflow_ranking]))
+        f.write("\n")
     
     print(f"  📁 Saved: {results_dir / 'accuracy_summary.txt'}")
 
