@@ -246,17 +246,14 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
         "m4": base_dir / "eval_test" / "m4" / scenario
     }
     
-    # Load data from all backends (now returns both data dict and trimmed entries)
-    # Use trim=300 to match the trim used in compute_e2e_duration_from_logs
+    # Load data from all backends with symmetric trimming
     TRIM_FLOWS = 50
     all_data = {}
-    all_trimmed_entries = {}
     for name, file_path in files.items():
         if file_path.exists():
-            data, trimmed_entries = load_data(file_path, trim=TRIM_FLOWS)
+            data, _ = load_data(file_path, trim=TRIM_FLOWS)
             if data:
                 all_data[name] = data
-                all_trimmed_entries[name] = trimmed_entries
     
     if "real_world" not in all_data:
         return None
