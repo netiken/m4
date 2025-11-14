@@ -732,10 +732,11 @@ static void on_response_arrival(void* arg) {
 
 static void client_recv_ud(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log with ACTUAL simulation timestamp (includes ML prediction + server delay + scheduling)
-    // This matches testbed's full application-level FCT measurement
+    // Log with PREDICTED timestamp for per-flow FCT comparison
+    // Per-flow FCT = pure ML prediction (slowdown * ideal_fct), not including simulation delays
+    uint64_t predicted_resp_recv_ud_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns;
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
-        g_client_logs[ctx->client_id] << "event=resp_recv_ud ts_ns=" << g_event_queue->get_current_time()
+        g_client_logs[ctx->client_id] << "event=resp_recv_ud ts_ns=" << predicted_resp_recv_ud_ns
                  << " id=" << ctx->op_index
                  << " clt=" << ctx->client_id
                  << " wrkr=" << ctx->worker_id
@@ -762,9 +763,11 @@ static void client_send_handshake(void* arg) {
     ctx->start_time = g_event_queue->get_current_time();
     ctx->handshake_send_time = ctx->start_time;
     
-    // Log with ACTUAL simulation timestamp (when handshake actually starts)
+    // Log with PREDICTED timestamp for per-flow FCT comparison
+    // hand_send timestamp = req_send + ud_predicted_fct (when UD phase would complete)
+    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns + HANDSHAKE_DELAY_NS;
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
-        g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << ctx->start_time
+        g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << predicted_hand_send_ns
                  << " id=" << ctx->op_index
                  << " clt=" << ctx->client_id
                  << " wrkr=" << ctx->worker_id
@@ -780,16 +783,18 @@ static void client_send_handshake(void* arg) {
 
 static void client_recv_rdma_finalize(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log with ACTUAL simulation timestamps (includes all delays for fair comparison with testbed)
-    uint64_t now_ns = (uint64_t)g_event_queue->get_current_time();
-    uint64_t dur_ns = (ctx->handshake_send_time <= now_ns) ? (now_ns - (uint64_t)ctx->handshake_send_time) : 0;
+    // Log with PREDICTED timestamps for per-flow FCT comparison
+    // resp_rdma_read timestamp = hand_send + rdma_predicted_fct (pure ML prediction)
+    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns + HANDSHAKE_DELAY_NS;
+    uint64_t predicted_resp_rdma_read_ns = predicted_hand_send_ns + ctx->rdma_predicted_fct_ns;
+    uint64_t predicted_dur_ns = ctx->rdma_predicted_fct_ns;
     
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
-        // Log with actual simulation timestamps (same as NS3/FlowSim)
-        g_client_logs[ctx->client_id] << "event=resp_rdma_read ts_ns=" << now_ns
+        // Log with predicted timestamps (pure ML predictions for per-flow comparison)
+        g_client_logs[ctx->client_id] << "event=resp_rdma_read ts_ns=" << predicted_resp_rdma_read_ns
                  << " id=" << ctx->op_index
-                 << " start_ns=" << ctx->handshake_send_time
-                 << " dur_ns=" << dur_ns
+                 << " start_ns=" << predicted_hand_send_ns
+                 << " dur_ns=" << predicted_dur_ns
                  << " clt=" << ctx->client_id
                  << " wrkr=" << ctx->worker_id
                  << " slot=" << ctx->slot
