@@ -733,8 +733,9 @@ static void on_response_arrival(void* arg) {
 static void client_recv_ud(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     // Log with PREDICTED timestamp for per-flow FCT comparison
-    // Per-flow FCT = pure ML prediction (slowdown * ideal_fct), not including simulation delays
-    uint64_t predicted_resp_recv_ud_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns;
+    // Per-flow FCT = ML prediction + SERVER_OVERHEAD (same as NS3/FlowSim/Testbed)
+    // This measures what M4 predicts the full flow will take (network + server processing)
+    uint64_t predicted_resp_recv_ud_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns + SERVER_OVERHEAD_NS;
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
         g_client_logs[ctx->client_id] << "event=resp_recv_ud ts_ns=" << predicted_resp_recv_ud_ns
                  << " id=" << ctx->op_index
@@ -764,8 +765,8 @@ static void client_send_handshake(void* arg) {
     ctx->handshake_send_time = ctx->start_time;
     
     // Log with PREDICTED timestamp for per-flow FCT comparison
-    // hand_send timestamp = req_send + ud_predicted_fct (when UD phase would complete)
-    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns + HANDSHAKE_DELAY_NS;
+    // hand_send timestamp = req_send + ud_predicted_fct + SERVER_OVERHEAD + HANDSHAKE_DELAY
+    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns + SERVER_OVERHEAD_NS + HANDSHAKE_DELAY_NS;
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
         g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << predicted_hand_send_ns
                  << " id=" << ctx->op_index
@@ -784,10 +785,11 @@ static void client_send_handshake(void* arg) {
 static void client_recv_rdma_finalize(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
     // Log with PREDICTED timestamps for per-flow FCT comparison
-    // resp_rdma_read timestamp = hand_send + rdma_predicted_fct (pure ML prediction)
-    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns + HANDSHAKE_DELAY_NS;
-    uint64_t predicted_resp_rdma_read_ns = predicted_hand_send_ns + ctx->rdma_predicted_fct_ns;
-    uint64_t predicted_dur_ns = ctx->rdma_predicted_fct_ns;
+    // resp_rdma_read timestamp = hand_send + rdma_predicted_fct + SERVER_OVERHEAD
+    // This includes server processing time for fair comparison with other backends
+    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns + SERVER_OVERHEAD_NS + HANDSHAKE_DELAY_NS;
+    uint64_t predicted_resp_rdma_read_ns = predicted_hand_send_ns + ctx->rdma_predicted_fct_ns + SERVER_OVERHEAD_NS;
+    uint64_t predicted_dur_ns = ctx->rdma_predicted_fct_ns + SERVER_OVERHEAD_NS;
     
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
         // Log with predicted timestamps (pure ML predictions for per-flow comparison)

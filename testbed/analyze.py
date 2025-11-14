@@ -278,7 +278,7 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
     }
     
     # Load data from all backends with symmetric trimming
-    TRIM_FLOWS = 50
+    TRIM_FLOWS = 20
     all_data = {}
     all_entries = {}
     for name, file_path in files.items():
@@ -319,12 +319,10 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
             if backend in scenario_results and backend in all_entries:
                 sim_entries = all_entries[backend]
                 
-                # Compute relative errors ONLY for RDMA (data) packets
-                # UD packets have massive application-level queuing that ML cannot capture
-                real_rdma_only = [(c, p, d) for c, p, d in real_entries if p == 'rdma']
-                sim_rdma_only = [(c, p, d) for c, p, d in sim_entries if p == 'rdma']
-                relative_errors = compute_relative_errors(real_rdma_only, sim_rdma_only)
-                signed_errors = compute_signed_relative_errors(real_rdma_only, sim_rdma_only)
+                # Compute relative errors for BOTH UD and RDMA flows
+                # After adding SERVER_OVERHEAD_NS, UD predictions are now accurate
+                relative_errors = compute_relative_errors(real_entries, sim_entries)
+                signed_errors = compute_signed_relative_errors(real_entries, sim_entries)
                 
                 # For phase-specific errors, filter entries by phase
                 real_ud = [(c, p, d) for c, p, d in real_entries if p == 'ud']
