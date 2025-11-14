@@ -381,7 +381,7 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
         if not scenario_results:
             continue
             
-        plt.figure(figsize=(8, 4))
+        plt.figure(figsize=(8, 6))
         
         # Collect data points by backend for this window size
         backend_data = {"real_world": [], "flowsim": [], "ns3": [], "m4": []}
@@ -403,14 +403,14 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
                 
             xs, ys = zip(*data_points)
             plt.plot(xs, ys, marker=PLOT_MARKERS[backend], label=PLOT_LABELS[backend],
-                    color=PLOT_COLORS[backend], markersize=12, linestyle='None')
+                    color=PLOT_COLORS[backend], markersize=15, linestyle='None')
         
         # Apply notebook styling
-        plt.xlabel("Size of Data Packets (KB)", fontsize=20)
-        plt.ylabel("Application Completion\nTime (ms)", fontsize=20)
-        plt.tick_params(axis='both', which='major', labelsize=16)
-        plt.grid(True, alpha=0.3)
-        plt.legend(fontsize=20, frameon=False,ncol=2)
+        plt.xlabel("Size of Data Packets (KB)", fontsize=25)
+        plt.ylabel("Application Completion\nTime (ms)", fontsize=25)
+        plt.tick_params(axis='both', which='major', labelsize=25)
+        plt.grid(False)
+        plt.legend(fontsize=25, frameon=False,ncol=1)
         plt.tight_layout()
         
         # Save with window size suffix
@@ -424,7 +424,7 @@ def generate_overall_plots_by_window_size(all_scenario_results: List[Dict], resu
 def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -> None:
     """Generate m4-testbed-perflow.png - Per-flow CDF plot using exact original styling."""
     
-    plt.figure(figsize=(8, 4))
+    plt.figure(figsize=(8, 6))
     
     # Collect all relative errors across scenarios (simple metric)
     all_relative_errors = {"m4": [], "flowsim": [], "ns3": []}
@@ -462,11 +462,11 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
                     linewidth=3, color=PERFLOW_COLORS[i])
     
     # Apply notebook styling
-    plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=20)
-    plt.ylabel("CDF (%)", fontsize=20)  
-    plt.tick_params(axis='both', which='major', labelsize=16)
+    plt.xlabel("Magnitude of relative estimation error\nfor per-flow FCT slowdown (%)", fontsize=25 )
+    plt.ylabel("CDF (%)", fontsize=25)  
+    plt.tick_params(axis='both', which='major', labelsize=25)
     plt.grid(True, alpha=0.3)
-    plt.legend(fontsize=20, loc=4, frameon=False)  # loc=4 is lower right
+    plt.legend(fontsize=25, loc=4, frameon=False)  # loc=4 is lower right
     plt.tight_layout()
     plt.xlim(1, 200)
     # plt.xscale('log')
