@@ -24,7 +24,7 @@ from typing import Dict, List
 # Shared sweep configuration
 WINDOW_SIZES: List[int] = [1, 2, 4]
 RDMA_TITLES_BASE: Dict[int, str] = {
-    102408: "100",
+    # 102408: "100",
     256008: "250",
     307208: "300",
     409608: "400",
