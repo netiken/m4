@@ -71,12 +71,9 @@ set_target_properties(main PROPERTIES
 
 target_link_libraries(main "${TORCH_LIBRARIES}")
 
-add_subdirectory(rapidyaml)
 target_include_directories(main PRIVATE "${PYTHON_ENV_PREFIX}/include")
 target_include_directories(main PRIVATE ${TORCH_INCLUDE_DIRS})
-target_include_directories(main PRIVATE rapidyaml/src rapidyaml/src/c4)
 target_include_directories(main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/rdma_bench)
-target_link_libraries(main ryml)
 
 # Link CityHash
 add_library(cityhash_c OBJECT rdma_bench/mica/city.c)

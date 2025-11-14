@@ -3,8 +3,6 @@
 #include <filesystem>
 #include <torch/torch.h>
 #include <torch/script.h>
-#include <ryml_std.hpp>
-#include <ryml.hpp>
 #include "Topology.h"
 #include "TopologyBuilder.h"
 #include "Type.h"
@@ -29,7 +27,7 @@ static uint64_t RESP_RDMA_BYTES = 1024008;
 
 // Timing Parameters
 
-static constexpr uint64_t SERVER_OVERHEAD_NS = 1500000;
+static constexpr uint64_t SERVER_OVERHEAD_NS = 87000;
 static constexpr uint64_t SEND_SPACING_NS = 2500;
 static constexpr uint64_t STARTUP_DELAY_NS = 0;
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;
@@ -101,7 +99,6 @@ struct FlowCtx {
     Route route_rev;
     uint64_t ud_predicted_fct_ns;
     uint64_t rdma_predicted_fct_ns;
-    uint64_t server_delay_ns;
 };
 
 struct FlowRecord {
@@ -179,7 +176,8 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
 
 // ML Helper Functions
 
-// Compute ideal FCT (matches training formula: propagation + transmission + pipeline_fill)
+// Compute ideal FCT (network time only, no server overhead)
+// Matches training formula: propagation + transmission + pipeline_fill
 static inline float compute_ideal_fct(uint64_t flow_size, int n_links) {
     float num_packets = std::ceil((float)flow_size / MTU_BYTES);
     float total_bytes = (float)flow_size + num_packets * HEADER_SIZE_BYTES;
@@ -188,14 +186,6 @@ static inline float compute_ideal_fct(uint64_t flow_size, int n_links) {
     float first_packet_bytes = std::min(MTU_BYTES, (float)flow_size) + HEADER_SIZE_BYTES;
     float pipeline_ns = first_packet_bytes * BYTES_TO_NS * (float)(n_links - 2);
     return propagation_ns + transmission_ns + pipeline_ns;
-}
-
-// Compute server delay (window-based scaling)
-static inline uint64_t get_server_contention_delay_ns(uint64_t flow_size, const FlowCtx* ctx) {
-    if (flow_size < 1000 || ctx == nullptr) {
-        return 0;
-    }
-    return SERVER_OVERHEAD_NS * WINDOW_SIZE * WINDOW_SIZE;
 }
 
 void setup_m4(torch::Device device, const std::string& model_dir = "checkpoints") {
@@ -553,9 +543,6 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         res_fct_tensor[flow_id][0] = predicted_fct;
         res_sldn_tensor[flow_id][0] = sldn_pred;
         
-        // Calculate server-side contention delay (for app completion time)
-        uint64_t server_delay = get_server_contention_delay_ns(flow_size, flow_ctx);
-        
         // Store predicted FCT in the correct field based on flow phase
         // UD phase: small request/response (before handshake)
         // RDMA phase: handshake and large response (after handshake)
@@ -564,12 +551,11 @@ static void ml_predict_and_schedule_herd(uint64_t flow_size, void (*callback)(vo
         } else {
             flow_ctx->ud_predicted_fct_ns = (uint64_t)predicted_fct;
         }
-        flow_ctx->server_delay_ns = server_delay;
         
-        // Schedule completion with BOTH predicted FCT and server delay
-        // predicted_fct: ML prediction (exported for per-flow metrics)
-        // server_delay: Added to completion time (affects app time only)
-        EventTime completion_time = g_event_queue->get_current_time() + (EventTime)predicted_fct + (EventTime)server_delay;
+        // Schedule completion with predicted FCT + server overhead
+        // predicted_fct = slowdown * network_time (pure network delay)
+        // Then scaled by WINDOW_SIZE and add server processing delay
+        EventTime completion_time = g_event_queue->get_current_time() + (EventTime)predicted_fct*(float)WINDOW_SIZE + (EventTime)SERVER_OVERHEAD_NS;
         
         // Create completion context that includes flow_id for state cleanup
         struct CompletionCtx {
@@ -746,7 +732,8 @@ static void on_response_arrival(void* arg) {
 
 static void client_recv_ud(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log: resp_recv_ud (using actual timestamp - not used for per-flow FCT calculation)
+    // Log with ACTUAL simulation timestamp (includes ML prediction + server delay + scheduling)
+    // This matches testbed's full application-level FCT measurement
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
         g_client_logs[ctx->client_id] << "event=resp_recv_ud ts_ns=" << g_event_queue->get_current_time()
                  << " id=" << ctx->op_index
@@ -775,12 +762,9 @@ static void client_send_handshake(void* arg) {
     ctx->start_time = g_event_queue->get_current_time();
     ctx->handshake_send_time = ctx->start_time;
     
-    // Log hand_send with ML-predicted timestamp (for per-flow UD FCT)
-    // This makes UD FCT = hand_send - req_send use the ML prediction
-    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns;
-    
+    // Log with ACTUAL simulation timestamp (when handshake actually starts)
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
-        g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << predicted_hand_send_ns
+        g_client_logs[ctx->client_id] << "event=hand_send ts_ns=" << ctx->start_time
                  << " id=" << ctx->op_index
                  << " clt=" << ctx->client_id
                  << " wrkr=" << ctx->worker_id
@@ -796,20 +780,15 @@ static void client_send_handshake(void* arg) {
 
 static void client_recv_rdma_finalize(void* arg) {
     auto* ctx = static_cast<FlowCtx*>(arg);
-    // Log: resp_rdma_read
-    // Use ML-predicted completion time (without server delay) for per-flow metrics
-    // RDMA FCT = rdma_recv - hand_send, so we need:
-    // rdma_recv timestamp = hand_send (predicted) + RDMA predicted FCT
+    // Log with ACTUAL simulation timestamps (includes all delays for fair comparison with testbed)
     uint64_t now_ns = (uint64_t)g_event_queue->get_current_time();
-    uint64_t predicted_hand_send_ns = (uint64_t)ctx->req_send_time + ctx->ud_predicted_fct_ns;
-    uint64_t predicted_rdma_recv_ns = predicted_hand_send_ns + ctx->rdma_predicted_fct_ns;
-    uint64_t dur_ns = ctx->rdma_predicted_fct_ns;  // Use ML prediction for RDMA duration
+    uint64_t dur_ns = (ctx->handshake_send_time <= now_ns) ? (now_ns - (uint64_t)ctx->handshake_send_time) : 0;
     
     if (ctx->client_id >= 0 && ctx->client_id < (int)g_client_logs.size() && g_client_logs[ctx->client_id].is_open()) {
-        // Log with predicted completion time (for per-flow metrics)
-        g_client_logs[ctx->client_id] << "event=resp_rdma_read ts_ns=" << predicted_rdma_recv_ns
+        // Log with actual simulation timestamps (same as NS3/FlowSim)
+        g_client_logs[ctx->client_id] << "event=resp_rdma_read ts_ns=" << now_ns
                  << " id=" << ctx->op_index
-                 << " start_ns=" << predicted_hand_send_ns
+                 << " start_ns=" << ctx->handshake_send_time
                  << " dur_ns=" << dur_ns
                  << " clt=" << ctx->client_id
                  << " wrkr=" << ctx->worker_id
@@ -883,7 +862,6 @@ static void add_flow_for_client(void* client_id_ptr) {
     ctx->req_send_time = g_event_queue->get_current_time();  // Save for UD FCT calculation
     ctx->ud_predicted_fct_ns = 0;    // Will be set by UD phase ML prediction
     ctx->rdma_predicted_fct_ns = 0;  // Will be set by RDMA phase ML prediction
-    ctx->server_delay_ns = 0;        // Will be set by ML prediction
 
     g_clients[ctx->client_id].ws[wn] = (g_clients[ctx->client_id].ws[wn] + 1) % WINDOW_SIZE;
 
@@ -1173,26 +1151,14 @@ int main(int argc, char *argv[]) {
         std::cout << "Loading M4 ML models for HERD network prediction...\n";
         
         try {
-            // Read config file to get ML model parameters
-            std::string config_path = "../../../config/test_config_testbed.yaml";  // Relative to m4/testbed/backends/m4/
-            std::ifstream infile_cfg(config_path);
-
-            std::ostringstream contents;
-                    contents << infile_cfg.rdbuf();
-            std::string config_contents = contents.str();
-            ryml::Tree config = ryml::parse_in_place(ryml::to_substr(config_contents));
-            ryml::NodeRef hidden_size_node = config["model"]["hidden_size"];
-            int32_t hidden_size;
-            hidden_size_node >> hidden_size;
-            ryml::NodeRef n_links_node = config["dataset"]["n_links_max"];
-            int32_t n_links;
-            n_links_node >> n_links;
+            // Hardcoded config values from test_config_testbed.yaml
+            int32_t hidden_size = 200;  // model.hidden_size
+            int32_t n_links = 100;      // dataset.n_links_max
+            
             if (g_n_links_override > 0) {
                 n_links = g_n_links_override;
                 std::cout << "[INFO] Overriding n_links with computed value from routes: " << n_links << "\n";
             }
-
-            // Parameters are now initialized per-flow based on flow size (no global defaults needed)
 
             // Load ML models
             setup_m4(device, model_dir);

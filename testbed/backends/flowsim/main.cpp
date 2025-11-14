@@ -108,7 +108,7 @@ static constexpr uint64_t HANDSHAKE_BYTES = 10;
 static uint64_t RESP_RDMA_BYTES = 1024008;
 
 // Timing Parameters
-static constexpr uint64_t SERVER_OVERHEAD_NS = 100000;
+static constexpr uint64_t SERVER_OVERHEAD_NS = 87000;
 static constexpr uint64_t SEND_SPACING_NS = 2500;
 static constexpr uint64_t STARTUP_DELAY_NS = 0;
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;
@@ -253,7 +253,7 @@ static void on_request_arrival(void* arg) {
 
 // Get server delay based on window size
 static inline uint64_t get_server_delay_ns() {
-    return SERVER_OVERHEAD_NS * WINDOW_SIZE * WINDOW_SIZE;
+    return SERVER_OVERHEAD_NS;
 }
 
 static void worker_recv(void* arg) {

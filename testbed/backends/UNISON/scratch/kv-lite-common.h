@@ -21,7 +21,7 @@ namespace kvlite {
     static const uint32_t KVL_DEFAULT_MAX_WINDOWS = 1;
     static const uint32_t KVL_HANDSHAKE_REQ_BYTES = 10;
     static const uint32_t KVL_SERVER_SMALL_RESP_BYTES = 41;
-    static const uint64_t KVL_OVERHEAD_NS = 100000;
+    static const uint64_t KVL_OVERHEAD_NS = 87000;
     static const uint32_t KVL_CLIENT_BASE_SPORT = 10000;
     static const uint32_t KVL_SERVER_BASE_SPORT = 10001;
     static const uint32_t KVL_SERVER_BASE_IP = 0x0b000001; // 11.0.0.1 (matches node_id_to_ip host octet)

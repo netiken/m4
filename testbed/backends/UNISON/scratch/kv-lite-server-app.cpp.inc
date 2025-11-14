@@ -85,15 +85,16 @@ void KvLiteServerApp::ProcessReceive(const KvLiteRequest &req)
             data.clientNodeId = req.clientNodeId;
             data.serverNodeId = req.serverNodeId;
             
-            // 🎯 Window-specific RDMA efficiency correction
-            double efficiencyFactor;
+            // Window-specific RDMA size correction to match testbed behavior
+            // Testbed shows effective throughput degradation with higher window sizes
+            double sizeFactor;
             switch (m_windowSize) {
-                case 1: efficiencyFactor = 1.0; break;   // No correction for single flow
-                case 2: efficiencyFactor = 0.75; break;  // Moderate correction
-                case 4: efficiencyFactor = 0.5; break;   // Stronger correction
-                default: efficiencyFactor = 0.5; break;
+                case 1: sizeFactor = 1.0; break;   // No correction for single flow
+                case 2: sizeFactor = 0.75; break;  // Moderate correction
+                case 4: sizeFactor = 0.5; break;   // Stronger correction
+                default: sizeFactor = 0.5; break;
             }
-            data.responseBytes = static_cast<uint32_t>(m_defaultResponseBytes * efficiencyFactor);
+            data.responseBytes = static_cast<uint32_t>(m_defaultResponseBytes * sizeFactor);
             
             // RDMA phase: Apply same window-based overhead as UD phase for consistency
             Simulator::Schedule(NanoSeconds(GetServerOverhead()), &KvLiteServerApp::IssueResponse, this, data);

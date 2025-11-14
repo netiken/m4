@@ -401,15 +401,15 @@ class M4Backend:
             return data
         
         def format_event_ns3(event):
-            """Format an event in ns3-style log line"""
+            """Format an event in ns3-style log line, preserving M4 event names"""
             role_map = {
                 "req_send": "client req_send",
                 "req_recv": "server req_recv",
                 "resp_send": "server resp_send",
-                "resp_recv_ud": "client resp_recv",
+                "resp_recv_ud": "client resp_recv_ud",  # Keep M4 event name
                 "hand_send": "client hand_send",
                 "hand_recv": "server hand_recv",
-                "resp_rdma_read": "client rdma_recv",
+                "resp_rdma_read": "client resp_rdma_read",  # Keep M4 event name
                 "resp_rdma_send": "server rdma_send",
                 "rdma_send": "server rdma_send",
                 "rdma_recv": "client rdma_recv",
@@ -488,24 +488,30 @@ class M4Backend:
                 client = events_sorted[0]["client"] if events_sorted else 0
                 
                 req_send = next((e["t"] for e in events_sorted if e["event"] == "req_send"), None)
+                resp_recv_ud = next((e["t"] for e in events_sorted if e["event"] == "resp_recv_ud"), None)
                 hand_send = next((e["t"] for e in events_sorted if e["event"] == "hand_send"), None)
-                rdma_recv = next((e["t"] for e in events_sorted if e["event"] == "rdma_recv"), None)
+                resp_rdma_read = next((e["t"] for e in events_sorted if e["event"] == "resp_rdma_read"), None)
                 
-                if req_send is not None and hand_send is not None:
+                # UD phase: resp_recv_ud - req_send (uses ACTUAL simulation time for resp_recv_ud)
+                if req_send is not None and resp_recv_ud is not None:
                     outputs.append({
                         "type": "ud",
                         "client": client,
                         "id": req_id,
-                        "dur": hand_send - req_send,
+                        "dur": resp_recv_ud - req_send,
                         "ts": req_send,
                     })
                 
-                if hand_send is not None and rdma_recv is not None:
+                # RDMA phase: resp_rdma_read - hand_send (uses PREDICTED timestamps for both)
+                # hand_send = req_send + ud_predicted_fct
+                # resp_rdma_read = hand_send + rdma_predicted_fct
+                # So RDMA FCT = rdma_predicted_fct (pure ML prediction)
+                if hand_send is not None and resp_rdma_read is not None:
                     outputs.append({
                         "type": "rdma",
                         "client": client,
                         "id": req_id,
-                        "dur": rdma_recv - hand_send,
+                        "dur": resp_rdma_read - hand_send,
                         "ts": hand_send,
                     })
             
@@ -567,9 +573,9 @@ class FlowSimBackend:
             
             with stdout_path.open("w") as out, stderr_path.open("w") as err:
                 proc = subprocess.run(cmd, cwd=str(run_dir), stdout=out, stderr=err, text=True)
-            
-            if proc.returncode != 0:
-                print(f"  -> non-zero exit {proc.returncode}; check {stderr_path}")
+                
+                if proc.returncode != 0:
+                    print(f"  -> non-zero exit {proc.returncode}; check {stderr_path}")
             
             return run_tag
         
@@ -662,8 +668,141 @@ class FlowSimBackend:
                     for e in sorted(events, key=lambda x: x['ts_ns']):
                         out.write(format_event_ns3(e) + "\n")
                     out.write("\n")
+            
+            # FlowSim C++ writes flowsim_output.txt in completion order (not start time order)
+            # We need to re-sort it by start time for fair per-flow comparison with M4/NS3
+            # Read C++-generated output, match with client logs to get start times, and re-sort
+            flowsim_cpp_output = subdir / "flowsim_output.txt"
+            if flowsim_cpp_output.exists():
+                # Parse C++ output
+                output_lines = []
+                with flowsim_cpp_output.open("r") as f:
+                    for line in f:
+                        if line.strip():
+                            output_lines.append(line.strip())
+                
+                # Match each output line with start time from grouped_flows
+                outputs_with_ts = []
+                for line in output_lines:
+                    # Parse: [ud|rdma] client=X id=Y dur_ns=Z
+                    match = re.match(r'\[(ud|rdma)\] client=(\d+) id=(\d+) dur_ns=(\d+)', line)
+                    if not match:
+                        continue
+                    phase, clt, req_id, dur = match.groups()
+                    clt = int(clt)
+                    req_id = int(req_id)
+                    dur = int(dur)
+                    
+                    # Find start time from flows dict
+                    flow_key = (clt, req_id)
+                    if flow_key in flows:
+                        events_for_flow = sorted(flows[flow_key], key=lambda e: e['ts_ns'])
+                        if phase == 'ud':
+                            # UD starts at req_send
+                            ts = next((e['ts_ns'] for e in events_for_flow if e['event'] == 'req_send'), 0)
+                        else:
+                            # RDMA starts at hand_send
+                            ts = next((e['ts_ns'] for e in events_for_flow if e['event'] == 'hand_send'), 0)
+                        outputs_with_ts.append((ts, line))
+                
+                # Sort by start time and write back
+                outputs_with_ts.sort(key=lambda x: x[0])
+                with flowsim_cpp_output.open("w") as f:
+                    for _, line in outputs_with_ts:
+                        f.write(line + "\n")
         
         return True
+
+
+def regenerate_testbed_ground_truth():
+    """Regenerate real_world.txt from flows_debug.txt using same calculation as simulators.
+    
+    UD: resp_recv_ud - req_send
+    RDMA: resp_rdma_read - hand_send (using start_ns)
+    """
+    import re
+    from collections import defaultdict
+    
+    testbed_dir = ROOT_DIR / "eval_test" / "testbed"
+    if not testbed_dir.exists():
+        print("❌ No testbed directory found at", testbed_dir)
+        return False
+    
+    print("\n🔧 Regenerating testbed ground truth...")
+    
+    for scenario_dir in sorted(testbed_dir.iterdir()):
+        if not scenario_dir.is_dir():
+            continue
+        
+        flows_debug = scenario_dir / "flows_debug.txt"
+        if not flows_debug.exists():
+            continue
+        
+        # Parse flows_debug.txt
+        flows = defaultdict(dict)
+        current_flow_id = None
+        
+        with flows_debug.open("r") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("flow_id="):
+                    current_flow_id = line.split("=")[1]
+                    flows[current_flow_id] = {}
+                elif line.startswith("event=") and current_flow_id:
+                    parts = line.split()
+                    event_type = None
+                    ts_ns = None
+                    start_ns = None
+                    dur_ns = None
+                    client = None
+                    
+                    for part in parts:
+                        if part.startswith("event="):
+                            event_type = part.split("=")[1]
+                        elif part.startswith("ts_ns="):
+                            ts_ns = int(part.split("=")[1])
+                        elif part.startswith("start_ns="):
+                            start_ns = int(part.split("=")[1])
+                        elif part.startswith("dur_ns="):
+                            dur_ns = int(part.split("=")[1])
+                        elif part.startswith("clt="):
+                            client = int(part.split("=")[1])
+                    
+                    if event_type and ts_ns:
+                        flows[current_flow_id][event_type] = {"ts": ts_ns, "start_ns": start_ns, "dur": dur_ns, "client": client}
+        
+        # Calculate FCT and collect as (timestamp, line) tuples
+        # IMPORTANT: Calculate durations the SAME WAY as simulators for fair comparison!
+        output_entries = []
+        for flow_id, flow in flows.items():
+            # UD phase: Calculate as (resp_recv_ud - req_send), same as NS3/M4/FlowSim
+            if "req_send" in flow and "resp_recv_ud" in flow:
+                ud_dur = flow["resp_recv_ud"]["ts"] - flow["req_send"]["ts"]
+                client = flow["req_send"]["client"]
+                ts = flow["req_send"]["ts"]
+                output_entries.append((ts, f"[ud] client={client} id={flow_id} dur_ns={ud_dur}\n"))
+            
+            # RDMA phase: Calculate as (resp_rdma_read - hand_send), same as NS3/M4/FlowSim
+            # Testbed provides start_ns in resp_rdma_read event (which is the hand_send timestamp)
+            if "resp_rdma_read" in flow and flow["resp_rdma_read"].get("start_ns"):
+                rdma_dur = flow["resp_rdma_read"]["ts"] - flow["resp_rdma_read"]["start_ns"]
+                client = flow["resp_rdma_read"]["client"]
+                ts = flow["resp_rdma_read"]["start_ns"]
+                output_entries.append((ts, f"[rdma] client={client} id={flow_id} dur_ns={rdma_dur}\n"))
+        
+        # Sort by timestamp to match M4's ordering
+        output_entries.sort(key=lambda x: x[0])
+        output_lines = [line for _, line in output_entries]
+        
+        # Write real_world.txt
+        real_world_txt = scenario_dir / "real_world.txt"
+        with real_world_txt.open("w") as f:
+            f.writelines(output_lines)
+        
+        print(f"  ✓ Regenerated {scenario_dir.name}/real_world.txt ({len(output_lines)} entries)")
+    
+    print("✅ Testbed ground truth regenerated!\n")
+    return True
 
 
 def main():
@@ -673,8 +812,8 @@ def main():
     )
     parser.add_argument(
         "backend",
-        choices=["ns3", "flowsim", "m4", "all"],
-        help="Backend to run"
+        choices=["ns3", "flowsim", "m4", "all", "regen-testbed"],
+        help="Backend to run, or 'regen-testbed' to regenerate testbed ground truth from flows_debug.txt"
     )
     parser.add_argument(
         "--jobs", "-j",
@@ -699,8 +838,17 @@ def main():
         action="store_true",
         help="Run quick test with only 4 scenarios (100KB/1000KB × window 1/4) instead of full 27 scenarios"
     )
+    parser.add_argument(
+        "--process-only", "-p",
+        action="store_true",
+        help="Only process existing results, skip running simulations"
+    )
     
     args = parser.parse_args()
+    
+    # Handle special command: regenerate testbed ground truth
+    if args.backend == "regen-testbed":
+        return 0 if regenerate_testbed_ground_truth() else 1
     
     # Parse GPU IDs
     try:
@@ -722,14 +870,20 @@ def main():
     # Run each backend
     all_success = True
     for backend in backends:
-        print(f"\n{'='*80}")
-        print(f"[{backend.name}] Running sweep...")
-        print(f"{'='*80}\n")
-        
-        if not backend.run_sweep(args.jobs, quick=args.quick):
-            print(f"\n❌ [{backend.name}] Sweep FAILED\n", file=sys.stderr)
-            all_success = False
-            continue
+        # Skip simulation if --process-only is set
+        if not args.process_only:
+            print(f"\n{'='*80}")
+            print(f"[{backend.name}] Running sweep...")
+            print(f"{'='*80}\n")
+            
+            if not backend.run_sweep(args.jobs, quick=args.quick):
+                print(f"\n❌ [{backend.name}] Sweep FAILED\n", file=sys.stderr)
+                all_success = False
+                continue
+        else:
+            print(f"\n{'='*80}")
+            print(f"[{backend.name}] Skipping sweep (--process-only mode)")
+            print(f"{'='*80}\n")
         
         print(f"\n{'='*80}")
         print(f"[{backend.name}] Processing results...")

@@ -21,7 +21,7 @@ class KvLiteServerApp : public Application
     virtual ~KvLiteServerApp();
 
     uint64_t GetServerOverhead() const {
-        return kvlite::KVL_OVERHEAD_NS * m_windowSize * m_windowSize;
+        return kvlite::KVL_OVERHEAD_NS;
     }
 
     // Hook: user handles request and decides response size/behavior

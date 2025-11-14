@@ -99,45 +99,85 @@ def compute_end2end_times(data: Dict) -> List[float]:
     return end2end_times
 
 
-def compute_relative_errors(real_values: List[float], sim_values: List[float]) -> np.ndarray:
+def compute_relative_errors(real_entries: List[Tuple[int, str, int]], sim_entries: List[Tuple[int, str, int]]) -> np.ndarray:
     """
-    Compute simple relative errors between real-world and simulated values.
-    Formula: |real - sim| / real (same as original analyze.py)
+    Compute per-flow relative errors by matching flows per (client, phase).
+    
+    Flows are matched within each client by phase (ud/rdma) in sequence order.
+    This ensures we compare the 1st UD of client 0 in testbed with 1st UD of client 0 in simulator.
+    
+    Formula: |real - sim| / real (for each matched pair)
     """
-    if not real_values or not sim_values:
+    from collections import defaultdict
+    
+    if not real_entries or not sim_entries:
         return np.array([])
     
-    # Match lengths
-    min_len = min(len(real_values), len(sim_values))
-    real_arr = np.array(real_values[:min_len])
-    sim_arr = np.array(sim_values[:min_len])
+    # Group by (client, phase)
+    real_grouped = defaultdict(list)
+    sim_grouped = defaultdict(list)
     
-    # Avoid division by zero
-    mask = real_arr != 0
-    if not np.any(mask):
-        return np.array([])
+    for client, phase, dur in real_entries:
+        real_grouped[(client, phase)].append(dur)
     
-    # Simple relative error: |real - sim| / real
-    return np.abs(real_arr[mask] - sim_arr[mask]) / real_arr[mask]
+    for client, phase, dur in sim_entries:
+        sim_grouped[(client, phase)].append(dur)
+    
+    # Match flows within each (client, phase) group
+    errors = []
+    for key in real_grouped:
+        if key not in sim_grouped:
+            continue
+        
+        real_flows = real_grouped[key]
+        sim_flows = sim_grouped[key]
+        min_len = min(len(real_flows), len(sim_flows))
+        
+        for i in range(min_len):
+            if real_flows[i] > 0:
+                error = abs(real_flows[i] - sim_flows[i]) / real_flows[i]
+                errors.append(error)
+    
+    return np.array(errors)
 
 
-def compute_signed_relative_errors(real_values: List[float], sim_values: List[float]) -> np.ndarray:
+def compute_signed_relative_errors(real_entries: List[Tuple[int, str, int]], sim_entries: List[Tuple[int, str, int]]) -> np.ndarray:
     """
-    Compute signed relative errors between real-world and simulated values.
+    Compute signed per-flow relative errors by matching flows per (client, phase).
+    
     Formula: (sim - real) / real  (preserve sign to see under/over-estimation)
     """
-    if not real_values or not sim_values:
+    from collections import defaultdict
+    
+    if not real_entries or not sim_entries:
         return np.array([])
     
-    min_len = min(len(real_values), len(sim_values))
-    real_arr = np.array(real_values[:min_len])
-    sim_arr = np.array(sim_values[:min_len])
+    # Group by (client, phase)
+    real_grouped = defaultdict(list)
+    sim_grouped = defaultdict(list)
     
-    mask = real_arr != 0
-    if not np.any(mask):
-        return np.array([])
+    for client, phase, dur in real_entries:
+        real_grouped[(client, phase)].append(dur)
     
-    return (sim_arr[mask] - real_arr[mask]) / real_arr[mask]
+    for client, phase, dur in sim_entries:
+        sim_grouped[(client, phase)].append(dur)
+    
+    # Match flows within each (client, phase) group
+    errors = []
+    for key in real_grouped:
+        if key not in sim_grouped:
+            continue
+        
+        real_flows = real_grouped[key]
+        sim_flows = sim_grouped[key]
+        min_len = min(len(real_flows), len(sim_flows))
+        
+        for i in range(min_len):
+            if real_flows[i] > 0:
+                error = (sim_flows[i] - real_flows[i]) / real_flows[i]
+                errors.append(error)
+    
+    return np.array(errors)
 
 
 def flatten_phase_series(data: Dict[Tuple[int, str], List[int]], phase: str) -> List[int]:
@@ -240,11 +280,13 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
     # Load data from all backends with symmetric trimming
     TRIM_FLOWS = 50
     all_data = {}
+    all_entries = {}
     for name, file_path in files.items():
         if file_path.exists():
-            data, _ = load_data(file_path, trim=TRIM_FLOWS)
+            data, entries = load_data(file_path, trim=TRIM_FLOWS)
             if data:
                 all_data[name] = data
+                all_entries[name] = entries
     
     if "real_world" not in all_data:
         return None
@@ -269,27 +311,26 @@ def analyze_scenario(scenario: str, base_dir: Path = None) -> Dict:
                 "app_completion_time_raw": app_completion_time,
             }
     
-    # Compute simple relative errors vs real-world (like original analyze.py)
-    if "real_world" in scenario_results:
-        real_times = scenario_results["real_world"]["end2end_times"]
-        real_ud_series = flatten_phase_series(all_data["real_world"], "ud")
-        real_rdma_series = flatten_phase_series(all_data["real_world"], "rdma")
+    # Compute per-flow relative errors vs real-world using proper flow matching
+    if "real_world" in scenario_results and "real_world" in all_entries:
+        real_entries = all_entries["real_world"]
         
         for backend in ["m4", "flowsim", "ns3"]:
-            if backend in scenario_results:
-                sim_times = scenario_results[backend]["end2end_times"]
+            if backend in scenario_results and backend in all_entries:
+                sim_entries = all_entries[backend]
                 
-                # Compute simple relative errors: |real - sim| / real
-                relative_errors = compute_relative_errors(real_times, sim_times)
-                signed_errors = compute_signed_relative_errors(real_times, sim_times)
-                ud_signed = compute_signed_relative_errors(
-                    real_ud_series,
-                    flatten_phase_series(all_data[backend], "ud"),
-                )
-                rdma_signed = compute_signed_relative_errors(
-                    real_rdma_series,
-                    flatten_phase_series(all_data[backend], "rdma"),
-                )
+                # Compute relative errors with proper (client, phase, sequence) matching
+                relative_errors = compute_relative_errors(real_entries, sim_entries)
+                signed_errors = compute_signed_relative_errors(real_entries, sim_entries)
+                
+                # For phase-specific errors, filter entries by phase
+                real_ud = [(c, p, d) for c, p, d in real_entries if p == 'ud']
+                sim_ud = [(c, p, d) for c, p, d in sim_entries if p == 'ud']
+                ud_signed = compute_signed_relative_errors(real_ud, sim_ud)
+                
+                real_rdma = [(c, p, d) for c, p, d in real_entries if p == 'rdma']
+                sim_rdma = [(c, p, d) for c, p, d in sim_entries if p == 'rdma']
+                rdma_signed = compute_signed_relative_errors(real_rdma, sim_rdma)
                 
                 if len(relative_errors) > 0:
                     scenario_results[backend]["relative_errors"] = relative_errors
@@ -426,7 +467,7 @@ def generate_perflow_plot(all_scenario_results: List[Dict], results_dir: Path) -
     plt.grid(True, alpha=0.3)
     plt.legend(fontsize=20, loc=4, frameon=False)  # loc=4 is lower right
     plt.tight_layout()
-    plt.xlim(0, 200)
+    plt.xlim(1, 200)
     # plt.xscale('log')
     plt.savefig(results_dir / 'm4-testbed-perflow.png', dpi=300, bbox_inches='tight')
     plt.close()
@@ -643,7 +684,7 @@ def main():
         else:
             print(f"{backend:9} | {'N/A':11} | {'N/A':11} | {'N/A':10} | {'0':5}")
     
-    print("\n📊 PER-FLOW FCT ESTIMATION ERRORS:")  
+    print("\n📊 PER-FLOW FCT ESTIMATION ERRORS:")
     print("Backend   | Median Error | Mean Error   | Std Dev     | Count")
     print("----------|--------------|--------------|-------------|-------")
     
