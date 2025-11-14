@@ -28,10 +28,22 @@ This repository provides scripts and instructions to replicate the experiments f
 ├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
 ├── results/                       # Experimental results and outputs
 ├── results_train/                 # Training results and outputs
-├── testbed/                       # Testbed integration with ns-3, flowSim, and m4 backends
-│   ├── eval_train/                # Evaluation training data
+├── testbed/                       # Testbed integration with ns-3, FlowSim, and m4 backends
+│   ├── backends/                  # Backend implementations
+│   │   ├── m4/                    # M4 ML-based simulator
+│   │   ├── flowsim/               # FlowSim flow-level simulator
+│   │   └── UNISON/                # NS3 packet-level simulator (UNISON)
+│   ├── eval_test/                 # Test scenarios and results
+│   │   ├── testbed/               # Real hardware ground truth (24 scenarios)
+│   │   ├── m4/                    # M4 simulation results
+│   │   ├── flowsim/               # FlowSim simulation results
+│   │   └── ns3/                   # NS3 simulation results
+│   ├── eval_train/                # Training data generation
+│   ├── results/                   # Generated plots and accuracy summaries
 │   ├── results_train/             # Training results and outputs
-│   └──  run_m4_post.py             # Post-processing script for testbed data
+│   ├── run.py                     # Main runner script for simulations
+│   ├── analyze.py                 # Results analysis and visualization
+│   └── build.sh                   # Build script for all backends
 ├── SimAI/                         # SimAI integration with UNISON, flowSim, and m4 backends
 │   ├── astra-sim-alibabacloud/    # Core simulation framework
 │   │   ├── astra-sim/             # AstraSim system layer
@@ -82,7 +94,8 @@ git submodule update --init --recursive
    ```
 
 **3. Reproduce paper results:**
-- **Section 5.3** (SimAI Integration): Check pre-computed results in `SimAI/results_examples/` and run the notebook `gray_failure_plot_results.ipynb` to generate paper figures
+- **Section 5.2** (Testbed Integration): Run `cd testbed && python analyze.py` to generate testbed comparison plots from pre-computed results
+- **Section 5.3** (SimAI Integration): Check pre-computed results in `SimAI/results_gray_failures/` and run `python SimAI/gray_failure_plot_results.py` to generate paper figures
 - **Sections 5.4-5.6** (m4 Evaluation): Run the notebook `plot_results.ipynb` to generate paper figures
 
 ---
@@ -125,21 +138,65 @@ This section shows how to reproduce the experimental results from the paper usin
 
 ### **Section 5.2: Testbed Integration**
 
-TODO for Om: add the instructions to run the testbed experiments.
-<!-- The `testbed/` directory contains the code to run the experiments on the testbed.
+The `testbed/` directory contains an integrated evaluation framework comparing three network simulation backends (**m4**, **FlowSim**, **NS3**) against real hardware measurements from a 12-node testbed running HERD, a key-value store application.
 
-Run the data processing script:
+#### Build Backends
+
+Build all three backends (requires GCC-9 and CUDA for M4):
+
 ```bash
-python testbed/run_m4_post.py
+cd testbed
+
+# Build all backends
+./build.sh all
+
+# Or build individual backends
+./build.sh m4       # M4 ML-based simulator (requires CUDA)
+./build.sh flowsim  # FlowSim flow-level simulator
+./build.sh ns3      # NS3 packet-level simulator (UNISON)
 ```
 
-Run the training and testing scripts:
+#### Run Simulations
+
+Run simulations using the pre-existing testbed ground truth data:
+
 ```bash
-# training
-python main_train.py --train_config=./config/train_config_testbed.yaml
-# testing
-python main_train.py --test_config=./config/test_config_testbed.yaml
-``` -->
+# Run all backends (recommended)
+python run.py all
+
+# Or run individual backends
+python run.py m4       # M4 ML-based simulator
+python run.py flowsim  # FlowSim flow-level simulator
+python run.py ns3      # NS3 packet-level simulator
+
+# Use --process-only to skip simulation and only process existing results
+python run.py all --process-only
+```
+
+**Test Scenarios:** 24 scenarios covering RDMA sizes (250KB-1000KB) × window sizes (1, 2, 4)
+
+**Results are saved in:**
+- `eval_test/testbed/` — Real hardware ground truth (24 scenarios)
+- `eval_test/m4/` — M4 simulation outputs
+- `eval_test/flowsim/` — FlowSim simulation outputs
+- `eval_test/ns3/` — NS3 simulation outputs
+
+#### Analyze Results
+
+Generate evaluation plots and accuracy summaries:
+
+```bash
+python analyze.py
+```
+
+This produces:
+- `results/m4-testbed-perflow.png` — Per-flow FCT error CDF
+- `results/m4-testbed-overall-window2.png` — Application completion time comparison
+- `results/accuracy_summary.txt` — Summary statistics
+
+**Evaluation Metrics:**
+- **Per-flow FCT error**: Absolute relative error for individual UD and RDMA flows
+- **Application completion time error**: End-to-end execution time accuracy
 
 ### **Section 5.3: SimAI Integration Experiments**
 
