@@ -89,6 +89,11 @@ function build_m4() {
     print_header "Building M4"
     
     cd "$BACKENDS_DIR/m4"
+
+    # Ensure CUDA toolkit binaries are on PATH so CMake can find nvcc
+    if [ -x "/usr/local/cuda/bin/nvcc" ]; then
+        export PATH="/usr/local/cuda/bin:$PATH"
+    fi
     
     print_info "Cleaning previous build..."
     rm -rf build
@@ -141,4 +146,3 @@ esac
 
 print_header "Build Complete!"
 print_info "Run sweeps with: python run.py [ns3|flowsim|m4|all] --jobs 32"
-

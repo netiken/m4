@@ -1,0 +1,48 @@
+FATAL ERROR: ML prediction failed for flow size 17: select(): index 28600 out of range for tensor of size [28600] at dimension 0
+Exception raised from select_symint at /pytorch/aten/src/ATen/native/TensorShape.cpp:2250 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x757643fefb80 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x1031549 (0x75763062d549 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x2c77e55 (0x757632273e55 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: at::_ops::select_int::redispatch(c10::DispatchKeySet, at::Tensor const&, long, c10::SymInt) + 0xb0 (0x757631df4cf0 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: <unknown function> + 0x530f946 (0x75763490b946 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: <unknown function> + 0x530fcc7 (0x75763490bcc7 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #6: at::_ops::select_int::redispatch(c10::DispatchKeySet, at::Tensor const&, long, c10::SymInt) + 0xb0 (0x757631df4cf0 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x4da5abc (0x7576343a1abc in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: <unknown function> + 0x4da5f87 (0x7576343a1f87 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::_ops::select_int::call(at::Tensor const&, long, c10::SymInt) + 0x1f6 (0x757631e589a6 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #10: <unknown function> + 0xc4bf (0x63d1c78114bf in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #11: <unknown function> + 0xc27f (0x63d1c781127f in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #12: <unknown function> + 0x16dab (0x63d1c781bdab in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #13: <unknown function> + 0x1e8f9 (0x63d1c78238f9 in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #14: <unknown function> + 0x56027 (0x63d1c785b027 in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #15: <unknown function> + 0x53a41 (0x63d1c7858a41 in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #16: <unknown function> + 0x21a8d (0x63d1c7826a8d in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #17: <unknown function> + 0x2a1ca (0x7575f2da01ca in /usr/lib/x86_64-linux-gnu/libc.so.6)
+frame #18: __libc_start_main + 0x8b (0x7575f2da028b in /usr/lib/x86_64-linux-gnu/libc.so.6)
+frame #19: <unknown function> + 0x8555 (0x63d1c780d555 in /data2/om/og/m4/testbed/backends/m4/build/main)
+
+M4 ML pipeline is required - no fallbacks allowed!
+terminate called after throwing an instance of 'c10::IndexError'
+  what():  select(): index 28600 out of range for tensor of size [28600] at dimension 0
+Exception raised from select_symint at /pytorch/aten/src/ATen/native/TensorShape.cpp:2250 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0x80 (0x757643fefb80 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x1031549 (0x75763062d549 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #2: <unknown function> + 0x2c77e55 (0x757632273e55 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #3: at::_ops::select_int::redispatch(c10::DispatchKeySet, at::Tensor const&, long, c10::SymInt) + 0xb0 (0x757631df4cf0 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #4: <unknown function> + 0x530f946 (0x75763490b946 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #5: <unknown function> + 0x530fcc7 (0x75763490bcc7 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #6: at::_ops::select_int::redispatch(c10::DispatchKeySet, at::Tensor const&, long, c10::SymInt) + 0xb0 (0x757631df4cf0 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #7: <unknown function> + 0x4da5abc (0x7576343a1abc in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #8: <unknown function> + 0x4da5f87 (0x7576343a1f87 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #9: at::_ops::select_int::call(at::Tensor const&, long, c10::SymInt) + 0x1f6 (0x757631e589a6 in /afs/csail.mit.edu/u/o/omchabra/miniconda3/lib/python3.12/site-packages/torch/lib/libtorch_cpu.so)
+frame #10: <unknown function> + 0xc4bf (0x63d1c78114bf in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #11: <unknown function> + 0xc27f (0x63d1c781127f in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #12: <unknown function> + 0x16dab (0x63d1c781bdab in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #13: <unknown function> + 0x1e8f9 (0x63d1c78238f9 in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #14: <unknown function> + 0x56027 (0x63d1c785b027 in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #15: <unknown function> + 0x53a41 (0x63d1c7858a41 in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #16: <unknown function> + 0x21a8d (0x63d1c7826a8d in /data2/om/og/m4/testbed/backends/m4/build/main)
+frame #17: <unknown function> + 0x2a1ca (0x7575f2da01ca in /usr/lib/x86_64-linux-gnu/libc.so.6)
+frame #18: __libc_start_main + 0x8b (0x7575f2da028b in /usr/lib/x86_64-linux-gnu/libc.so.6)
+frame #19: <unknown function> + 0x8555 (0x63d1c780d555 in /data2/om/og/m4/testbed/backends/m4/build/main)
+

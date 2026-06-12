@@ -15,7 +15,7 @@ namespace kvlite {
     static const uint32_t KVL_DEFAULT_SERVER_DPORT = 4000;
     static const uint32_t KVL_PRIORITY_GROUP = 3;
     static const uint32_t KVL_CLIENT_REQUEST_BYTES = 17;
-    static const uint64_t KVL_CLIENT_START_DELAY_NS = 0;
+    static const uint64_t KVL_CLIENT_START_DELAY_NS = 742392606;
     static const uint64_t KVL_CLIENT_SEND_DELAY_NS = 2500; // ns - reduced for faster processing
     static const uint32_t KVL_CLIENT_MAX_REQUESTS = 650;
     static const uint32_t KVL_DEFAULT_MAX_WINDOWS = 1;

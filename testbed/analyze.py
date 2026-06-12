@@ -618,7 +618,6 @@ def main():
             "end2end_errors": [],
             "perflow_errors": [],
             "perflow_signed_phases": {"ud": [], "rdma": []},
-            "app_pairs": [],
         },
         "flowsim": {
             "end2end_errors": [],
@@ -644,15 +643,6 @@ def main():
                     if real_app_time and sim_app_time and real_app_time > 0:
                         e2e_error = abs(real_app_time - sim_app_time) / real_app_time
                         backend_stats[backend]["end2end_errors"].append(e2e_error)
-                        if backend == "m4":
-                            backend_stats[backend]["app_pairs"].append(
-                                (
-                                    result["scenario"],
-                                    real_app_time,
-                                    sim_app_time,
-                                    result[backend].get("app_completion_time_raw"),
-                                )
-                            )
         
         # Per-flow errors: individual flow completion time comparison
         for backend in backend_stats.keys():
@@ -710,15 +700,39 @@ def main():
         status = "🥇" if i == 1 else "🥈" if i == 2 else "🥉"
         print(f"  {i}. {status} {backend:8}: {error:.1%} median error")
 
-    # Show application completion time comparison for M4 vs real world
-    app_pairs = backend_stats["m4"].get("app_pairs", [])
-    if app_pairs:
-        print("\n📊 Application completion time (seconds):")
-        print(f"{'scenario':10} {'real':>10} {'m4':>10}")
-        for scenario, real_ns, m4_ns, _ in sorted(app_pairs):
-            real_s = real_ns / 1e9 if real_ns else float("nan")
-            m4_s = m4_ns / 1e9 if m4_ns else float("nan")
-            print(f"{scenario:10} {real_s:10.3f} {m4_s:10.3f}")
+    # Show application completion time comparison for each backend vs real world
+    print("\n📊 Application completion time (seconds):")
+    print(f"{'scenario':10} {'real':>10} {'flowsim':>20} {'ns3':>20} {'m4':>20}")
+    for result in sorted(all_scenario_results, key=lambda r: r["scenario"]):
+        scenario = result["scenario"]
+
+        def _to_seconds(ns: Optional[int]) -> float:
+            return ns / 1e9 if ns else float("nan")
+
+        real_ns = result.get("real_world", {}).get("app_completion_time")
+        flowsim_ns = result.get("flowsim", {}).get("app_completion_time") if "flowsim" in result else None
+        ns3_ns = result.get("ns3", {}).get("app_completion_time") if "ns3" in result else None
+        m4_ns = result.get("m4", {}).get("app_completion_time") if "m4" in result else None
+
+        real_s = _to_seconds(real_ns) if real_ns is not None else float("nan")
+        flowsim_s = _to_seconds(flowsim_ns) if flowsim_ns is not None else float("nan")
+        ns3_s = _to_seconds(ns3_ns) if ns3_ns is not None else float("nan")
+        m4_s = _to_seconds(m4_ns) if m4_ns is not None else float("nan")
+
+        def _pct_error(sim_ns: Optional[int], real_ns: Optional[int]) -> float:
+            if real_ns and sim_ns and real_ns > 0:
+                return abs(sim_ns - real_ns) / real_ns * 100.0
+            return float("nan")
+
+        flowsim_err = _pct_error(flowsim_ns, real_ns)
+        ns3_err = _pct_error(ns3_ns, real_ns)
+        m4_err = _pct_error(m4_ns, real_ns)
+
+        flowsim_cell = f"{flowsim_s:6.3f} ({flowsim_err:5.1f}%)"
+        ns3_cell = f"{ns3_s:6.3f} ({ns3_err:5.1f}%)"
+        m4_cell = f"{m4_s:6.3f} ({m4_err:5.1f}%)"
+
+        print(f"{scenario:10} {real_s:10.3f} {flowsim_cell:>20} {ns3_cell:>20} {m4_cell:>20}")
     
     # Generate plots if requested
     if not args.no_plots:

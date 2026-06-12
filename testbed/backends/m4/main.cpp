@@ -29,7 +29,7 @@ static uint64_t RESP_RDMA_BYTES = 1024008;
 
 static constexpr uint64_t SERVER_OVERHEAD_NS = 87000;
 static constexpr uint64_t SEND_SPACING_NS = 2500;
-static constexpr uint64_t STARTUP_DELAY_NS = 0;
+static constexpr uint64_t STARTUP_DELAY_NS = 742392606;
 static constexpr uint64_t HANDSHAKE_DELAY_NS = 8647;
 // Network Parameters
 static constexpr float MTU_BYTES = 1000.0f;
