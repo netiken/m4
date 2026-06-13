@@ -43,12 +43,12 @@ QUICK_SCENARIOS = [
 ]
 
 # Plot styling constants (matching notebook style exactly)
-OURS_LABEL = "m4"  # Label for M4 in plots (following paper convention)
+OURS_LABEL = "f1"  # Label for M4 in plots (following paper convention)
 PLOT_COLORS = {"real_world": "black", "flowsim": "orange", "ns3": "crimson", "m4": "cornflowerblue"}
 PLOT_MARKERS = {"real_world": "D", "flowsim": "^", "ns3": "o", "m4": "X"}  # Testbed=diamond, flowSim=triangle, UNISON=circle, FLS=X
 PLOT_LABELS = {"real_world": "Testbed", "flowsim": "flowSim", "ns3": "UNISON", "m4": OURS_LABEL}
 PERFLOW_COLORS = ["orange", "blueviolet", "cornflowerblue"]  # flowSim, ns3, FLS
-PERFLOW_LABELS = ["flowSim", "ns3", OURS_LABEL]
+PERFLOW_LABELS = ["flowSim", "UNISON", OURS_LABEL]
 def load_data(file_path: Path, trim: int = 0) -> Tuple[Dict[Tuple[int, str], List[int]], List[Tuple[int, str, int]]]:
     """Load experiment data from a simulation output file.
     
