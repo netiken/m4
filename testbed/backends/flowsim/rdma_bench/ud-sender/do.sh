@@ -1,1 +1,0 @@
-( cd ../; make ud-sender )

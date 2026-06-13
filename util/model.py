@@ -39,20 +39,35 @@ class HomoGNNLayer(nn.Module):
         super(HomoGNNLayer, self).__init__()
         self.homogeneous_layer = HomoNetGNN(c_in=c_in, c_out=c_out, dropout=dropout)
 
-    def forward(self, x, edge_index):
-        out_combined = self.homogeneous_layer(x, edge_index)
+    def forward(self, x, edge_index, edge_weight=None):
+        out_combined = self.homogeneous_layer(x, edge_index, edge_weight)
 
         return out_combined
+
+
+class WeightedSAGEConv(SAGEConv):
+    def forward(self, x, edge_index, edge_weight=None, size=None):
+        self._edge_weight = edge_weight
+        try:
+            return super().forward(x, edge_index, size=size)
+        finally:
+            self._edge_weight = None
+
+    def message(self, x_j):
+        edge_weight = self._edge_weight
+        if edge_weight is None:
+            return x_j
+        return x_j * edge_weight.reshape(-1, 1).to(device=x_j.device, dtype=x_j.dtype)
 
 
 class HomoNetGNN(nn.Module):
     def __init__(self, c_in, c_out, dropout=0.2):
         super(HomoNetGNN, self).__init__()
-        self.conv = SAGEConv(c_in, c_out, aggr="sum", project=True)
+        self.conv = WeightedSAGEConv(c_in, c_out, aggr="sum", project=True)
         self.norm = torch.nn.LayerNorm(c_out)
 
-    def forward(self, x, edge_index):
-        out = self.conv(x, edge_index)
+    def forward(self, x, edge_index, edge_weight=None):
+        out = self.conv(x, edge_index, edge_weight=edge_weight)
         out = self.norm(out)  # Apply normalization
         return out
 
@@ -186,6 +201,7 @@ class FlowSimLstm(LightningModule):
         flow_active_matrix,  # (n_flows,2)
         time_delta_matrix,  # (batch,n_events)
         edges_a_to_b,  # (2, n_edges)
+        edges_a_to_b_weight=None,  # (n_edges,)
         enable_test=False,
     ):
         loss_size = None
@@ -246,6 +262,9 @@ class FlowSimLstm(LightningModule):
 
                 edge_mask = active_flow_mask[edges_a_to_b[0]]
                 edge_index_a_to_b = edges_a_to_b[:, edge_mask]
+                edge_weight_a_to_b = None
+                if edges_a_to_b_weight is not None:
+                    edge_weight_a_to_b = edges_a_to_b_weight[edge_mask]
                 active_link_idx, new_link_indices = torch.unique(
                     edge_index_a_to_b[1],
                     return_inverse=True,
@@ -343,9 +362,14 @@ class FlowSimLstm(LightningModule):
                     edge_index = torch.cat(
                         [edge_index_a_to_b, edge_index_b_to_a], dim=1
                     )
+                    edge_weight = None
+                    if edge_weight_a_to_b is not None:
+                        edge_weight = torch.cat(
+                            [edge_weight_a_to_b, edge_weight_a_to_b], dim=0
+                        )
 
                     for gcn in self.gcn_layers:
-                        x_combined = gcn(x_combined, edge_index)
+                        x_combined = gcn(x_combined, edge_index, edge_weight)
 
                 z_t_tmp = x_combined[:n_flows_active]
                 z_t_tmp_link = x_combined[n_flows_active:]
@@ -383,19 +407,36 @@ class FlowSimLstm(LightningModule):
         return res, loss_size, loss_queue, res_size, res_queue, size_info
 
     def step(self, batch, batch_idx, tag=None):
-        (
-            input,
-            output,
-            batch_index,
-            batch_index_link,
-            spec,
-            remainsize_matrix,
-            queuelen_matrix,
-            queuelen_link_matrix,
-            flow_active_matrix,
-            time_delta_matrix,
-            edges_a_to_b_matrix,
-        ) = batch
+        edges_a_to_b_weight = None
+        if len(batch) == 11:
+            (
+                input,
+                output,
+                batch_index,
+                batch_index_link,
+                spec,
+                remainsize_matrix,
+                queuelen_matrix,
+                queuelen_link_matrix,
+                flow_active_matrix,
+                time_delta_matrix,
+                edges_a_to_b_matrix,
+            ) = batch
+        else:
+            (
+                input,
+                output,
+                batch_index,
+                batch_index_link,
+                spec,
+                remainsize_matrix,
+                queuelen_matrix,
+                queuelen_link_matrix,
+                flow_active_matrix,
+                time_delta_matrix,
+                edges_a_to_b_matrix,
+                edges_a_to_b_weight,
+            ) = batch
         enable_test = tag == "test"
 
         estimated, loss_size, loss_queue, res_size, res_queue, size_info = self(
@@ -408,6 +449,7 @@ class FlowSimLstm(LightningModule):
             flow_active_matrix,
             time_delta_matrix,
             edges_a_to_b_matrix,
+            edges_a_to_b_weight=edges_a_to_b_weight,
             enable_test=enable_test,
         )
 
