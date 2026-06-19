@@ -2,7 +2,7 @@
 
 This repository contains the public artifact for our paper, [*m4: A Learned Flow-level Network Backend*](https://arxiv.org/pdf/2503.01770). `m4` is a learned online flow-level backend for distributed-application simulators: it accepts flow requests, maintains state over a flow-link graph, and returns completion-time callbacks much faster than packet-level simulation while improving accuracy over analytical flow-level baselines.
 
-The public release includes the core training and inference code, pretrained checkpoints, standalone simulation artifacts, and the SimAI integration. The RDMA hardware testbed artifact and raw testbed results are intentionally not included in this repository.
+The public release includes the core training and inference code, pretrained checkpoints, standalone simulation artifacts, and the SimAI integration.
 
 ## **Contents**
 
@@ -11,13 +11,11 @@ The public release includes the core training and inference code, pretrained che
 - [Quick Reproduction](#quick-reproduction)
 - [Setup and Installation](#setup-and-installation)
 - [Running Experiments from Scratch](#running-experiments-from-scratch)
-  - [SimAI Integration](#simai-integration)
   - [Standalone m4 Evaluation](#standalone-m4-evaluation)
-  - [RDMA Testbed Results](#rdma-testbed-results)
+  - [SimAI Integration](#simai-integration)
 - [Training Your Own Model](#training-your-own-model)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
-- [Contact](#contact)
 
 ---
 
@@ -64,9 +62,6 @@ The public release includes the core training and inference code, pretrained che
 | Core learned backend, model code, checkpoints, and standalone simulation artifacts | Included |
 | Standalone packet-simulator-labeled evaluation and ablations | Public artifacts and scripts are included through `results/`, `results_train/`, `parsimon-eval/`, and `plot_results.ipynb` |
 | SimAI gray-failure integration | Included; topologies and runner scripts are provided, while generated sweep outputs are produced locally |
-| RDMA hardware testbed integration and raw hardware results | Not included in this public release |
-
-The paper also reports an RDMA hardware evaluation, but those hardware traces and testbed scripts are not part of the GitHub artifact.
 
 ---
 
@@ -94,7 +89,6 @@ git submodule update --init --recursive
 **3. Use the included artifacts:**
 - **Standalone simulation and ablations:** open `plot_results.ipynb`, which reads the included result files under `results/` and `results_train/`.
 - **SimAI gray-failure evaluation:** build the desired SimAI backends, run `SimAI/gray_failure_run_sweep.py`, then run `SimAI/gray_failure_plot_results.py`.
-- **RDMA testbed evaluation:** reported in the paper but intentionally excluded from this public repository.
 
 ---
 
@@ -134,13 +128,53 @@ git submodule update --init --recursive
 
 This section describes the public experiment workflows that are included in this repository. The pre-trained checkpoints are available in the `checkpoints/` directory.
 
+### **Standalone m4 Evaluation**
+
+Reproduce `m4`'s standalone accuracy, scaling, sensitivity, and ablation evaluation across diverse network scenarios using the included checkpoints and result files.
+
+For the fastest path, run `plot_results.ipynb` from the repository root. The notebook reads the public result artifacts under `results/` and `results_train/` and regenerates the main standalone evaluation plots.
+
+To regenerate simulation outputs from scratch, use the experiment drivers under `parsimon-eval/`:
+
+- **Large-scale evaluation:**
+```bash
+# From the repository root
+cd parsimon-eval/expts/fig_7
+cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
+cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json ns3
+cargo run --release -- --root=./data --mixes spec/eval_test.mix.json mlsys
+cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
+```
+Results are saved in the `data` directory.
+
+- **Flow-level evaluation:**
+```bash
+# From the repository root
+cd parsimon-eval/expts/fig_8
+cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
+cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
+```
+Results are saved in the `eval_test` directory.
+
+- **Application completion-time evaluation:**
+```bash
+# From the repository root
+cd parsimon-eval/expts/fig_8
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app ns3
+cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app mlsys
+```
+Results are saved in the `eval_app` directory.
+
+#### Visualize Results
+After completing the data generation and inference steps above, use `plot_results.ipynb` to inspect and regenerate the standalone plots from the available result files.
+
 ### **SimAI Integration**
 
 The `SimAI/` directory contains an integrated evaluation framework with three network simulation backends: **UNISON (ns-3)** , **flowSim** , and **m4** .
 
 #### Build Backends
 
-Build all three backends (requires GCC-9):
+Build the backend(s) you want to run (requires GCC-9; the `m4` backend requires CUDA):
 
 ```bash
 cd SimAI
@@ -197,57 +231,6 @@ python gray_failure_topo_viz.py
 ```
 
 This produces `simai_topo_groups.png` showing the hierarchical network topology with NVSwitch and rail switch layers.
-
-### **Standalone m4 Evaluation**
-
-Reproduce `m4`'s standalone accuracy, scaling, sensitivity, and ablation evaluation across diverse network scenarios using the included checkpoints and result files.
-
-For the fastest path, run `plot_results.ipynb` from the repository root. The notebook reads the public result artifacts under `results/` and `results_train/` and regenerates the main standalone evaluation plots.
-
-To regenerate simulation outputs from scratch, use the experiment drivers under `parsimon-eval/`:
-
-- **Large-scale evaluation:**
-```bash
-# From the repository root
-cd parsimon-eval/expts/fig_7
-cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
-cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json ns3
-cargo run --release -- --root=./data --mixes spec/eval_test.mix.json mlsys
-cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
-```
-Results are saved in the `data` directory.
-
-- **Flow-level evaluation:**
-```bash
-# From the repository root
-cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
-cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
-```
-Results are saved in the `eval_test` directory.
-
-- **Application completion-time evaluation:**
-```bash
-# From the repository root
-cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app ns3
-cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app mlsys
-```
-Results are saved in the `eval_app` directory.
-
-#### Visualize Results
-After completing the data generation and inference steps above, use `plot_results.ipynb` to inspect and regenerate the standalone plots from the available result files.
-
----
-
-### **RDMA Testbed Results**
-
-The paper also evaluates a checkpoint fine-tuned on a 4-host RDMA deployment and tested on 12-host hardware. That part of the evaluation depends on hardware traces and testbed integration code that are not included in this public GitHub release.
-
-The public repository therefore does not contain a `testbed/` workflow.
-
----
-
 
 ## **Training Your Own Model**
 
@@ -324,9 +307,3 @@ If you find our work useful, please cite our paper:
 
 ## **Acknowledgments**
 We extend special thanks to Kevin Zhao and Thomas Anderson for their insights in the NSDI'23 paper *Scalable Tail Latency Estimation for Data Center Networks.* Their source code is available in [Parsimon](https://github.com/netiken/parsimon).
-
----
-
-## **Contact**
-For further inquiries, reach out to **Chenning Li** at:  
-**lichenni@mit.edu**
