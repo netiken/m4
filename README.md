@@ -1,16 +1,19 @@
-# **m4: A Learned Flow-level Network Simulator**
+# **m4: A Learned Flow-level Network Backend**
 
-This repository provides scripts and instructions to replicate the experiments from our paper, [*m4: A Learned Flow-level Network Simulator.*](https://arxiv.org/pdf/2503.01770) It includes all necessary tools to reproduce the experimental results documented in Sections 5.2 to 5.6 of the paper.
+This repository contains the public artifact for our paper, [*m4: A Learned Flow-level Network Backend*](https://arxiv.org/pdf/2503.01770). `m4` is a learned online flow-level backend for distributed-application simulators: it accepts flow requests, maintains state over a flow-link graph, and returns completion-time callbacks much faster than packet-level simulation while improving accuracy over analytical flow-level baselines.
+
+The public release includes the core training and inference code, pretrained checkpoints, standalone simulation artifacts, and the SimAI integration. The RDMA hardware testbed artifact and raw testbed results are intentionally not included in this repository.
 
 ## **Contents**
 
 - [Repository Structure](#repository-structure)
+- [Artifact Scope](#artifact-scope)
 - [Quick Reproduction](#quick-reproduction)
 - [Setup and Installation](#setup-and-installation)
 - [Running Experiments from Scratch](#running-experiments-from-scratch)
-  - [Section 5.2: Testbed Integration](#section-52-testbed-integration)
-  - [Section 5.3: SimAI Integration](#section-53-simai-integration-experiments)
-  - [Sections 5.4-5.6: m4 Evaluation](#sections-54-56-m4-evaluation-experiments)
+  - [SimAI Integration](#simai-integration)
+  - [Standalone m4 Evaluation](#standalone-m4-evaluation)
+  - [RDMA Testbed Results](#rdma-testbed-results)
 - [Training Your Own Model](#training-your-own-model)
 - [Citation](#citation)
 - [Acknowledgments](#acknowledgments)
@@ -28,42 +31,24 @@ This repository provides scripts and instructions to replicate the experiments f
 ├── parsimon-eval/                 # Scripts to reproduce m4 experiments and comparisons
 ├── results/                       # Experimental results and outputs
 ├── results_train/                 # Training results and outputs
-├── testbed/                       # Testbed integration with ns-3, FlowSim, and m4 backends
-│   ├── backends/                  # Backend implementations
-│   │   ├── m4/                    # M4 ML-based simulator
-│   │   ├── flowsim/               # FlowSim flow-level simulator
-│   │   └── UNISON/                # NS3 packet-level simulator (UNISON)
-│   ├── eval_test/                 # Test scenarios and results
-│   │   ├── testbed/               # Real hardware ground truth (24 scenarios)
-│   │   ├── m4/                    # M4 simulation results
-│   │   ├── flowsim/               # FlowSim simulation results
-│   │   └── ns3/                   # NS3 simulation results
-│   ├── eval_train/                # Training data generation
-│   ├── results/                   # Generated plots and accuracy summaries
-│   ├── results_train/             # Training results and outputs
-│   ├── run.py                     # Main runner script for simulations
-│   ├── analyze.py                 # Results analysis and visualization
-│   └── build.sh                   # Build script for all backends
 ├── SimAI/                         # SimAI integration with UNISON, flowSim, and m4 backends
 │   ├── astra-sim-alibabacloud/    # Core simulation framework
 │   │   ├── astra-sim/             # AstraSim system layer
 │   │   │   ├── network_frontend/  # Network backend implementations
 │   │   │   │   ├── ns3/           # UNISON (ns-3) packet-level simulator
 │   │   │   │   ├── flowsim/       # flowSim analytical simulator
-│   │   │   │   └── m4/            # m4 ML-based simulator
+│   │   │   │   └── m4/            # m4 learned backend
 │   │   │   └── system/            # System components (routing, collective ops)
 │   │   ├── extern/                # ns-3 source code
 │   │   └── build.sh               # Build script for all backends
 │   ├── example/                   # Example workloads and topologies
 │   │   ├── gray_failures/         # 105 pre-generated gray failure topology files
-│   │   │   └── gray_topo_N{2-16}_R{4-10}.txt  # Topology files for N degraded GPUs, R reduction factor
+│   │   │   └── gray_topo_N{2-16}_R{4-10}.txt  # N degraded edge links, R reduction factor
 │   │   ├── microAllReduce.txt     # AllReduce collective workload
 │   │   └── SimAI.conf             # ns-3 configuration
 │   ├── scripts/                   # Build and run scripts
-│   ├── results_gray_failures/     # Pre-computed gray failure results (315 simulations)
-│   │   └── n_{N}_r_{R}_{backend}/ # Individual scenario results (ns3/flowsim/m4)
 │   ├── gray_failure_run_sweep.py  # Gray failure sweep runner
-│   ├── gray_failure_plot_results.py # Generate evaluation plots (6 figures)
+│   ├── gray_failure_plot_results.py # Generate gray-failure evaluation plots
 │   └── gray_failure_topo_viz.py   # Topology visualization tool
 ├── util/                          # Utility functions for m4, including data loaders and ML model implementations
 ├── main_train.py                  # Main script for training and testing m4
@@ -72,9 +57,22 @@ This repository provides scripts and instructions to replicate the experiments f
 
 ---
 
+## **Artifact Scope**
+
+| Paper component | Public release status |
+| --- | --- |
+| Core learned backend, model code, checkpoints, and standalone simulation artifacts | Included |
+| Standalone packet-simulator-labeled evaluation and ablations | Public artifacts and scripts are included through `results/`, `results_train/`, `parsimon-eval/`, and `plot_results.ipynb` |
+| SimAI gray-failure integration | Included; topologies and runner scripts are provided, while generated sweep outputs are produced locally |
+| RDMA hardware testbed integration and raw hardware results | Not included in this public release |
+
+The paper also reports an RDMA hardware evaluation, but those hardware traces and testbed scripts are not part of the GitHub artifact.
+
+---
+
 ## **Quick Reproduction**
 
-To quickly reproduce the results in the paper, follow these steps:
+To quickly inspect the public artifact and reproduce the included results:
 
 **1. Clone the repository and initialize submodules:**
 ```bash
@@ -93,10 +91,10 @@ git submodule update --init --recursive
    source .venv/bin/activate  # Activate the virtual environment!
    ```
 
-**3. Reproduce paper results:**
-- **Section 5.2** (Testbed Integration): Run `cd testbed && python analyze.py` to generate testbed comparison plots from pre-computed results
-- **Section 5.3** (SimAI Integration): Check pre-computed results in `SimAI/results_gray_failures/` and run `python SimAI/gray_failure_plot_results.py` to generate paper figures
-- **Sections 5.4-5.6** (m4 Evaluation): Run the notebook `plot_results.ipynb` to generate paper figures
+**3. Use the included artifacts:**
+- **Standalone simulation and ablations:** open `plot_results.ipynb`, which reads the included result files under `results/` and `results_train/`.
+- **SimAI gray-failure evaluation:** build the desired SimAI backends, run `SimAI/gray_failure_run_sweep.py`, then run `SimAI/gray_failure_plot_results.py`.
+- **RDMA testbed evaluation:** reported in the paper but intentionally excluded from this public repository.
 
 ---
 
@@ -134,71 +132,9 @@ git submodule update --init --recursive
 
 ## **Running Experiments from Scratch**
 
-This section shows how to reproduce the experimental results from the paper using pre-trained models. The pre-trained checkpoints are available in the `checkpoints/` directory.
+This section describes the public experiment workflows that are included in this repository. The pre-trained checkpoints are available in the `checkpoints/` directory.
 
-### **Section 5.2: Testbed Integration**
-
-The `testbed/` directory contains an integrated evaluation framework comparing three network simulation backends (**m4**, **FlowSim**, **NS3**) against real hardware measurements from a 12-node testbed running HERD, a key-value store application.
-
-#### Build Backends
-
-Build all three backends (requires GCC-9 and CUDA for M4):
-
-```bash
-cd testbed
-
-# Build all backends
-./build.sh all
-
-# Or build individual backends
-./build.sh m4       # M4 ML-based simulator (requires CUDA)
-./build.sh flowsim  # FlowSim flow-level simulator
-./build.sh ns3      # NS3 packet-level simulator (UNISON)
-```
-
-#### Run Simulations
-
-Run simulations using the pre-existing testbed ground truth data:
-
-```bash
-# Run all backends (recommended)
-python run.py all
-
-# Or run individual backends
-python run.py m4       # M4 ML-based simulator
-python run.py flowsim  # FlowSim flow-level simulator
-python run.py ns3      # NS3 packet-level simulator
-
-# Use --process-only to skip simulation and only process existing results
-python run.py all --process-only
-```
-
-**Test Scenarios:** 24 scenarios covering RDMA sizes (250KB-1000KB) × window sizes (1, 2, 4)
-
-**Results are saved in:**
-- `eval_test/testbed/` — Real hardware ground truth (24 scenarios)
-- `eval_test/m4/` — M4 simulation outputs
-- `eval_test/flowsim/` — FlowSim simulation outputs
-- `eval_test/ns3/` — NS3 simulation outputs
-
-#### Analyze Results
-
-Generate evaluation plots and accuracy summaries:
-
-```bash
-python analyze.py
-```
-
-This produces:
-- `results/m4-testbed-perflow.png` — Per-flow FCT error CDF
-- `results/m4-testbed-overall-window2.png` — Application completion time comparison
-- `results/accuracy_summary.txt` — Summary statistics
-
-**Evaluation Metrics:**
-- **Per-flow FCT error**: Absolute relative error for individual UD and RDMA flows
-- **Application completion time error**: End-to-end execution time accuracy
-
-### **Section 5.3: SimAI Integration Experiments**
+### **SimAI Integration**
 
 The `SimAI/` directory contains an integrated evaluation framework with three network simulation backends: **UNISON (ns-3)** , **flowSim** , and **m4** .
 
@@ -215,25 +151,26 @@ cd SimAI
 
 #### Gray Failure Evaluation
 
-We evaluate all three backends under **gray failure** conditions—scenarios where network components experience partial performance degradation rather than complete failures. This mimics real-world datacenter issues like cable aging, thermal throttling, or partial switch failures.
+The SimAI workflow evaluates gray-failure scenarios where network components experience partial performance degradation rather than complete failures.
 
 **Gray Failure Topologies:**
 
 The repository includes **105 pre-generated topologies** in `example/gray_failures/` covering a comprehensive parameter sweep:
-- **N ∈ {2, 3, ..., 16}**: Number of degraded GPUs (6%-50% of 32-GPU cluster)
+- **N ∈ {2, 3, ..., 16}**: Number of degraded GPU-facing edge links (6%-50% of 32-GPU cluster)
 - **R ∈ {4, 5, ..., 10}**: Bandwidth reduction factor (degraded links operate at 1/R capacity, i.e., 75%-90% bandwidth loss)
 
 **Run Gray Failure Sweep:**
 
-Note: Pre-computed results for all 315 simulations (3 backends × 105 scenarios) are available in `results_gray_failures/`. Running the sweep script will overwrite the pre-computed results.
+Generated sweep outputs are written under `SimAI/results_gray_failures/`. That directory is intentionally not part of the public GitHub release, so run the sweep before plotting if you start from a fresh clone.
 
 ```bash
+# From the SimAI/ directory
 # Run all scenarios for a specific backend
 python gray_failure_run_sweep.py ns3      # UNISON (packet-level ground truth)
 python gray_failure_run_sweep.py flowsim  # flowSim (analytical)
-python gray_failure_run_sweep.py m4       # m4 (ML-based, uses GPU auto-detection)
+python gray_failure_run_sweep.py m4       # m4 (learned backend, uses GPU auto-detection)
 
-# Run a single scenario (N=8 degraded GPUs, R=4 bandwidth reduction)
+# Run a single scenario (N=8 degraded edge links, R=4 bandwidth reduction)
 python gray_failure_run_sweep.py m4 --n 8 --r 4
 ```
 
@@ -244,11 +181,11 @@ Generate all evaluation plots (CDFs, runtime comparison, MAE analysis, scatter p
 python gray_failure_plot_results.py
 ```
 
-This produces 6 figures in the `SimAI/` directory:
+This produces gray-failure evaluation plots in the `SimAI/` directory, including:
 - `gray_failure_errors.png` — CDF of error magnitudes
 - `gray_failure_signed_errors.png` — CDF of signed errors (showing bias)
 - `gray_failure_runtimes.png` — Runtime comparison across backends
-- `gray_failure_mae_by_n.png` — Mean error vs. number of degraded GPUs
+- `gray_failure_mae_by_n.png` — Mean error vs. number of degraded edge links
 - `gray_failure_mae_by_r.png` — Mean error vs. bandwidth reduction factor
 - `gray_failure_scatter_n8.png` — Completion time analysis for N=8
 
@@ -261,61 +198,53 @@ python gray_failure_topo_viz.py
 
 This produces `simai_topo_groups.png` showing the hierarchical network topology with NVSwitch and rail switch layers.
 
----
+### **Standalone m4 Evaluation**
 
-### **Sections 5.4-5.6: m4 Evaluation Experiments**
+Reproduce `m4`'s standalone accuracy, scaling, sensitivity, and ablation evaluation across diverse network scenarios using the included checkpoints and result files.
 
-Reproduce m4's accuracy evaluation across diverse network scenarios using pre-trained models.
+For the fastest path, run `plot_results.ipynb` from the repository root. The notebook reads the public result artifacts under `results/` and `results_train/` and regenerates the main standalone evaluation plots.
 
-TODO for Anton: add the instructions to build and run the flowSim and m4.
+To regenerate simulation outputs from scratch, use the experiment drivers under `parsimon-eval/`:
 
-<!-- #### Quick Test (Small Scale)
-
-For a quick test with one scenario:
+- **Large-scale evaluation:**
 ```bash
-cd parsimon-eval/expts/fig_8
-cargo run --release -- --root=./demo --mixes spec/0.mix.json --nr-flows 2000 --enable-train ns3
-cargo run --release -- --root=./demo --mixes spec/0.mix.json --nr-flows 2000 --enable-train mlsys
-```
-
-Results will be saved in the `demo/` directory.
-
-**Flags:**
-- `--enable-train` — Use training-specific ns-3 version (`ns-3.39`) for packet traces
-- `--enable-app` — Synchronize flow start times for application completion scenarios (Appendix 1) -->
-
-<!-- #### Full Evaluation -->
-
-Note: we provide 5 pre-generated scenarios for ns-3 in the `parsimon-eval/expts/fig_8/eval_test_demo` directory. Please run the following commands to run the full evaluation:
-
-- **For Section 5.4 (Large-scale evaluation):**
-```bash
+# From the repository root
 cd parsimon-eval/expts/fig_7
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json ns3
 cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json ns3
 cargo run --release -- --root=./data --mixes spec/eval_test.mix.json mlsys
 cargo run --release -- --root=./data --mixes spec/eval_test.mix_large.json mlsys
 ```
-Results will be saved in the `data` directory.
+Results are saved in the `data` directory.
 
-- **For Section 5.5 (Flow-level evaluation):**
+- **Flow-level evaluation:**
 ```bash
+# From the repository root
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 ns3
 cargo run --release -- --root=./eval_test --mixes spec/eval_test.mix.json --nr-flows 20000 mlsys
 ```
-Results will be saved in the `eval_test` directory.
+Results are saved in the `eval_test` directory.
 
-- **For Appendix 1 (Application completion time):**
+- **Application completion-time evaluation:**
 ```bash
+# From the repository root
 cd parsimon-eval/expts/fig_8
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app ns3
 cargo run --release -- --root=./eval_app --mixes spec/eval_app.mix.json --nr-flows 20000 --enable-app mlsys
 ```
-Results will be saved in the `eval_app` directory.
+Results are saved in the `eval_app` directory.
 
 #### Visualize Results
-After completing the data generation and inference steps above, create the paper figures in the notebook `plot_results.ipynb`.
+After completing the data generation and inference steps above, use `plot_results.ipynb` to inspect and regenerate the standalone plots from the available result files.
+
+---
+
+### **RDMA Testbed Results**
+
+The paper also evaluates a checkpoint fine-tuned on a 4-host RDMA deployment and tested on 12-host hardware. That part of the evaluation depends on hardware traces and testbed integration code that are not included in this public GitHub release.
+
+The public repository therefore does not contain a `testbed/` workflow.
 
 ---
 
@@ -346,7 +275,6 @@ Train the neural network using the generated or demo training data:
    - Modify `config/train_config.yaml` if needed.
    - Run:
      ```bash
-     cd m4
      uv run python main_train.py --train_config={path_to_config_file} --mode=train --dir_input={dir_to_save_data} --dir_output={dir_to_save_ckpts} --note={note}
      ```
    Example:
@@ -369,7 +297,6 @@ Validate your trained model using the training data to check performance:
    - Modify `config/test_config.yaml` if needed.
    - Run:
      ```bash
-     cd m4
      uv run python main_train.py --mode=test --test_config={path_to_config_file} --dir_input={dir_to_save_data} --dir_output={dir_to_save_results} --note={note}
      ```
    Example:
@@ -384,10 +311,12 @@ Validate your trained model using the training data to check performance:
 ## **Citation**
 If you find our work useful, please cite our paper:
 ```bibtex
-@inproceedings{m4,
+@misc{m4,
     author = {Li, Chenning and Zabreyko, Anton and Nasr-Esfahany, Arash and Zhao, Kevin and Goyal, Prateesh and Alizadeh, Mohammad and Anderson, Thomas},
-    title = {m4: A Learned Flow-level Network Simulator},
-    year = {2025},
+    title = {m4: A Learned Flow-level Network Backend},
+    year = {2026},
+    eprint = {2503.01770},
+    archivePrefix = {arXiv},
 }
 ```
 
@@ -400,4 +329,4 @@ We extend special thanks to Kevin Zhao and Thomas Anderson for their insights in
 
 ## **Contact**
 For further inquiries, reach out to **Chenning Li** at:  
-📧 **lichenni@mit.edu**
+**lichenni@mit.edu**
